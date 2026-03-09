@@ -85,7 +85,7 @@ export function MedplumAuthProvider({ children }: { children: React.ReactNode })
     setProfile({ resourceType: 'Practitioner', id: 'token-auth' } as Resource);
     setLoading(false);
 
-    medplum.getProfile()
+    medplum.getProfileAsync()
       .then((p) => { if (p) setProfile(p as Resource); })
       .catch(() => {
         localStorage.removeItem('medplum-access-token');
