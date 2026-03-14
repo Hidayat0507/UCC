@@ -2,20 +2,33 @@
 
 import { createContext, useContext, useEffect, useState } from 'react';
 import { MedplumClient } from '@medplum/core';
-import type { Resource } from '@medplum/fhirtypes';
+import type { HumanName, Resource } from '@medplum/fhirtypes';
+
+const noopStorage = {
+  getString: (_key: string) => undefined,
+  setString: (_key: string, _value: string) => {},
+  getObject: (_key: string) => undefined,
+  setObject: (_key: string, _value: unknown) => {},
+  clear: () => {},
+  removeString: (_key: string) => {},
+};
 
 const MEDPLUM_BASE_URL = process.env.NEXT_PUBLIC_MEDPLUM_BASE_URL || 'http://localhost:8103';
 const MEDPLUM_CLIENT_ID = process.env.NEXT_PUBLIC_MEDPLUM_CLIENT_ID || '';
-const MEDPLUM_PROJECT_ID = process.env.NEXT_PUBLIC_MEDPLUM_PROJECT_ID || '';
 
 interface MedplumAuthContextType {
   medplum: MedplumClient;
   profile: Resource | null;
   loading: boolean;
   isAuthenticated: boolean;
+  userLabel: string | null;
   isAdmin: boolean;
   clinicId: string | null;
-  signIn: (email: string, password: string) => Promise<{ isAdmin: boolean }>;
+  signIn: (
+    email: string,
+    password: string,
+    requestedClinicId?: string | null
+  ) => Promise<{ isAdmin: boolean; homeUrl?: string; clinicId?: string | null }>;
   signOut: () => Promise<void>;
   getAccessToken: () => string | undefined;
   setClinicId: (clinicId: string | null) => Promise<void>;
@@ -23,20 +36,96 @@ interface MedplumAuthContextType {
 
 const MedplumAuthContext = createContext<MedplumAuthContextType | null>(null);
 
+function formatHumanName(name?: HumanName): string | null {
+  if (!name) return null;
+  const parts = [...(name.given ?? []), name.family].filter(Boolean);
+  return parts.length > 0 ? parts.join(' ') : null;
+}
+
+function getProfileLabel(profile: Resource | null): string | null {
+  if (!profile) return null;
+
+  if ('name' in profile && Array.isArray((profile as any).name)) {
+    const displayName = formatHumanName((profile as any).name[0]);
+    if (displayName) return displayName;
+  }
+
+  if ('telecom' in profile && Array.isArray((profile as any).telecom)) {
+    const email = (profile as any).telecom.find((item: any) => item?.system === 'email')?.value;
+    if (email) return email;
+  }
+
+  return profile.id ?? profile.resourceType;
+}
+
+function toResourceLikeProfile(data: {
+  id?: string;
+  resourceType?: string;
+  name?: string | null;
+  email?: string | null;
+}): Resource | null {
+  if (!data.id || !data.resourceType) {
+    return null;
+  }
+
+  return {
+    resourceType: data.resourceType,
+    id: data.id,
+    ...(data.name
+      ? {
+          name: [{ text: data.name }],
+        }
+      : undefined),
+    ...(data.email
+      ? {
+          telecom: [{ system: 'email', value: data.email }],
+        }
+      : undefined),
+  } as Resource;
+}
+
 export function MedplumAuthProvider({ children }: { children: React.ReactNode }) {
   const [medplum] = useState(() => new MedplumClient({
     baseUrl: MEDPLUM_BASE_URL,
     clientId: MEDPLUM_CLIENT_ID || undefined,
+    storage: noopStorage,
     onUnauthenticated: () => {
       setProfile(null);
+      setHasSession(false);
       setIsAdmin(false);
     },
   }));
 
   const [profile, setProfile] = useState<Resource | null>(null);
+  const [hasSession, setHasSession] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [clinicId, setClinicIdState] = useState<string | null>(null);
+
+  const hydrateFromServerSession = async () => {
+    const sessionRes = await fetch('/api/auth/medplum-session', { credentials: 'include' });
+
+    if (!sessionRes.ok) {
+      setHasSession(false);
+      setProfile(null);
+      setIsAdmin(false);
+      return;
+    }
+
+    const session = await sessionRes.json();
+    setHasSession(session.authenticated === true);
+    setIsAdmin(session.isPlatformAdmin === true);
+    setClinicIdState(session.clinicId ?? null);
+
+    const meRes = await fetch('/api/auth/me', { credentials: 'include' });
+    if (!meRes.ok) {
+      setProfile(null);
+      return;
+    }
+
+    const me = await meRes.json();
+    setProfile(toResourceLikeProfile(me));
+  };
 
   const persistClinicId = async (nextClinicId: string | null) => {
     setClinicIdState(nextClinicId);
@@ -54,73 +143,59 @@ export function MedplumAuthProvider({ children }: { children: React.ReactNode })
 
   // Restore session from MedplumClient internal storage on mount
   useEffect(() => {
-    // Read clinic from cookie (set by middleware)
-    const clinicCookie = document.cookie
-      .split('; ')
-      .find(row => row.startsWith('medplum-clinic='))
-      ?.split('=')[1];
-    if (clinicCookie) setClinicIdState(decodeURIComponent(clinicCookie));
+    let cancelled = false;
 
-    // MedplumClient persists its own session via @medplum:* localStorage keys
-    medplum.getProfileAsync()
-      .then(async (p) => {
-        if (p) {
-          setProfile(p as Resource);
-          try {
-            const me = await medplum.get('auth/me');
-            setIsAdmin(me?.membership?.admin === true);
-          } catch {
-            setIsAdmin(false);
-          }
+    const bootstrap = async () => {
+      try {
+        await hydrateFromServerSession();
+      } catch {
+        if (!cancelled) {
+          setProfile(null);
+          setHasSession(false);
+          setIsAdmin(false);
         }
-      })
-      .catch(() => {
-        setProfile(null);
-        setIsAdmin(false);
-      })
-      .finally(() => setLoading(false));
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    bootstrap();
+
+    return () => {
+      cancelled = true;
+    };
   }, [medplum]);
 
-  const signIn = async (email: string, password: string): Promise<{ isAdmin: boolean }> => {
+  const signIn = async (
+    email: string,
+    password: string,
+    nextPath?: string | null
+  ): Promise<{ isAdmin: boolean; homeUrl?: string; clinicId?: string | null }> => {
     try {
-      const loginResponse = await medplum.startLogin({
-        email,
-        password,
-        projectId: MEDPLUM_PROJECT_ID || undefined,
-      });
-
-      if (loginResponse?.code && !medplum.getAccessToken()) {
-        await medplum.processCode(loginResponse.code);
-      }
-
-      try {
-        const maybeProfile = await medplum.getProfileAsync();
-        if (maybeProfile) setProfile(maybeProfile as Resource);
-      } catch {
-        setProfile(null);
-      }
-
-      const accessToken = medplum.getAccessToken();
-      if (!accessToken) throw new Error('Login succeeded but no access token was returned');
-
-      // Check admin status
-      let adminStatus = false;
-      try {
-        const me = await medplum.get('auth/me');
-        adminStatus = me?.membership?.admin === true;
-        setIsAdmin(adminStatus);
-      } catch {
-        setIsAdmin(false);
-      }
-
-      // Persist to server-side session cookie (shared across subdomains via COOKIE_DOMAIN)
-      await fetch('/api/auth/medplum-session', {
+      const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ accessToken }),
+        body: JSON.stringify({
+          email,
+          password,
+          next: nextPath || undefined,
+        }),
       });
 
-      return { isAdmin: adminStatus };
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.error || 'Login failed');
+      }
+
+      await hydrateFromServerSession();
+
+      return {
+        isAdmin: payload.isAdmin === true,
+        homeUrl: typeof payload.redirectUrl === 'string' ? payload.redirectUrl : undefined,
+        clinicId: typeof payload.clinicId === 'string' ? payload.clinicId : null,
+      };
     } catch (error: any) {
       throw new Error(error.message || 'Login failed');
     }
@@ -128,8 +203,8 @@ export function MedplumAuthProvider({ children }: { children: React.ReactNode })
 
   const signOut = async () => {
     try {
-      medplum.signOut();
       setProfile(null);
+      setHasSession(false);
       setIsAdmin(false);
       setClinicIdState(null);
       await fetch('/api/auth/medplum-session', { method: 'DELETE' });
@@ -144,7 +219,8 @@ export function MedplumAuthProvider({ children }: { children: React.ReactNode })
     medplum,
     profile,
     loading,
-    isAuthenticated: profile !== null,
+    isAuthenticated: hasSession,
+    userLabel: getProfileLabel(profile),
     isAdmin,
     clinicId,
     signIn,
