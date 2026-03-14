@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: 'standalone',
   typescript: {
     // ⚠️ TEMPORARY: Ignore type errors during build
     // TODO: Fix Medplum FHIR type incompatibilities

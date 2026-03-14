@@ -7,7 +7,6 @@ import { Textarea } from "@/components/ui/textarea";
 import Link from "next/link";
 import { ArrowLeft, Mic } from "lucide-react";
 import { Prescription, ProcedureRecord } from "@/lib/models";
-import { updateQueueStatus } from "@/lib/actions";
 import { safeToISOString } from "@/lib/utils";
 import { OrderComposer } from "@/components/orders/order-composer";
 import { PatientCard, SerializedPatient } from "@/components/patients/patient-card";
@@ -23,6 +22,7 @@ import { getPatient } from "@/lib/fhir/patient-client";
 import { LAB_TESTS, type LabTestCode } from "@/lib/fhir/lab-service";
 import { IMAGING_PROCEDURES, type ImagingProcedureCode } from "@/lib/fhir/imaging-service";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { DiagnosisSearch } from "@/components/diagnosis-search";
 
 // Load procedures from DB
 
@@ -37,6 +37,21 @@ export default function ConsultationForm({
   initialPatient,
   initialConsultation = null,
 }: ConsultationFormProps) {
+  const updateQueueStatus = async (status: "arrived" | "waiting" | "in_consultation" | "completed" | "meds_and_bills" | null) => {
+    const response = await fetch("/api/queue", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ patientId, status }),
+    });
+
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      throw new Error(payload.error || "Failed to update queue status");
+    }
+  };
+
   const [patient, setPatient] = useState<SerializedPatient | null>(initialPatient ?? null);
   const [loading, setLoading] = useState(!initialPatient);
   const isEditMode = Boolean(initialConsultation?.id);
@@ -330,7 +345,7 @@ export default function ConsultationForm({
     if (!clinicalNotes.trim() || !diagnosis.trim()) {
       toast({
         title: "Validation Error",
-        description: "Please fill in SOAP note and Diagnosis",
+        description: "Please fill in Consultation Note and Diagnosis",
         variant: "destructive"
       });
       return;
@@ -548,11 +563,11 @@ export default function ConsultationForm({
             </Card>
           </div>
 
-          {/* Middle: SOAP Note & Diagnosis (largest column) */}
+          {/* Middle: Consultation Note & Diagnosis (largest column) */}
           <div className="md:col-span-6 space-y-3">
             <div className="space-y-1">
               <Textarea
-                placeholder="SOAP note (Subjective, Objective, Assessment, Plan)"
+                placeholder="Consultation note"
                 className="min-h-[260px]"
                 value={clinicalNotes}
                 onChange={(e) => setClinicalNotes(e.target.value)}
@@ -580,12 +595,7 @@ export default function ConsultationForm({
                 patient={patient}
               />
             </div>
-            <Input
-              placeholder="Condition (diagnosis)"
-              className="mt-2"
-              value={diagnosis}
-              onChange={(e) => setDiagnosis(e.target.value)}
-            />
+            <DiagnosisSearch value={diagnosis} onChange={setDiagnosis} />
           </div>
 
           {/* Right: Orders (Meds + Procedures) */}

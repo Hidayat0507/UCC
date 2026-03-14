@@ -136,6 +136,7 @@ export function OrderComposer({
         medication: { id: opt.id, name: (opt.payload?.name as string) ?? opt.label.split(" (")[0] },
         frequency: "",
         duration: "",
+        price: typeof opt.payload?.unitPrice === "number" ? opt.payload.unitPrice : undefined,
       };
       setPrescriptions((prev) => [...prev, newItem]);
       setQuery("");
@@ -386,5 +387,4 @@ export function OrderComposer({
     </div>
   );
 }
-
 

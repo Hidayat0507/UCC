@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,17 +9,28 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useToast } from "@/components/ui/use-toast";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+type ClinicOption = {
+  id: string;
+  name: string;
+  subdomain: string;
+  parentOrganizationId?: string;
+};
 
 export default function NewClinicPage() {
   const router = useRouter();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [existingClinics, setExistingClinics] = useState<ClinicOption[]>([]);
+  const [loadingClinics, setLoadingClinics] = useState(true);
   const [form, setForm] = useState({
     name: "",
     subdomain: "",
     phone: "",
     address: "",
     logoUrl: "",
+    parentOrganizationId: "none",
   });
 
   const handleChange = (field: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -30,6 +41,31 @@ export default function NewClinicPage() {
     }
     setForm((prev) => ({ ...prev, [field]: value }));
   };
+
+  const parentOrganizations = existingClinics.filter((clinic) => !clinic.parentOrganizationId);
+
+  useEffect(() => {
+    const loadClinics = async () => {
+      try {
+        const res = await fetch("/api/admin/clinics");
+        if (!res.ok) {
+          throw new Error("Failed to load organizations");
+        }
+        const data = await res.json();
+        setExistingClinics((data.clinics ?? []) as ClinicOption[]);
+      } catch (error: any) {
+        toast({
+          title: "Unable to load organizations",
+          description: error.message || "Please refresh and try again.",
+          variant: "destructive",
+        });
+      } finally {
+        setLoadingClinics(false);
+      }
+    };
+
+    loadClinics();
+  }, [toast]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,7 +78,13 @@ export default function NewClinicPage() {
       const res = await fetch("/api/admin/clinics", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          ...form,
+          parentOrganizationId:
+            form.parentOrganizationId && form.parentOrganizationId !== "none"
+              ? form.parentOrganizationId
+              : undefined,
+        }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -80,6 +122,33 @@ export default function NewClinicPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="parentOrganizationId">Parent Organization</Label>
+              <Select
+                value={form.parentOrganizationId}
+                onValueChange={(value) =>
+                  setForm((prev) => ({ ...prev, parentOrganizationId: value }))
+                }
+                disabled={loadingClinics}
+              >
+                <SelectTrigger id="parentOrganizationId">
+                  <SelectValue
+                    placeholder={loadingClinics ? "Loading organizations..." : "No parent"}
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No parent (top-level organization)</SelectItem>
+                  {parentOrganizations.map((clinic) => (
+                    <SelectItem key={clinic.id} value={clinic.id}>
+                      {clinic.name} ({clinic.subdomain})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Choose a parent to create this clinic as a branch.
+              </p>
+            </div>
             <div className="space-y-2">
               <Label htmlFor="name">Clinic Name *</Label>
               <Input

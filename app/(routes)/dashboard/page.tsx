@@ -20,7 +20,6 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHeader, TableRow, TableHead } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "@/components/ui/use-toast";
-import { addPatientToQueue, removePatientFromQueue } from "@/lib/actions";
 
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState('queue');
@@ -67,14 +66,22 @@ export default function Dashboard() {
 
   const handleStartConsultation = async (patient: Patient) => {
     try {
-      await addPatientToQueue(patient.id);
+      const response = await fetch('/api/queue', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ patientId: patient.id }),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || 'Failed to add patient to queue');
+      }
       toast({
         title: "Consultation Started",
         description: `${patient.fullName}'s consultation has been started.`,
       });
-      // Refresh the queue
-      const data = await getTriagedPatientsQueue();
-      setQueue(data);
+      await loadQueue();
     } catch (error) {
       console.error('Error starting consultation:', error);
       toast({
@@ -87,14 +94,22 @@ export default function Dashboard() {
 
   const handleCompleteConsultation = async (patient: Patient) => {
     try {
-      await removePatientFromQueue(patient.id);
+      const response = await fetch('/api/queue', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ patientId: patient.id }),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || 'Failed to remove patient from queue');
+      }
       toast({
         title: "Consultation Completed",
         description: `${patient.fullName}'s consultation has been completed.`,
       });
-      // Refresh the queue
-      const data = await getTriagedPatientsQueue();
-      setQueue(data);
+      await loadQueue();
     } catch (error) {
       console.error('Error completing consultation:', error);
       toast({

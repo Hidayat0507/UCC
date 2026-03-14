@@ -4,25 +4,44 @@
  */
 
 import { MedplumClient } from '@medplum/core';
-import type { Composition, Condition, MedicationRequest, Observation, Procedure } from '@medplum/fhirtypes';
+import type { Composition, Observation } from '@medplum/fhirtypes';
 import type { Consultation } from '@/lib/models';
 import { applyMyCoreProfile } from './mycore';
 
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
+function textToNarrative(text?: string): { status: 'generated'; div: string } | undefined {
+  const trimmed = text?.trim();
+  if (!trimmed) {
+    return undefined;
+  }
 
-function toNarrative(text: string | undefined) {
-  const safe = escapeHtml(text ?? '').replace(/\r\n/g, '\n').replace(/\n/g, '<br/>');
+  const html = trimmed
+    .split(/\n{2,}/)
+    .map((paragraph) => `<p>${paragraph.replace(/\n/g, '<br/>')}</p>`)
+    .join('');
+
   return {
     status: 'generated',
-    div: `<div xmlns="http://www.w3.org/1999/xhtml">${safe}</div>`,
+    div: `<div xmlns="http://www.w3.org/1999/xhtml">${html}</div>`,
   };
+}
+
+function buildCompositionSections(consultation: Consultation & { id: string }): Composition['section'] | undefined {
+  const sections: NonNullable<Composition['section']> = [
+    consultation.chiefComplaint?.trim()
+      ? { title: 'Subjective', text: textToNarrative(consultation.chiefComplaint) }
+      : undefined,
+    consultation.notes?.trim()
+      ? { title: 'Note', text: textToNarrative(consultation.notes) }
+      : undefined,
+    consultation.diagnosis?.trim()
+      ? { title: 'Assessment', text: textToNarrative(consultation.diagnosis) }
+      : undefined,
+    (consultation as any).progressNote?.trim()
+      ? { title: 'Plan', text: textToNarrative((consultation as any).progressNote) }
+      : undefined,
+  ].filter(Boolean) as NonNullable<Composition['section']>;
+
+  return sections.length > 0 ? sections : undefined;
 }
 
 /**
@@ -143,11 +162,6 @@ export async function exportConsultationToMedplum(
     );
     console.log(`✅ Created Encounter: ${(encounter as any).id}`);
 
-    const createdConditions: Condition[] = [];
-    const createdProcedures: Procedure[] = [];
-    const createdMedications: MedicationRequest[] = [];
-    let chiefComplaintObservation: Observation | undefined;
-
     // 3. Create Condition (Diagnosis)
     if (consultation.diagnosis) {
       const condition = await medplum.createResource(
@@ -166,7 +180,6 @@ export async function exportConsultationToMedplum(
         })
       );
       console.log(`✅ Created Condition: ${(condition as any).id}`);
-      createdConditions.push(condition as Condition);
     }
 
     // 4. Create Observation for Chief Complaint
@@ -189,7 +202,6 @@ export async function exportConsultationToMedplum(
         }) as Observation
       );
       console.log(`✅ Created Chief Complaint Observation: ${(observation as any).id}`);
-      chiefComplaintObservation = observation;
     }
     
     // 5. Create Procedures
@@ -210,10 +222,9 @@ export async function exportConsultationToMedplum(
           },
           performedDateTime: encounterDate,
           })
-        );
-        console.log(`✅ Created Procedure: ${(procedure as any).id}`);
-        createdProcedures.push(procedure as Procedure);
-      }
+      );
+      console.log(`✅ Created Procedure: ${(procedure as any).id}`);
+    }
     }
 
     // 6. Create MedicationRequests (Prescriptions)
@@ -249,36 +260,32 @@ export async function exportConsultationToMedplum(
           })
         );
         console.log(`✅ Created MedicationRequest: ${(medicationRequest as any).id}`);
-        createdMedications.push(medicationRequest as MedicationRequest);
       }
     }
 
-    // 7. Create SOAP Note (Composition)
-    if (consultation.notes) {
-      const planEntries = [
-        ...createdProcedures.filter((proc) => proc.id).map((proc) => ({ reference: `Procedure/${proc.id}` })),
-        ...createdMedications.filter((med) => med.id).map((med) => ({ reference: `MedicationRequest/${med.id}` })),
-      ];
-
-      const assessmentEntries = createdConditions
-        .filter((condition) => condition.id)
-        .map((condition) => ({ reference: `Condition/${condition.id}` }));
-
-      const subjectiveEntries = chiefComplaintObservation?.id
-        ? [{ reference: `Observation/${chiefComplaintObservation.id}` }]
-        : [];
-
-      const allEntries = [...subjectiveEntries, ...assessmentEntries, ...planEntries];
+    // 7. Create Composition as the primary encounter note
+    if (consultation.notes || (consultation as any).progressNote || consultation.diagnosis || consultation.chiefComplaint) {
+      const summaryText = [
+        consultation.notes?.trim(),
+        (consultation as any).progressNote?.trim(),
+      ]
+        .filter((value): value is string => Boolean(value))
+        .join('\n\n');
 
       await medplum.createResource<Composition>(
         applyMyCoreProfile({
           resourceType: 'Composition',
           status: 'final',
           type: {
-            coding: [{ system: 'http://loinc.org', code: '11506-3', display: 'Progress note' }],
-            text: 'SOAP note',
+            coding: [
+              {
+                system: 'http://loinc.org',
+                code: '34109-9',
+                display: 'Note',
+              },
+            ],
+            text: 'Consultation note',
           },
-          title: 'SOAP Note',
           subject: {
             reference: `Patient/${(patient as any).id}`,
           },
@@ -286,17 +293,13 @@ export async function exportConsultationToMedplum(
             reference: `Encounter/${(encounter as any).id}`,
           },
           date: encounterDate,
-          text: toNarrative(consultation.notes),
-          section: [
-            {
-              title: 'SOAP Note',
-              text: toNarrative(consultation.notes),
-              ...(allEntries.length ? { entry: allEntries } : {}),
-            },
-          ],
+          title: 'Consultation Note',
+          author: [{ display: 'System' }],
+          text: textToNarrative(summaryText || consultation.chiefComplaint || consultation.diagnosis || 'Consultation note'),
+          section: buildCompositionSections(consultation),
         }) as Composition
       );
-      console.log(`✅ Created SOAP Composition`);
+      console.log(`✅ Created Composition note`);
     }
 
     console.log(`✅ Successfully exported consultation ${consultation.id} to Medplum`);

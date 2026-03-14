@@ -73,6 +73,7 @@ export interface Consultation {
   diagnosis: string;
   procedures: ProcedureRecord[];
   notes?: string;
+  progressNote?: string;
   prescriptions: Prescription[];
   createdAt?: Date;
   updatedAt?: Date;

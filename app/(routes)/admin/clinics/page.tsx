@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Building2, ExternalLink, Plus } from "lucide-react";
 import Link from "next/link";
+import DeleteClinicButton from "@/components/admin/delete-clinic-button";
 
 export default async function ClinicsPage() {
   const clinics = await getOrganizationsFromMedplum().catch(() => []);
@@ -68,6 +69,9 @@ export default async function ClinicsPage() {
                 </div>
               </CardHeader>
               <CardContent className="flex-1 space-y-2 text-sm text-muted-foreground">
+                {clinic.parentOrganizationName && (
+                  <p>↳ Branch of {clinic.parentOrganizationName}</p>
+                )}
                 {clinic.phone && <p>📞 {clinic.phone}</p>}
                 {clinic.address && <p>📍 {clinic.address}</p>}
                 <p className="font-mono text-xs truncate">
@@ -78,6 +82,7 @@ export default async function ClinicsPage() {
                 <Button variant="outline" size="sm" className="flex-1" asChild>
                   <Link href={`/admin/clinics/${clinic.id}`}>Edit</Link>
                 </Button>
+                <DeleteClinicButton clinicId={clinic.id} clinicName={clinic.name} />
                 <Button variant="ghost" size="sm" asChild>
                   <a
                     href={`https://${clinic.subdomain}.${baseDomain}`}

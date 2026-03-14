@@ -2,7 +2,7 @@ import Link from "next/link";
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="relative left-1/2 min-h-screen w-screen -translate-x-1/2 bg-background text-foreground">
       <section className="mx-auto max-w-6xl px-6 pb-10 pt-8 md:pb-16 md:pt-12">
         <div className="rounded-3xl border border-border bg-card p-5 shadow-[0_12px_40px_rgba(15,23,42,0.06)] md:p-8">
           <div className="flex items-center justify-between">

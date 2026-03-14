@@ -717,15 +717,30 @@ export async function searchPatientsInMedplum(query: string, clinicId?: string):
   try {
     const medplum = await getMedplumClient();
 
+    const normalizedQuery = query.trim().toLowerCase();
+    if (!normalizedQuery) {
+      return [];
+    }
+
+    // Medplum search behavior for Patient + clinic-scoped custom identifiers is not
+    // consistent enough here, so fetch a bounded recent slice and filter locally.
     const patients = await medplum.searchResources('Patient', {
-      _query: query,
-      _count: '50',
-      ...(clinicId ? { identifier: `${CLINIC_IDENTIFIER_SYSTEM}|${clinicId}`, organization: `Organization/${clinicId}` } : {}),
+      _count: '200',
+      _sort: '-_lastUpdated',
     });
 
     return patients
       .filter((patient) => matchesClinic(patient as any, clinicId))
-      .map(fhirPatientToPatientData);
+      .map(fhirPatientToPatientData)
+      .filter((patient) => {
+        return (
+          patient.fullName?.toLowerCase().includes(normalizedQuery) ||
+          patient.nric?.toLowerCase().includes(normalizedQuery) ||
+          patient.phone?.toLowerCase().includes(normalizedQuery) ||
+          patient.identifierValue?.toLowerCase().includes(normalizedQuery)
+        );
+      })
+      .slice(0, 50);
   } catch (error) {
     console.error('Failed to search patients in Medplum:', error);
     return [];
@@ -742,7 +757,6 @@ export async function getAllPatientsFromMedplum(limit = 100, clinicId?: string):
     const patients = await medplum.searchResources('Patient', {
       _count: String(limit),
       _sort: '-_lastUpdated',
-      ...(clinicId ? { identifier: `${CLINIC_IDENTIFIER_SYSTEM}|${clinicId}`, organization: `Organization/${clinicId}` } : {}),
     });
 
     return patients

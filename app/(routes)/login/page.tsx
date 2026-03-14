@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import { useMedplumAuth } from "@/lib/auth-medplum";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PasswordInput } from "@/components/ui/password-input";
 import { useToast } from "@/components/ui/use-toast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -15,25 +16,21 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const { signIn } = useMedplumAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     try {
-      const { isAdmin } = await signIn(email, password);
+      const nextUrl = searchParams.get("next");
+      const { isAdmin, homeUrl } = await signIn(email, password, nextUrl);
+      if (homeUrl) {
+        window.location.assign(homeUrl);
+        return;
+      }
       if (isAdmin) {
-        const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN;
-        if (baseDomain && typeof window !== "undefined") {
-          const currentHost = window.location.hostname;
-          if (currentHost === `admin.${baseDomain}`) {
-            router.replace("/admin");
-          } else {
-            window.location.href = `${window.location.protocol}//admin.${baseDomain}/admin`;
-          }
-        } else {
-          router.replace("/admin");
-        }
+        router.replace("/admin");
       } else {
         router.replace("/dashboard");
       }
@@ -70,9 +67,8 @@ export default function Login() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
-              <Input
+              <PasswordInput
                 id="password"
-                type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required

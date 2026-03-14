@@ -61,7 +61,7 @@ const moduleIconMap: Record<string, LucideIcon> = {
 export default function Sidebar({ modules = [] }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const { profile, signOut } = useMedplumAuth();
+  const { isAuthenticated, loading, signOut, userLabel } = useMedplumAuth();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [enabledModules, setEnabledModules] = useState<Array<{ name: string; href: string; icon: LucideIcon }>>([]);
 
@@ -187,22 +187,29 @@ export default function Sidebar({ modules = [] }: SidebarProps) {
                 {!isCollapsed && <span className="ml-2">{item.name}</span>}
               </Link>
             ))}
-            {profile ? (
-              <Button
-                variant="ghost"
-                className={cn(
-                  "w-full text-muted-foreground hover:text-accent-foreground",
-                  isCollapsed ? "justify-center w-8 h-8 p-2 mx-auto" : "justify-start px-3 py-2"
+            {!loading && isAuthenticated ? (
+              <div className="space-y-1">
+                {!isCollapsed && userLabel && (
+                  <div className="px-3 pt-1 text-xs text-muted-foreground truncate" title={userLabel}>
+                    {userLabel}
+                  </div>
                 )}
-                onClick={async () => {
-                  await signOut();
-                  router.replace('/login');
-                }}
-                title={isCollapsed ? "Logout" : undefined}
-              >
-                <LogOut className="h-4 w-4 flex-shrink-0" />
-                {!isCollapsed && <span className="ml-2">Logout</span>}
-              </Button>
+                <Button
+                  variant="ghost"
+                  className={cn(
+                    "w-full text-muted-foreground hover:text-accent-foreground",
+                    isCollapsed ? "justify-center w-8 h-8 p-2 mx-auto" : "justify-start px-3 py-2"
+                  )}
+                  onClick={async () => {
+                    await signOut();
+                    router.replace('/login');
+                  }}
+                  title={isCollapsed ? (userLabel ? `Logout ${userLabel}` : "Logout") : undefined}
+                >
+                  <LogOut className="h-4 w-4 flex-shrink-0" />
+                  {!isCollapsed && <span className="ml-2">Logout</span>}
+                </Button>
+              </div>
             ) : (
               <Button
                 variant="ghost"

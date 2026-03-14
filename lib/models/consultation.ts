@@ -2,13 +2,38 @@ import { Consultation } from '@/lib/models'; // Import canonical types
 import { getMedplumClient } from '../fhir/patient-service';
 import { getConsultationFromMedplum, getPatientConsultationsFromMedplum } from '../fhir/consultation-service';
 
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+function textToNarrative(text?: string): { status: 'generated'; div: string } | undefined {
+  const trimmed = text?.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  const html = trimmed
+    .split(/\n{2,}/)
+    .map((paragraph) => `<p>${paragraph.replace(/\n/g, '<br/>')}</p>`)
+    .join('');
+
+  return {
+    status: 'generated',
+    div: `<div xmlns="http://www.w3.org/1999/xhtml">${html}</div>`,
+  };
+}
+
+function buildNarrativeConsultationNote(consultation: Partial<Consultation>): string {
+  const parts = [
+    consultation.notes?.trim(),
+    consultation.progressNote?.trim() && consultation.progressNote.trim() !== consultation.notes?.trim()
+      ? consultation.progressNote.trim()
+      : undefined,
+  ].filter((value): value is string => Boolean(value));
+
+  if (parts.length > 0) {
+    return parts.join('\n\n');
+  }
+
+  return consultation.chiefComplaint?.trim()
+    || consultation.diagnosis?.trim()
+    || 'Consultation note';
 }
 
 // Removed local Prescription interface definition
@@ -82,26 +107,57 @@ export async function getConsultationById(id: string): Promise<Consultation | nu
 
 export async function updateConsultation(id: string, consultation: Partial<Consultation>): Promise<boolean> {
   try {
-    if (consultation.notes) {
+    if (consultation.notes || consultation.progressNote) {
       const medplum = await getMedplumClient();
       const encounter = await medplum.readResource('Encounter', id);
-      const safeNotes = escapeHtml(consultation.notes).replace(/\r\n/g, '\n').replace(/\n/g, '<br/>');
-      await medplum.createResource({
-        resourceType: 'Composition',
-        status: 'amended',
-        type: {
-          coding: [{ system: 'http://loinc.org', code: '11506-3', display: 'Progress note' }],
-          text: 'SOAP note',
-        },
-        title: 'SOAP Note (Amendment)',
-        subject: encounter.subject,
-        encounter: { reference: `Encounter/${id}` },
-        date: new Date().toISOString(),
-        text: {
-          status: 'generated',
-          div: `<div xmlns="http://www.w3.org/1999/xhtml">${safeNotes}</div>`,
-        },
+      const compositions = await medplum.searchResources('Composition', {
+        encounter: `Encounter/${id}`,
       });
+      const latestComposition = compositions
+        .slice()
+        .sort((a, b) => {
+          const aTime = a.meta?.lastUpdated ? new Date(a.meta.lastUpdated).getTime() : 0;
+          const bTime = b.meta?.lastUpdated ? new Date(b.meta.lastUpdated).getTime() : 0;
+          return bTime - aTime;
+        })[0];
+
+      if (latestComposition?.id) {
+        const nextText = buildNarrativeConsultationNote({
+          notes: consultation.notes?.trim() || latestComposition.text?.div?.replace(/<[^>]+>/g, ' ').trim(),
+          progressNote: consultation.progressNote,
+          chiefComplaint: consultation.chiefComplaint,
+          diagnosis: consultation.diagnosis,
+        });
+        await medplum.updateResource({
+          ...latestComposition,
+          status: 'final',
+          date: new Date().toISOString(),
+          title: latestComposition.title || 'Consultation Note',
+          text: textToNarrative(nextText),
+          section: undefined,
+        });
+      } else {
+        await medplum.createResource({
+          resourceType: 'Composition',
+          status: 'final',
+          type: {
+            coding: [
+              {
+                system: 'http://loinc.org',
+                code: '34109-9',
+                display: 'Note',
+              },
+            ],
+            text: 'Consultation note',
+          },
+          subject: encounter.subject,
+          encounter: { reference: `Encounter/${id}` },
+          date: new Date().toISOString(),
+          title: 'Consultation Note',
+          author: [{ display: 'System' }],
+          text: textToNarrative(buildNarrativeConsultationNote(consultation)),
+        });
+      }
     }
     return true;
   } catch (error) {

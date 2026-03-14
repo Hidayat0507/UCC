@@ -12,6 +12,18 @@ const MEDPLUM_BASE_URL = process.env.MEDPLUM_BASE_URL || 'http://localhost:8103'
 const MEDPLUM_CLIENT_ID = process.env.MEDPLUM_CLIENT_ID;
 const MEDPLUM_CLIENT_SECRET = process.env.MEDPLUM_CLIENT_SECRET;
 
+export interface AssignedClinic {
+  id: string;
+  name: string;
+  subdomain: string;
+}
+
+export interface UserAccessContext {
+  profile: ProfileResource;
+  isPlatformAdmin: boolean;
+  clinics: AssignedClinic[];
+}
+
 /**
  * Get authenticated Medplum client for the current user
  * Reads access token from cookie or Authorization header
@@ -63,11 +75,72 @@ export async function getMedplumForRequest(req?: NextRequest): Promise<MedplumCl
  */
 export async function getCurrentProfile(req?: NextRequest): Promise<ProfileResource> {
   const medplum = await getMedplumForRequest(req);
-  const profile = medplum.getProfile();
+  const profile = (await medplum.getProfileAsync()) ?? medplum.getProfile();
   if (!profile) {
     throw new Error('No Medplum profile available');
   }
   return profile;
+}
+
+export async function getAssignedClinics(
+  medplum: MedplumClient,
+  profile: ProfileResource
+): Promise<AssignedClinic[]> {
+  if (profile.resourceType !== 'Practitioner' || !profile.id) {
+    return [];
+  }
+
+  const roles = await medplum.searchResources('PractitionerRole', {
+    practitioner: `Practitioner/${profile.id}`,
+    _count: '100',
+  });
+
+  const organizationIds = Array.from(
+    new Set(
+      (roles ?? [])
+        .map((role) => role.organization?.reference?.replace('Organization/', ''))
+        .filter((value): value is string => Boolean(value))
+    )
+  );
+
+  const organizations = await Promise.all(
+    organizationIds.map(async (id) => {
+      try {
+        return await medplum.readResource('Organization', id);
+      } catch {
+        return null;
+      }
+    })
+  );
+
+  return organizations
+    .filter((org): org is NonNullable<typeof org> => Boolean(org?.id))
+    .map((org) => ({
+      id: org.id as string,
+      name: org.name ?? 'Unnamed clinic',
+      subdomain:
+        org.identifier?.find((identifier) => identifier.system === 'clinic')?.value ?? (org.id as string),
+    }));
+}
+
+export async function getUserAccessContext(req?: NextRequest): Promise<UserAccessContext> {
+  const medplum = await getMedplumForRequest(req);
+  const profile = (await medplum.getProfileAsync()) ?? medplum.getProfile();
+
+  if (!profile) {
+    throw new Error('No Medplum profile available');
+  }
+
+  let isPlatformAdmin = false;
+  try {
+    const me = await medplum.get('auth/me');
+    isPlatformAdmin = me?.membership?.admin === true;
+  } catch {
+    isPlatformAdmin = false;
+  }
+
+  const clinics = await getAssignedClinics(medplum, profile);
+  return { profile, isPlatformAdmin, clinics };
 }
 
 /**
@@ -139,6 +212,14 @@ export async function requireAuth(req?: NextRequest): Promise<MedplumClient> {
   }
 }
 
+export async function requirePlatformAdmin(req?: NextRequest): Promise<UserAccessContext> {
+  const access = await getUserAccessContext(req);
+  if (!access.isPlatformAdmin) {
+    throw new Error('Platform admin access required');
+  }
+  return access;
+}
+
 /**
  * Optional authentication - returns null if not authenticated
  */
@@ -149,9 +230,6 @@ export async function optionalAuth(req?: NextRequest): Promise<MedplumClient | n
     return null;
   }
 }
-
-
-
 
 
 

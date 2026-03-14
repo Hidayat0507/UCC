@@ -10,10 +10,12 @@ import type {
   Patient as FHIRPatient,
   Encounter,
   Condition,
+  ClinicalImpression,
   Composition,
   Observation,
   Procedure,
   MedicationRequest,
+  Resource,
 } from '@medplum/fhirtypes';
 import { findDiagnosisByText } from './terminologies/diagnoses';
 import { findMedicationByName } from './terminologies/medications';
@@ -26,11 +28,17 @@ export interface ConsultationData {
   patientId: string;
   chiefComplaint?: string;
   diagnosis: string;
-  procedures?: Array<{ name: string; price?: number }>;
+  procedures?: Array<{
+    name: string;
+    price?: number;
+    codingSystem?: string;
+    codingCode?: string;
+    codingDisplay?: string;
+  }>;
   notes?: string;
   progressNote?: string;
   prescriptions?: Array<{
-    medication: { id: string; name: string };
+    medication: { id: string; name: string; strength?: string };
     frequency: string;
     duration: string;
     price?: number;
@@ -51,6 +59,35 @@ let medplumClient: MedplumClient | undefined;
 let medplumInitPromise: Promise<MedplumClient> | undefined;
 
 const CLINIC_IDENTIFIER_SYSTEM = 'clinic';
+const PROCEDURE_PRICE_EXTENSION_URL = 'https://ucc.emr/fhir/StructureDefinition/procedure-price';
+const PROCEDURE_NOTES_EXTENSION_URL = 'https://ucc.emr/fhir/StructureDefinition/procedure-notes';
+const MEDICATION_PRICE_EXTENSION_URL = 'https://ucc.emr/fhir/StructureDefinition/medicationrequest-price';
+const MEDICATION_DURATION_EXTENSION_URL = 'https://ucc.emr/fhir/StructureDefinition/medicationrequest-duration';
+
+function getExtensionNumber(
+  extensions: Array<{ url?: string; valueDecimal?: number; valueInteger?: number }> | undefined,
+  url: string
+): number | undefined {
+  const ext = extensions?.find((entry) => entry.url === url);
+  if (!ext) {
+    return undefined;
+  }
+  if (typeof ext.valueDecimal === 'number') {
+    return ext.valueDecimal;
+  }
+  if (typeof ext.valueInteger === 'number') {
+    return ext.valueInteger;
+  }
+  return undefined;
+}
+
+function getExtensionString(
+  extensions: Array<{ url?: string; valueString?: string }> | undefined,
+  url: string
+): string | undefined {
+  const ext = extensions?.find((entry) => entry.url === url);
+  return typeof ext?.valueString === 'string' ? ext.valueString : undefined;
+}
 
 function addClinicIdentifier(identifiers: { system?: string; value?: string }[] | undefined, clinicId?: string) {
   if (!clinicId) return identifiers;
@@ -86,26 +123,6 @@ function withServiceProvider<T extends { [key: string]: any }>(resource: T, clin
   };
 }
 
-const SOAP_SECTION_ORDER = ['subjective', 'objective', 'assessment', 'plan'] as const;
-type SoapSectionKey = typeof SOAP_SECTION_ORDER[number];
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-function toNarrative(text: string | undefined) {
-  const safe = escapeHtml(text ?? '').replace(/\r\n/g, '\n').replace(/\n/g, '<br/>');
-  return {
-    status: 'generated',
-    div: `<div xmlns="http://www.w3.org/1999/xhtml">${safe}</div>`,
-  };
-}
-
 function decodeHtml(value: string): string {
   return value
     .replace(/&nbsp;/g, ' ')
@@ -127,75 +144,91 @@ function narrativeToText(narrative?: { div?: string }): string {
   return decodeHtml(stripped).replace(/\r/g, '').trim();
 }
 
-function parseSoapSections(note: string) {
-  const trimmed = note.trim();
+function buildNoteFromClinicalImpression(impression: ClinicalImpression): string | null {
+  const sections = impression.note
+    ?.map((note) => note.text?.trim())
+    .filter((text): text is string => Boolean(text));
+
+  if (sections && sections.length > 0) {
+    return sections.join('\n\n');
+  }
+
+  const summary = impression.summary?.trim();
+  if (summary) {
+    return summary;
+  }
+
+  const description = impression.description?.trim();
+  return description || null;
+}
+
+function textToNarrative(text?: string): { status: 'generated'; div: string } | undefined {
+  const trimmed = text?.trim();
   if (!trimmed) {
-    return {};
-  }
-  const matches = [...trimmed.matchAll(/(^|\n)\s*(subjective|objective|assessment|plan)\s*:\s*/gi)];
-  if (matches.length === 0) {
-    return { note: trimmed };
+    return undefined;
   }
 
-  const sections: Partial<Record<SoapSectionKey, string>> = {};
-  for (let idx = 0; idx < matches.length; idx += 1) {
-    const match = matches[idx];
-    const label = match[2]?.toLowerCase() as SoapSectionKey | undefined;
-    if (!label) continue;
-    const start = (match.index ?? 0) + match[0].length;
-    const end = idx + 1 < matches.length ? matches[idx + 1].index ?? trimmed.length : trimmed.length;
-    const content = trimmed.slice(start, end).trim();
-    if (content) {
-      sections[label] = content;
-    }
-  }
-  return sections;
+  const html = trimmed
+    .split(/\n{2,}/)
+    .map((paragraph) => `<p>${paragraph.replace(/\n/g, '<br/>')}</p>`)
+    .join('');
+
+  return {
+    status: 'generated',
+    div: `<div xmlns="http://www.w3.org/1999/xhtml">${html}</div>`,
+  };
 }
 
-function buildSoapNoteFromComposition(composition: Composition): string | null {
-  if (!composition.section || composition.section.length === 0) {
-    const text = narrativeToText(composition.text as any);
-    return text || null;
+function buildNarrativeConsultationNote(consultation: ConsultationData): string {
+  const parts = [
+    consultation.notes?.trim(),
+    consultation.progressNote?.trim() && consultation.progressNote.trim() !== consultation.notes?.trim()
+      ? consultation.progressNote.trim()
+      : undefined,
+  ].filter((value): value is string => Boolean(value));
+
+  if (parts.length > 0) {
+    return parts.join('\n\n');
   }
 
-  const byTitle = new Map<string, string>();
-  composition.section.forEach((section) => {
-    const title = section.title?.trim() || '';
-    if (!title) return;
-    const text = narrativeToText(section.text as any);
-    if (text) {
-      byTitle.set(title.toLowerCase(), text);
-    }
-  });
-
-  const orderedLines: string[] = [];
-  SOAP_SECTION_ORDER.forEach((key) => {
-    const label = key[0].toUpperCase() + key.slice(1);
-    const content = byTitle.get(label.toLowerCase());
-    if (content) {
-      orderedLines.push(`${label}:\n${content}`);
-    }
-  });
-
-  if (orderedLines.length > 0) {
-    return orderedLines.join('\n\n');
-  }
-
-  const fallback = composition.section
-    .map((section) => {
-      const title = section.title?.trim();
-      const text = narrativeToText(section.text as any);
-      if (!title || !text) {
-        return null;
-      }
-      return `${title}:\n${text}`;
-    })
-    .filter((line): line is string => Boolean(line));
-
-  return fallback.length ? fallback.join('\n\n') : null;
+  return consultation.chiefComplaint?.trim()
+    || consultation.diagnosis?.trim()
+    || 'Consultation note';
 }
 
-async function validateAndCreate<T extends { resourceType: string }>(medplum: MedplumClient, resource: T) {
+function buildCompositionResource(
+  consultation: ConsultationData,
+  patientReference: string,
+  patientName: string | undefined,
+  encounterId: string,
+  encounterDate: string,
+  practitionerRef?: string
+): Composition {
+  const noteText = buildNarrativeConsultationNote(consultation);
+
+  return {
+    resourceType: 'Composition',
+    status: 'final',
+    type: {
+      coding: [
+        {
+          system: 'http://loinc.org',
+          code: '34109-9',
+          display: 'Note',
+        },
+      ],
+      text: 'Consultation note',
+    },
+    subject: { reference: patientReference, display: patientName },
+    encounter: { reference: `Encounter/${encounterId}` },
+    date: encounterDate,
+    title: 'Consultation Note',
+    author: practitionerRef ? [{ reference: practitionerRef }] : [{ display: 'System' }],
+    text: textToNarrative(noteText),
+  };
+}
+
+async function validateAndCreate<T extends Resource>(medplum: MedplumClient, resource: T) {
   const profiledResource = applyMyCoreProfile(resource as any) as T;
   const validation = validateFhirResource(profiledResource);
   logValidation(resource.resourceType, validation);
@@ -399,11 +432,9 @@ export async function saveConsultationToMedplum(
   const createdConditions: Condition[] = [];
   const createdProcedures: Procedure[] = [];
   const createdMedications: MedicationRequest[] = [];
-  let chiefComplaintObservation: Observation | undefined;
-
   // 3. Create Chief Complaint (Observation) if provided
   if (consultation.chiefComplaint) {
-    chiefComplaintObservation = await validateAndCreate<Observation>(medplum, withClinicIdentifiers({
+    await validateAndCreate<Observation>(medplum, withClinicIdentifiers({
       resourceType: 'Observation',
       status: 'final',
       subject: { reference: patientReference },
@@ -492,6 +523,14 @@ export async function saveConsultationToMedplum(
         encounter: { reference: `Encounter/${encounter.id}` },
         code: codeable,
         performedDateTime: encounterDate,
+        extension: [
+          ...(typeof proc.price === 'number'
+            ? [{ url: PROCEDURE_PRICE_EXTENSION_URL, valueDecimal: proc.price }]
+            : []),
+          ...(proc.notes?.trim()
+            ? [{ url: PROCEDURE_NOTES_EXTENSION_URL, valueString: proc.notes.trim() }]
+            : []),
+        ],
       }, clinicId)) as Procedure;
       createdProcedures.push(procedure);
     }
@@ -530,129 +569,32 @@ export async function saveConsultationToMedplum(
           },
         ],
         authoredOn: encounterDate,
+        extension: [
+          ...(typeof rx.price === 'number'
+            ? [{ url: MEDICATION_PRICE_EXTENSION_URL, valueDecimal: rx.price }]
+            : []),
+          ...(rx.duration?.trim()
+            ? [{ url: MEDICATION_DURATION_EXTENSION_URL, valueString: rx.duration.trim() }]
+            : []),
+        ],
       }, clinicId)) as MedicationRequest;
       createdMedications.push(medicationRequest);
     }
   }
 
-  // 8. Create Composition — full encounter summary (Epic/MY Core best practice)
-  {
-    const compositionSections: any[] = [];
-
-    // Chief Complaint section (LOINC 10154-3)
-    if (chiefComplaintObservation?.id) {
-      compositionSections.push({
-        title: 'Chief Complaint',
-        code: { coding: [{ system: 'http://loinc.org', code: '10154-3', display: 'Chief complaint' }] },
-        text: toNarrative(consultation.chiefComplaint),
-        entry: [{ reference: `Observation/${chiefComplaintObservation.id}` }],
-      });
-    }
-
-    // Diagnoses section (LOINC 29308-4 — Problem list)
-    if (createdConditions.length > 0) {
-      compositionSections.push({
-        title: 'Diagnoses',
-        code: { coding: [{ system: 'http://loinc.org', code: '29308-4', display: 'Diagnosis' }] },
-        text: toNarrative(createdConditions.map((c: any) => c.code?.text).filter(Boolean).join('; ')),
-        entry: createdConditions.filter((c) => c.id).map((c) => ({ reference: `Condition/${c.id}` })),
-      });
-    }
-
-    // Medications section (LOINC 10160-0)
-    if (createdMedications.length > 0) {
-      const medTexts = createdMedications.map((m: any) => {
-        const name = m.medicationCodeableConcept?.text || 'Medication';
-        const dosage = m.dosageInstruction?.[0]?.text || '';
-        return dosage ? `${name} — ${dosage}` : name;
-      });
-      compositionSections.push({
-        title: 'Medications',
-        code: { coding: [{ system: 'http://loinc.org', code: '10160-0', display: 'History of Medication use' }] },
-        text: toNarrative(medTexts.join('\n')),
-        entry: createdMedications.filter((m) => m.id).map((m) => ({ reference: `MedicationRequest/${m.id}` })),
-      });
-    }
-
-    // Procedures section (LOINC 47519-4)
-    if (createdProcedures.length > 0) {
-      compositionSections.push({
-        title: 'Procedures',
-        code: { coding: [{ system: 'http://loinc.org', code: '47519-4', display: 'History of Procedures' }] },
-        text: toNarrative(createdProcedures.map((p: any) => p.code?.text).filter(Boolean).join('; ')),
-        entry: createdProcedures.filter((p) => p.id).map((p) => ({ reference: `Procedure/${p.id}` })),
-      });
-    }
-
-    // SOAP narrative sections — the doctor's clinical note
-    if (consultation.notes) {
-      const soapParsed = parseSoapSections(consultation.notes);
-      const hasSoapSections = SOAP_SECTION_ORDER.some((key) => soapParsed[key]);
-
-      if (hasSoapSections) {
-        for (const key of SOAP_SECTION_ORDER) {
-          const text = soapParsed[key];
-          if (!text) continue;
-          const title = key[0].toUpperCase() + key.slice(1);
-          const SOAP_LOINC: Record<string, { code: string; display: string }> = {
-            subjective: { code: '61150-9', display: 'Subjective' },
-            objective: { code: '61149-1', display: 'Objective' },
-            assessment: { code: '51848-0', display: 'Assessment' },
-            plan: { code: '18776-5', display: 'Plan of care' },
-          };
-          compositionSections.push({
-            title,
-            code: { coding: [{ system: 'http://loinc.org', ...SOAP_LOINC[key] }] },
-            text: toNarrative(text),
-          });
-        }
-      } else {
-        // Single clinical note (not parsed into SOAP sections)
-        compositionSections.push({
-          title: 'Clinical Notes',
-          code: { coding: [{ system: 'http://loinc.org', code: '55752-0', display: 'Clinical information' }] },
-          text: toNarrative(consultation.notes),
-        });
-      }
-    }
-
-    // Progress note section (LOINC 11506-3) — if separate from SOAP
-    if (consultation.progressNote && consultation.progressNote !== consultation.notes) {
-      compositionSections.push({
-        title: 'Progress Note',
-        code: { coding: [{ system: 'http://loinc.org', code: '11506-3', display: 'Progress note' }] },
-        text: toNarrative(consultation.progressNote),
-      });
-    }
-
-    // Only create Composition if there's meaningful content
-    if (compositionSections.length > 0) {
-      const compositionAuthor: { reference: string }[] = practitionerRef
-        ? [{ reference: practitionerRef }]
-        : clinicId
-          ? [{ reference: `Organization/${clinicId}` }]
-          : [{ reference: patientReference }];
-
-      await validateAndCreate<Composition>(medplum, {
-        resourceType: 'Composition',
-        status: 'final',
-        identifier: {
-          system: MY_CORE_IDENTIFIERS.COMPOSITION_ID,
-          value: `enc-${encounter.id}-${Date.now()}`,
-        },
-        type: {
-          coding: [{ system: 'http://loinc.org', code: '34133-9', display: 'Summary of episode note' }],
-        },
-        title: `Visit Summary — ${new Date(encounterDate).toLocaleDateString('en-MY', { day: 'numeric', month: 'short', year: 'numeric' })}`,
-        subject: { reference: patientReference, display: patientData.name },
-        encounter: { reference: `Encounter/${encounter.id}` },
-        date: encounterDate,
-        author: compositionAuthor,
-        custodian: clinicId ? { reference: `Organization/${clinicId}` } : undefined,
-        text: toNarrative(consultation.notes || consultation.diagnosis || 'Visit summary'),
-        section: compositionSections,
-      } as any);
-    }
+  // 8. Create Composition as the primary clinical note for the encounter
+  if (consultation.notes || consultation.progressNote || consultation.diagnosis || consultation.chiefComplaint) {
+    await validateAndCreate<Composition>(
+      medplum,
+      buildCompositionResource(
+        consultation,
+        patientReference,
+        patientData.name,
+        encounter.id!,
+        encounterDate,
+        practitionerRef
+      )
+    );
   }
 
   // Create Provenance for audit trail
@@ -687,11 +629,12 @@ export async function getConsultationFromMedplum(encounterId: string, clinicId?:
     }
     
     // Get related resources
-    const [conditions, observations, procedures, medications, compositions] = await Promise.all([
+    const [conditions, observations, procedures, medications, impressions, compositions] = await Promise.all([
       medplum.searchResources('Condition', { encounter: `Encounter/${encounterId}` }),
       medplum.searchResources('Observation', { encounter: `Encounter/${encounterId}` }),
       medplum.searchResources('Procedure', { encounter: `Encounter/${encounterId}` }),
       medplum.searchResources('MedicationRequest', { encounter: `Encounter/${encounterId}` }),
+      medplum.searchResources('ClinicalImpression', { encounter: `Encounter/${encounterId}` }),
       medplum.searchResources('Composition', { encounter: `Encounter/${encounterId}` }),
     ]);
 
@@ -709,6 +652,14 @@ export async function getConsultationFromMedplum(encounterId: string, clinicId?:
       (obs) => (obs as any).code?.text === 'Progress Note'
     );
 
+    const latestImpression = impressions
+      .slice()
+      .sort((a, b) => {
+        const aTime = (a.meta?.lastUpdated ? new Date(a.meta.lastUpdated).getTime() : 0);
+        const bTime = (b.meta?.lastUpdated ? new Date(b.meta.lastUpdated).getTime() : 0);
+        return bTime - aTime;
+      })[0];
+
     const latestComposition = compositions
       .slice()
       .sort((a, b) => {
@@ -717,7 +668,12 @@ export async function getConsultationFromMedplum(encounterId: string, clinicId?:
         return bTime - aTime;
       })[0];
 
-    const soapNote = latestComposition ? buildSoapNoteFromComposition(latestComposition as Composition) : null;
+    const compositionNote = latestComposition
+      ? narrativeToText((latestComposition as Composition).text as any)
+      : null;
+    const clinicalNote = compositionNote || (
+      latestImpression ? buildNoteFromClinicalImpression(latestImpression as ClinicalImpression) : null
+    );
 
     return {
       id: encounter.id!,
@@ -725,11 +681,12 @@ export async function getConsultationFromMedplum(encounterId: string, clinicId?:
       patientName: encounter.subject?.display,
       chiefComplaint: (chiefComplaint as any)?.valueString || '',
       diagnosis: conditions[0] ? ((conditions[0] as any).code?.text || '') : '',
-      notes: soapNote || (clinicalNotes as any)?.valueString,
-      progressNote: (progressNote as any)?.valueString,
+      notes: clinicalNote || (clinicalNotes as any)?.valueString,
+      progressNote: (progressNote as any)?.valueString || (latestImpression as ClinicalImpression | undefined)?.note?.[0]?.text,
       procedures: procedures.map((proc) => ({
         name: (proc as any).code?.text || 'Procedure',
-        price: 0,
+        price: getExtensionNumber((proc as any).extension, PROCEDURE_PRICE_EXTENSION_URL) ?? 0,
+        notes: getExtensionString((proc as any).extension, PROCEDURE_NOTES_EXTENSION_URL) || '',
       })),
       prescriptions: medications.map((med) => ({
         medication: {
@@ -737,8 +694,8 @@ export async function getConsultationFromMedplum(encounterId: string, clinicId?:
           name: (med as any).medicationCodeableConcept?.text || 'Medication',
         },
         frequency: (med as any).dosageInstruction?.[0]?.text || '',
-        duration: '',
-        price: 0,
+        duration: getExtensionString((med as any).extension, MEDICATION_DURATION_EXTENSION_URL) || '',
+        price: getExtensionNumber((med as any).extension, MEDICATION_PRICE_EXTENSION_URL) ?? 0,
       })),
       date: encounter.period?.start ? new Date(encounter.period.start) : new Date(),
       createdAt: encounter.meta?.lastUpdated ? new Date(encounter.meta.lastUpdated) : new Date(),

@@ -8,13 +8,16 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/use-toast";
 
 type ClinicOption = {
   id: string;
   name: string;
   subdomain: string;
+  parentOrganizationName?: string;
 };
 
 export default function InviteUserPage() {
@@ -28,10 +31,12 @@ export default function InviteUserPage() {
     lastName: "",
     email: "",
     clinicId: "",
+    password: "",
+    sendEmail: false,
   });
 
   const handleChange =
-    (field: "firstName" | "lastName" | "email") =>
+    (field: "firstName" | "lastName" | "email" | "password") =>
     (e: React.ChangeEvent<HTMLInputElement>) => {
       setForm((prev) => ({ ...prev, [field]: e.target.value }));
     };
@@ -69,18 +74,38 @@ export default function InviteUserPage() {
       toast({ title: "Missing required fields", variant: "destructive" });
       return;
     }
+    if (!form.sendEmail && !form.password) {
+      toast({
+        title: "Password required",
+        description: "Set a password when creating a user without email invite.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!form.sendEmail && form.password.trim().length < 8) {
+      toast({
+        title: "Password too short",
+        description: "Temporary password must be at least 8 characters.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     setLoading(true);
     try {
       const res = await fetch("/api/admin/users/invite", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
           firstName: form.firstName,
           lastName: form.lastName,
           email: form.email,
           clinicId: form.clinicId,
-          sendEmail: true,
+          password: form.password || undefined,
+          sendEmail: form.sendEmail,
         }),
       });
 
@@ -90,8 +115,10 @@ export default function InviteUserPage() {
       }
 
       toast({
-        title: "Invitation sent",
-        description: `${form.firstName} ${form.lastName} has been invited.`,
+        title: form.sendEmail ? "Invitation sent" : "User created",
+        description: form.sendEmail
+          ? `${form.firstName} ${form.lastName} has been invited.`
+          : `${form.firstName} ${form.lastName} can now sign in.`,
       });
       router.replace("/admin/users");
     } catch (err: any) {
@@ -116,7 +143,7 @@ export default function InviteUserPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Invite User</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Send a Medplum invitation to a practitioner.
+            Create a clinic user directly or send a Medplum invitation email.
           </p>
         </div>
       </div>
@@ -124,7 +151,9 @@ export default function InviteUserPage() {
       <Card>
         <CardHeader>
           <CardTitle>Practitioner Details</CardTitle>
-          <CardDescription>The invited user will receive an email invitation.</CardDescription>
+          <CardDescription>
+            Assign the user to a clinic and optionally email an invitation.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -141,7 +170,11 @@ export default function InviteUserPage() {
                 <SelectContent>
                   {clinics.map((clinic) => (
                     <SelectItem key={clinic.id} value={clinic.id}>
-                      {clinic.name} ({clinic.subdomain})
+                      {clinic.name}
+                      {clinic.parentOrganizationName
+                        ? ` - Branch of ${clinic.parentOrganizationName}`
+                        : ""}
+                      {` (${clinic.subdomain})`}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -182,9 +215,38 @@ export default function InviteUserPage() {
               />
             </div>
 
+            <div className="space-y-2">
+              <Label htmlFor="password">Temporary Password</Label>
+              <PasswordInput
+                id="password"
+                value={form.password}
+                onChange={handleChange("password")}
+                placeholder="Set a password for direct sign-in"
+              />
+              <p className="text-xs text-muted-foreground">
+                Required when email invite is disabled. Minimum 8 characters.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-between rounded-lg border p-4">
+              <div className="space-y-1">
+                <Label htmlFor="sendEmailInvite">Send Email Invite</Label>
+                <p className="text-xs text-muted-foreground">
+                  Turn this on only if the email address can receive Medplum invites.
+                </p>
+              </div>
+              <Switch
+                id="sendEmailInvite"
+                checked={form.sendEmail}
+                onCheckedChange={(checked) =>
+                  setForm((prev) => ({ ...prev, sendEmail: Boolean(checked) }))
+                }
+              />
+            </div>
+
             <div className="pt-2 flex gap-3">
               <Button type="submit" disabled={loading || loadingClinics || clinics.length === 0}>
-                {loading ? "Sending Invite..." : "Send Invite"}
+                {loading ? "Saving..." : form.sendEmail ? "Send Invite" : "Create User"}
               </Button>
               <Button type="button" variant="outline" asChild>
                 <Link href="/admin/users">Cancel</Link>

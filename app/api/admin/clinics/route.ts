@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getOrganizationsFromMedplum } from "@/lib/fhir/admin-service";
 import { saveOrganizationDetailsToMedplum } from "@/lib/fhir/organization-service";
+import { requirePlatformAdmin } from "@/lib/server/medplum-auth";
 
 /**
  * GET /api/admin/clinics
  * List clinics (Organisations) for admin flows.
  */
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    await requirePlatformAdmin(req);
     const clinics = await getOrganizationsFromMedplum();
     return NextResponse.json({ clinics });
   } catch (error: any) {
@@ -25,7 +27,8 @@ export async function GET() {
  */
 export async function POST(req: NextRequest) {
   try {
-    const { name, subdomain, phone, address, logoUrl } = await req.json();
+    await requirePlatformAdmin(req);
+    const { name, subdomain, phone, address, logoUrl, parentOrganizationId } = await req.json();
 
     if (!name || !subdomain) {
       return NextResponse.json(
@@ -43,7 +46,13 @@ export async function POST(req: NextRequest) {
     }
 
     await saveOrganizationDetailsToMedplum(
-      { name, phone: phone || undefined, address: address || undefined, logoUrl: logoUrl || undefined },
+      {
+        name,
+        phone: phone || undefined,
+        address: address || undefined,
+        logoUrl: logoUrl || undefined,
+        parentOrganizationId: parentOrganizationId || undefined,
+      },
       subdomain
     );
 
@@ -52,7 +61,7 @@ export async function POST(req: NextRequest) {
     console.error("Failed to create clinic:", error);
     return NextResponse.json(
       { error: error.message || "Failed to create clinic" },
-      { status: 500 }
+      { status: /Platform admin access required/i.test(error.message || "") ? 403 : 500 }
     );
   }
 }
