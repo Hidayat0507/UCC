@@ -1,7 +1,10 @@
 import { NextRequest } from "next/server";
-import { getConsultationById, getPatientById } from "@/lib/models";
+import { getConsultationFromMedplum } from "@/lib/fhir/consultation-service";
+import { getPatientFromMedplum } from "@/lib/fhir/patient-service";
 import { toFhirPatient, toFhirEncounter, toFhirCondition, toFhirMedicationRequest, toFhirServiceRequest } from "@/lib/fhir/mappers";
 import { adminAuth } from "@/lib/firebase-admin";
+import { getMedplumForRequest } from "@/lib/server/medplum-auth";
+import { getClinicIdFromRequest } from "@/lib/server/clinic";
 import { z } from "zod";
 import { writeServerAuditLog } from "@/lib/server/logging";
 
@@ -34,10 +37,13 @@ export async function POST(req: NextRequest) {
     }
     const { consultationId } = parsed.data;
 
-    const consultation = await getConsultationById(consultationId);
+    const medplum = await getMedplumForRequest(req);
+    const clinicId = await getClinicIdFromRequest(req);
+
+    const consultation = await getConsultationFromMedplum(consultationId, clinicId ?? undefined, medplum);
     if (!consultation) return new Response(JSON.stringify({ error: 'Consultation not found' }), { status: 404 });
 
-    const patient = await getPatientById(consultation.patientId);
+    const patient = await getPatientFromMedplum(consultation.patientId, clinicId ?? undefined, medplum);
     if (!patient) return new Response(JSON.stringify({ error: 'Patient not found' }), { status: 404 });
 
     // Create minimal FHIR resources and link
