@@ -1,14 +1,26 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const CLINIC_URL =
-  process.env.EMR_CLINIC_URL || "https://apex-group.drhidayat.com";
-const ADMIN_URL =
-  process.env.EMR_ADMIN_URL || "https://admin.drhidayat.com";
+// ---------------------------------------------------------------------------
+// URL resolution
+//
+// Production:  set EMR_CLINIC_URL / EMR_ADMIN_URL in CI secrets
+// Local dev:   PLAYWRIGHT_ENV=local  or just run without the env vars
+//              → uses http://localhost:3000
+// ---------------------------------------------------------------------------
+const isLocal = process.env.PLAYWRIGHT_ENV === "local" || !process.env.EMR_CLINIC_URL;
+
+const CLINIC_URL = isLocal
+  ? "http://localhost:3000"
+  : process.env.EMR_CLINIC_URL || "https://apex-group.drhidayat.com";
+
+const ADMIN_URL = isLocal
+  ? "http://localhost:3000"
+  : process.env.EMR_ADMIN_URL || "https://admin.drhidayat.com";
 
 export default defineConfig({
   testDir: "./tests/e2e",
   timeout: 60_000,
-  retries: 1,
+  retries: process.env.CI ? 2 : 1,
   reporter: [
     ["list"],
     ["html", { outputFolder: "playwright-report", open: "never" }],
@@ -20,18 +32,31 @@ export default defineConfig({
     video: "retain-on-failure",
     trace: "on-first-retry",
   },
+
   projects: [
-    // ── Auth setup (runs once before all workflow tests) ────────────────
+    // ── Auth setup (runs once before all workflow tests) ────────────────────
     {
       name: "auth-setup",
       testMatch: /auth\.setup\.ts/,
-      use: { ...devices["Desktop Chrome"] },
+      use: {
+        ...devices["Desktop Chrome"],
+        baseURL: CLINIC_URL,
+      },
     },
 
-    // ── Clinic-context tests (dashboard, patients, consultation, orders) ─
+    // ── Clinic workflow tests ───────────────────────────────────────────────
     {
       name: "clinic",
-      testMatch: /(?!admin)(?!credential-check)(?!emr-auth).*\.spec\.ts/,
+      testMatch: [
+        "**/clinic-login.spec.ts",
+        "**/patients.spec.ts",
+        "**/patient.spec.ts",
+        "**/consultation.spec.ts",
+        "**/orders.spec.ts",
+        "**/queue.spec.ts",
+        "**/triage.spec.ts",
+        "**/check-in.spec.ts",
+      ],
       use: {
         ...devices["Desktop Chrome"],
         baseURL: CLINIC_URL,
@@ -40,7 +65,7 @@ export default defineConfig({
       dependencies: ["auth-setup"],
     },
 
-    // ── Admin-portal tests ──────────────────────────────────────────────
+    // ── Admin portal tests ──────────────────────────────────────────────────
     {
       name: "admin",
       testMatch: /admin\.spec\.ts/,
@@ -52,11 +77,14 @@ export default defineConfig({
       dependencies: ["auth-setup"],
     },
 
-    // ── Lightweight smoke tests (no auth required) ──────────────────────
+    // ── Smoke tests (no auth required, run against any env) ─────────────────
     {
       name: "smoke",
       testMatch: /(credential-check|emr-auth)\.spec\.ts/,
-      use: { ...devices["Desktop Chrome"] },
+      use: {
+        ...devices["Desktop Chrome"],
+        baseURL: CLINIC_URL,
+      },
     },
   ],
 });

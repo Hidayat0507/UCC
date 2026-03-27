@@ -12,8 +12,7 @@ import {
   updateConsultationInMedplum,
 } from '@/lib/fhir/consultation-service';
 import { getPatientFromMedplum } from '@/lib/fhir/patient-service';
-import { getClinicIdFromRequest } from '@/lib/server/clinic';
-import { getMedplumForRequest, requireClinicAuth } from '@/lib/server/medplum-auth';
+import { requireClinicAuth } from '@/lib/server/medplum-auth';
 import { handleRouteError } from '@/lib/server/route-helpers';
 
 /**
@@ -85,16 +84,11 @@ export async function POST(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   try {
-    const medplum = await getMedplumForRequest(request);
+    const { medplum, clinicId } = await requireClinicAuth(request);
     const { searchParams } = new URL(request.url);
     const patientId = searchParams.get('patientId');
     const consultationId = searchParams.get('id');
     const recent = searchParams.get('recent');
-    const clinicId = await getClinicIdFromRequest(request);
-
-    if (!clinicId) {
-      return NextResponse.json({ error: 'Missing clinicId' }, { status: 400 });
-    }
 
     // Get specific consultation
     if (consultationId) {
@@ -138,17 +132,12 @@ export async function GET(request: NextRequest) {
  */
 export async function PATCH(request: NextRequest) {
   try {
-    const medplum = await getMedplumForRequest(request);
+    const { medplum, clinicId } = await requireClinicAuth(request);
     const body = await request.json();
     const { consultationId, ...updates } = body;
-    const clinicId = await getClinicIdFromRequest(request);
 
     if (!consultationId) {
       return NextResponse.json({ error: 'Missing consultationId' }, { status: 400 });
-    }
-
-    if (!clinicId) {
-      return NextResponse.json({ error: 'Missing clinicId' }, { status: 400 });
     }
 
     await updateConsultationInMedplum(consultationId, updates, clinicId, medplum);

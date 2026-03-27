@@ -4,8 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getClinicIdFromRequest } from '@/lib/server/clinic';
-import { getMedplumForRequest, requireClinicAuth } from '@/lib/server/medplum-auth';
+import { requireClinicAuth } from '@/lib/server/medplum-auth';
 import { handleRouteError } from '@/lib/server/route-helpers';
 import {
   savePatientToMedplum,
@@ -52,16 +51,11 @@ export async function POST(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   try {
-    const medplum = await getMedplumForRequest(request);
+    const { medplum, clinicId } = await requireClinicAuth(request);
     const { searchParams } = new URL(request.url);
     const patientId = searchParams.get('id');
     const searchQuery = searchParams.get('search');
     const limit = searchParams.get('limit');
-    const clinicId = await getClinicIdFromRequest(request);
-
-    if (!clinicId) {
-      return NextResponse.json({ error: 'Missing clinicId' }, { status: 400 });
-    }
 
     // Get specific patient
     if (patientId) {
@@ -100,16 +94,11 @@ export async function GET(request: NextRequest) {
  */
 export async function PATCH(request: NextRequest) {
   try {
-    const medplum = await getMedplumForRequest(request);
+    const { medplum, clinicId } = await requireClinicAuth(request);
     const { patientId, ...updates } = await request.json();
-    const clinicId = await getClinicIdFromRequest(request);
 
     if (!patientId) {
       return NextResponse.json({ error: 'Missing patientId' }, { status: 400 });
-    }
-
-    if (!clinicId) {
-      return NextResponse.json({ error: 'Missing clinicId' }, { status: 400 });
     }
 
     await updatePatientInMedplum(patientId, updates, clinicId, medplum);
@@ -122,7 +111,6 @@ export async function PATCH(request: NextRequest) {
     return handleRouteError(error, 'PATCH /api/patients');
   }
 }
-
 
 
 

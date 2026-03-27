@@ -26,9 +26,7 @@ test.describe("Login page", () => {
   test("renders form with email and password fields", async ({ page }) => {
     await page.goto(`${CLINIC_URL}/login`, { waitUntil: "domcontentloaded" });
 
-    await expect(
-      page.getByRole("heading", { name: /welcome back/i })
-    ).toBeVisible();
+    await expect(page.getByText("Welcome back")).toBeVisible();
     await expect(page.locator("#email")).toBeVisible();
     await expect(page.locator("#password")).toBeVisible();
     await expect(

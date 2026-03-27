@@ -83,6 +83,70 @@ export async function getCurrentProfile(req?: NextRequest): Promise<ProfileResou
   return profile as ProfileResource;
 }
 
+async function isPlatformAdmin(medplum: MedplumClient): Promise<boolean> {
+  try {
+    const me = await medplum.get('auth/me');
+    return me?.membership?.admin === true;
+  } catch {
+    return false;
+  }
+}
+
+async function resolveClinicOrganizationIds(
+  medplum: MedplumClient,
+  clinicId: string
+): Promise<Set<string>> {
+  const ids = new Set<string>();
+
+  const organizations = await medplum.searchResources('Organization', {
+    identifier: `clinic|${clinicId}`,
+    _count: '10',
+  });
+
+  for (const org of organizations ?? []) {
+    if (org.id) {
+      ids.add(org.id);
+    }
+  }
+
+  // If clinicId is already an Organization ID, allow direct matching as well.
+  ids.add(clinicId);
+  return ids;
+}
+
+async function assertClinicAssignment(
+  medplum: MedplumClient,
+  profile: ProfileResource,
+  clinicId: string
+): Promise<void> {
+  if (await isPlatformAdmin(medplum)) {
+    return;
+  }
+
+  if (profile.resourceType !== 'Practitioner' || !profile.id) {
+    throw new AuthError('Clinic access is only available to assigned staff users.');
+  }
+
+  const allowedOrganizationIds = await resolveClinicOrganizationIds(medplum, clinicId);
+  const roles = await medplum.searchResources('PractitionerRole', {
+    practitioner: `Practitioner/${profile.id}`,
+    _count: '100',
+  });
+
+  const hasMatchingRole = (roles ?? []).some((role) => {
+    const orgRef = role.organization?.reference;
+    if (!orgRef?.startsWith('Organization/')) {
+      return false;
+    }
+    const organizationId = orgRef.replace('Organization/', '');
+    return allowedOrganizationIds.has(organizationId);
+  });
+
+  if (!hasMatchingRole) {
+    throw new AuthError(`You are not assigned to clinic '${clinicId}'.`);
+  }
+}
+
 
 /**
  * Check if user has a specific role.
@@ -118,12 +182,19 @@ export async function requireAuth(req?: NextRequest): Promise<MedplumClient> {
  */
 export async function requireClinicAuth(
   req: NextRequest
-): Promise<{ medplum: MedplumClient; clinicId: string | null }> {
+): Promise<{ medplum: MedplumClient; clinicId: string }> {
   const { getClinicIdFromRequest } = await import('@/lib/server/clinic');
-  const [medplum, clinicId] = await Promise.all([
+  const [medplum, clinicId, profile] = await Promise.all([
     getMedplumForRequest(req),
     getClinicIdFromRequest(req),
+    getCurrentProfile(req),
   ]);
+
+  if (!clinicId) {
+    throw new AuthError('No clinic context found. Access must come from a clinic subdomain.');
+  }
+
+  await assertClinicAssignment(medplum, profile, clinicId);
   return { medplum, clinicId };
 }
 

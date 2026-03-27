@@ -6,8 +6,6 @@ import type { Resource } from '@medplum/fhirtypes';
 
 const MEDPLUM_BASE_URL = process.env.NEXT_PUBLIC_MEDPLUM_BASE_URL || 'http://localhost:8103';
 const MEDPLUM_CLIENT_ID = process.env.NEXT_PUBLIC_MEDPLUM_CLIENT_ID || '';
-const MEDPLUM_PROJECT_ID = process.env.NEXT_PUBLIC_MEDPLUM_PROJECT_ID || '';
-
 interface MedplumAuthContextType {
   medplum: MedplumClient;
   profile: Resource | null;
@@ -112,15 +110,23 @@ export function MedplumAuthProvider({ children }: { children: React.ReactNode })
 
   const signIn = async (email: string, password: string): Promise<{ isAdmin: boolean }> => {
     try {
-      const loginResponse = await medplum.startLogin({
-        email,
-        password,
-        projectId: MEDPLUM_PROJECT_ID || undefined,
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
       });
 
-      if (loginResponse?.code && !medplum.getAccessToken()) {
-        await medplum.processCode(loginResponse.code);
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(`${payload?.code || 'AUTH_UNKNOWN'}: ${payload?.error || 'Login failed.'}`);
       }
+
+      const accessToken = payload?.accessToken;
+      if (typeof accessToken !== 'string' || !accessToken) {
+        throw new Error('AUTH_CONFIG: Login succeeded but no session was created.');
+      }
+
+      medplum.setAccessToken(accessToken);
 
       try {
         const maybeProfile = await medplum.getProfileAsync();
@@ -129,25 +135,12 @@ export function MedplumAuthProvider({ children }: { children: React.ReactNode })
         setProfile(null);
       }
 
-      const accessToken = medplum.getAccessToken();
-      if (!accessToken) throw new Error('Login succeeded but no access token was returned');
+      const adminStatus = payload?.isAdmin === true;
+      setIsAdmin(adminStatus);
 
-      // Check admin status
-      let adminStatus = false;
-      try {
-        const me = await medplum.get('auth/me');
-        adminStatus = me?.membership?.admin === true;
-        setIsAdmin(adminStatus);
-      } catch {
-        setIsAdmin(false);
+      if (typeof payload?.clinicId === 'string' || payload?.clinicId === null) {
+        setClinicIdState(payload.clinicId ?? null);
       }
-
-      // Persist to server-side session cookie (shared across subdomains via COOKIE_DOMAIN)
-      await fetch('/api/auth/medplum-session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ accessToken }),
-      });
 
       return { isAdmin: adminStatus };
     } catch (error: any) {
@@ -192,8 +185,8 @@ export function MedplumAuthProvider({ children }: { children: React.ReactNode })
 // ── Error classification ────────────────────────────────────────────────────
 
 /**
- * Maps low-level fetch / Medplum errors to clear, user-facing messages.
- * Distinguishes network/CORS issues from wrong credentials so the UI can
+ * Maps low-level fetch / auth errors to clear, user-facing messages.
+ * Distinguishes network/server issues from wrong credentials so the UI can
  * show the right guidance instead of a single "Invalid email or password."
  */
 function classifyAuthError(error: unknown): Error {
@@ -218,9 +211,27 @@ function classifyAuthError(error: unknown): Error {
     lower.includes('invalid') ||
     lower.includes('unauthorized') ||
     lower.includes('bad credentials') ||
-    lower.includes('incorrect password')
+    lower.includes('incorrect password') ||
+    lower.includes('auth_credentials')
   ) {
     return new Error('AUTH_CREDENTIALS: Incorrect email or password. Please try again.');
+  }
+
+  if (
+    lower.includes('auth_clinic_required') ||
+    lower.includes('auth_clinic_forbidden') ||
+    lower.includes('not assigned to clinic') ||
+    lower.includes('multiple clinics')
+  ) {
+    return new Error(
+      'AUTH_CLINIC: This account must sign in from the correct clinic subdomain.'
+    );
+  }
+
+  if (lower.includes('auth_forbidden')) {
+    return new Error(
+      'AUTH_FORBIDDEN: Your account does not have access to this area.'
+    );
   }
 
   if (lower.includes('no access token')) {

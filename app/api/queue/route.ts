@@ -4,19 +4,12 @@ import {
   getTriageQueueForToday,
   updateQueueStatusForPatient,
 } from '@/lib/fhir/triage-service';
-import { getMedplumForRequest } from '@/lib/server/medplum-auth';
-import { getClinicIdFromRequest } from '@/lib/server/clinic';
+import { requireClinicAuth } from '@/lib/server/medplum-auth';
 import { handleRouteError } from '@/lib/server/route-helpers';
 
 export async function GET(req: NextRequest) {
   try {
-    const [medplum, clinicId] = await Promise.all([
-      getMedplumForRequest(req),
-      getClinicIdFromRequest(req),
-    ]);
-    if (!clinicId) {
-      return NextResponse.json({ success: false, error: 'Missing clinicId' }, { status: 400 });
-    }
+    const { medplum, clinicId } = await requireClinicAuth(req);
     const patients = await getTriageQueueForToday(200, medplum, clinicId);
     return NextResponse.json({ success: true, patients });
   } catch (error) {
@@ -26,16 +19,10 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const [medplum, clinicId] = await Promise.all([
-      getMedplumForRequest(req),
-      getClinicIdFromRequest(req),
-    ]);
+    const { medplum, clinicId } = await requireClinicAuth(req);
     const { patientId } = await req.json();
     if (!patientId) {
       return NextResponse.json({ success: false, error: 'patientId is required' }, { status: 400 });
-    }
-    if (!clinicId) {
-      return NextResponse.json({ success: false, error: 'Missing clinicId' }, { status: 400 });
     }
     await checkInPatientInTriage(patientId, undefined, medplum, clinicId);
     return NextResponse.json({ success: true });
@@ -46,16 +33,10 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-    const [medplum, clinicId] = await Promise.all([
-      getMedplumForRequest(req),
-      getClinicIdFromRequest(req),
-    ]);
+    const { medplum, clinicId } = await requireClinicAuth(req);
     const { patientId } = await req.json();
     if (!patientId) {
       return NextResponse.json({ success: false, error: 'patientId is required' }, { status: 400 });
-    }
-    if (!clinicId) {
-      return NextResponse.json({ success: false, error: 'Missing clinicId' }, { status: 400 });
     }
     await updateQueueStatusForPatient(patientId, null, medplum, clinicId);
     return NextResponse.json({ success: true });
@@ -66,16 +47,10 @@ export async function DELETE(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   try {
-    const [medplum, clinicId] = await Promise.all([
-      getMedplumForRequest(req),
-      getClinicIdFromRequest(req),
-    ]);
+    const { medplum, clinicId } = await requireClinicAuth(req);
     const { patientId, status } = await req.json();
     if (!patientId || typeof status === 'undefined') {
       return NextResponse.json({ success: false, error: 'patientId and status are required' }, { status: 400 });
-    }
-    if (!clinicId) {
-      return NextResponse.json({ success: false, error: 'Missing clinicId' }, { status: 400 });
     }
     await updateQueueStatusForPatient(patientId, status, medplum, clinicId);
     return NextResponse.json({ success: true });

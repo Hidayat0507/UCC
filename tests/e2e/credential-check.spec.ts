@@ -22,16 +22,13 @@ test.describe("Production credential and site checks", () => {
     await expect(page).toHaveTitle(/UCC EMR/i);
   });
 
-  test("EMR staff login page is accessible", async ({ page }, testInfo) => {
-    const missing = missingEnvVars({ EMR_URL });
-    if (missing.length) {
-      annotateMissingEnv(testInfo, missing);
-      test.skip();
-    }
-
-    await page.goto(`${EMR_URL}/login`, { waitUntil: "domcontentloaded" });
-    await expect(page.locator('input[type="email"]')).toBeVisible();
-    await expect(page.locator('input[type="password"]')).toBeVisible();
+  test("EMR staff login page is accessible", async ({ page }) => {
+    // The login form lives on clinic subdomains — the root domain redirects to /landing.
+    const clinicUrl =
+      process.env.EMR_CLINIC_URL || "https://apex-group.drhidayat.com";
+    await page.goto(`${clinicUrl}/login`, { waitUntil: "domcontentloaded" });
+    await expect(page.locator("#email")).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("#password")).toBeVisible();
   });
 
   test("Medplum self-hosted UI loads", async ({ page }, testInfo) => {

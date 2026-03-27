@@ -46,6 +46,12 @@ export default function Login() {
       } else if (raw.startsWith("AUTH_NETWORK")) {
         description =
           "Could not reach the authentication server. Check your internet connection or try again shortly.";
+      } else if (raw.startsWith("AUTH_CLINIC")) {
+        description =
+          "This account must sign in from the correct clinic subdomain.";
+      } else if (raw.startsWith("AUTH_FORBIDDEN")) {
+        description =
+          "Your account does not have access to this area.";
       } else if (raw.startsWith("AUTH_CONFIG")) {
         description =
           "Login succeeded but no session was created. This is a configuration issue — please contact support.";
