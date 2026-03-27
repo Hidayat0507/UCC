@@ -98,8 +98,8 @@ async function getMedplumClient(): Promise<MedplumClient> {
 /**
  * Create a lab order (ServiceRequest)
  */
-export async function createLabOrder(order: LabOrderRequest): Promise<string> {
-  const medplum = await getMedplumClient();
+export async function createLabOrder(order: LabOrderRequest, medplum?: MedplumClient): Promise<string> {
+  const client = medplum ?? (await getMedplumClient());
   
   console.log(`📋 Creating lab order for patient ${order.patientId}`);
 
@@ -109,7 +109,7 @@ export async function createLabOrder(order: LabOrderRequest): Promise<string> {
   for (const testCode of order.tests) {
     const test = LAB_TESTS[testCode];
     
-    const serviceRequest = await validateAndCreate<ServiceRequest>(medplum, {
+    const serviceRequest = await validateAndCreate<ServiceRequest>(client, {
       resourceType: 'ServiceRequest',
       status: 'active',
       intent: 'order',
@@ -146,6 +146,7 @@ export async function createLabOrder(order: LabOrderRequest): Promise<string> {
     if (serviceRequest.id) {
       try {
         await createProvenanceForResource(
+          client,
           'ServiceRequest',
           serviceRequest.id,
           order.orderedBy?.startsWith('Practitioner/') ? order.orderedBy.split('/')[1] : undefined,
@@ -169,14 +170,15 @@ export async function createLabOrder(order: LabOrderRequest): Promise<string> {
 export async function receiveLabResults(
   serviceRequestId: string,
   results: LabResult[],
-  conclusion?: string
+  conclusion?: string,
+  medplum?: MedplumClient
 ): Promise<string> {
-  const medplum = await getMedplumClient();
+  const client = medplum ?? (await getMedplumClient());
   
   console.log(`📊 Receiving lab results for ServiceRequest ${serviceRequestId}`);
 
   // Get the original service request
-  const serviceRequest = await medplum.readResource('ServiceRequest', serviceRequestId);
+  const serviceRequest = await client.readResource('ServiceRequest', serviceRequestId);
   
   if (!serviceRequest.subject?.reference) {
     throw new Error('ServiceRequest has no patient reference');
@@ -243,14 +245,14 @@ export async function receiveLabResults(
   };
 
   // Create all Observations in a Bundle transaction
-  const observations = await createResourcesInBundle<Observation>(medplum, observationResources);
+  const observations = await createResourcesInBundle<Observation>(client, observationResources);
   console.log(`✅ Created ${observations.length} Observations in Bundle transaction`);
 
   // Create Provenance for Observations (non-blocking)
   for (const obs of observations) {
     if (obs.id) {
       try {
-        await createProvenanceForResource('Observation', obs.id, undefined, undefined, 'CREATE');
+        await createProvenanceForResource(client, 'Observation', obs.id, undefined, undefined, 'CREATE');
       } catch (error) {
         console.warn(`⚠️  Failed to create Provenance for Observation/${obs.id} (non-blocking):`, error);
       }
@@ -263,7 +265,7 @@ export async function receiveLabResults(
   }));
 
   // Create DiagnosticReport
-  const diagnosticReport = await validateAndCreate<DiagnosticReport>(medplum, diagnosticReportResource);
+  const diagnosticReport = await validateAndCreate<DiagnosticReport>(client, diagnosticReportResource);
 
   console.log(`✅ Created DiagnosticReport: ${diagnosticReport.id}`);
 
@@ -271,6 +273,7 @@ export async function receiveLabResults(
   if (diagnosticReport.id) {
     try {
       await createProvenanceForResource(
+        client,
         'DiagnosticReport',
         diagnosticReport.id,
         undefined,
@@ -284,7 +287,7 @@ export async function receiveLabResults(
   }
 
   // Update ServiceRequest status to completed
-  await medplum.updateResource({
+  await client.updateResource({
     ...serviceRequest,
     status: 'completed',
   });
@@ -295,10 +298,10 @@ export async function receiveLabResults(
 /**
  * Get all lab orders for a patient
  */
-export async function getPatientLabOrders(patientId: string): Promise<ServiceRequest[]> {
-  const medplum = await getMedplumClient();
+export async function getPatientLabOrders(patientId: string, medplum?: MedplumClient): Promise<ServiceRequest[]> {
+  const client = medplum ?? (await getMedplumClient());
   
-  const orders = await medplum.searchResources('ServiceRequest', {
+  const orders = await client.searchResources('ServiceRequest', {
     subject: `Patient/${patientId}`,
     category: 'laboratory',
     _sort: '-authored',
@@ -310,10 +313,10 @@ export async function getPatientLabOrders(patientId: string): Promise<ServiceReq
 /**
  * Get all lab results for a patient
  */
-export async function getPatientLabResults(patientId: string): Promise<LabReportSummary[]> {
-  const medplum = await getMedplumClient();
+export async function getPatientLabResults(patientId: string, medplum?: MedplumClient): Promise<LabReportSummary[]> {
+  const client = medplum ?? (await getMedplumClient());
   
-  const reports = await medplum.searchResources('DiagnosticReport', {
+  const reports = await client.searchResources('DiagnosticReport', {
     subject: `Patient/${patientId}`,
     _sort: '-issued',
   });
@@ -328,7 +331,7 @@ export async function getPatientLabResults(patientId: string): Promise<LabReport
       for (const resultRef of report.result) {
         const obsId = resultRef.reference?.split('/')[1];
         if (obsId) {
-          const obs = await medplum.readResource('Observation', obsId);
+          const obs = await client.readResource('Observation', obsId);
           
           results.push({
             testCode: obs.code?.coding?.[0]?.code || '',
@@ -363,11 +366,11 @@ export async function getPatientLabResults(patientId: string): Promise<LabReport
 /**
  * Get a specific lab report by ID
  */
-export async function getLabReport(reportId: string): Promise<LabReportSummary | null> {
+export async function getLabReport(reportId: string, medplum?: MedplumClient): Promise<LabReportSummary | null> {
   try {
-    const medplum = await getMedplumClient();
+    const client = medplum ?? (await getMedplumClient());
     
-    const report = await medplum.readResource('DiagnosticReport', reportId);
+    const report = await client.readResource('DiagnosticReport', reportId);
     const results: LabResult[] = [];
     
     // Get all observations
@@ -375,7 +378,7 @@ export async function getLabReport(reportId: string): Promise<LabReportSummary |
       for (const resultRef of report.result) {
         const obsId = resultRef.reference?.split('/')[1];
         if (obsId) {
-          const obs = await medplum.readResource('Observation', obsId);
+          const obs = await client.readResource('Observation', obsId);
           
           results.push({
             testCode: obs.code?.coding?.[0]?.code || '',
@@ -411,10 +414,10 @@ export async function getLabReport(reportId: string): Promise<LabReportSummary |
 /**
  * Get lab results for an encounter
  */
-export async function getEncounterLabResults(encounterId: string): Promise<LabReportSummary[]> {
-  const medplum = await getMedplumClient();
+export async function getEncounterLabResults(encounterId: string, medplum?: MedplumClient): Promise<LabReportSummary[]> {
+  const client = medplum ?? (await getMedplumClient());
   
-  const reports = await medplum.searchResources('DiagnosticReport', {
+  const reports = await client.searchResources('DiagnosticReport', {
     encounter: `Encounter/${encounterId}`,
     _sort: '-issued',
   });
@@ -428,7 +431,7 @@ export async function getEncounterLabResults(encounterId: string): Promise<LabRe
       for (const resultRef of report.result) {
         const obsId = resultRef.reference?.split('/')[1];
         if (obsId) {
-          const obs = await medplum.readResource('Observation', obsId);
+          const obs = await client.readResource('Observation', obsId);
           
           results.push({
             testCode: obs.code?.coding?.[0]?.code || '',

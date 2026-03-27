@@ -1,4 +1,5 @@
 import { TriageData, VitalSigns, QueueStatus } from '../types';
+import { MedplumClient } from '@medplum/core';
 import { getMedplumClient, getPatientFromMedplum, SavedPatient } from './patient-service';
 import { validateFhirResource, logValidation } from './validation';
 
@@ -175,8 +176,12 @@ function parseTriageExtension(extensions?: Extension[]): TriageSummary {
   };
 }
 
-async function createChiefComplaintObservation(encounterId: string, patientRef: string, chiefComplaint: string) {
-  const medplum = await getMedplumClient();
+async function createChiefComplaintObservation(
+  medplum: MedplumClient,
+  encounterId: string,
+  patientRef: string,
+  chiefComplaint: string
+) {
   await validateAndCreate(medplum, {
     resourceType: 'Observation',
     status: 'final',
@@ -190,8 +195,12 @@ async function createChiefComplaintObservation(encounterId: string, patientRef: 
   });
 }
 
-async function createVitalsObservations(encounterId: string, patientRef: string, vitals: VitalSigns) {
-  const medplum = await getMedplumClient();
+async function createVitalsObservations(
+  medplum: MedplumClient,
+  encounterId: string,
+  patientRef: string,
+  vitals: VitalSigns
+) {
   const promises: Promise<any>[] = [];
 
   (Object.keys(vitals) as (keyof VitalSigns)[]).forEach((key) => {
@@ -223,12 +232,16 @@ async function createVitalsObservations(encounterId: string, patientRef: string,
   await Promise.all(promises);
 }
 
-export async function saveTriageEncounter(patientId: string, triageData: Omit<TriageData, 'triageAt' | 'isTriaged'>): Promise<void> {
-  const medplum = await getMedplumClient();
+export async function saveTriageEncounter(
+  patientId: string,
+  triageData: Omit<TriageData, 'triageAt' | 'isTriaged'>,
+  medplum?: MedplumClient
+): Promise<void> {
+  const client = medplum ?? (await getMedplumClient());
   const triageAtIso = new Date().toISOString();
   const queueStatus: QueueStatus = 'waiting';
 
-  const encounter = await validateAndCreate(medplum, {
+  const encounter = await validateAndCreate(client, {
     resourceType: 'Encounter',
     status: 'triaged',
     class: {
@@ -250,20 +263,24 @@ export async function saveTriageEncounter(patientId: string, triageData: Omit<Tr
     extension: [buildTriageExtension(triageData, triageAtIso, queueStatus)],
   });
 
-  await createChiefComplaintObservation(encounter.id!, `Patient/${patientId}`, triageData.chiefComplaint);
-  await createVitalsObservations(encounter.id!, `Patient/${patientId}`, triageData.vitalSigns || {});
+  await createChiefComplaintObservation(client, encounter.id!, `Patient/${patientId}`, triageData.chiefComplaint);
+  await createVitalsObservations(client, encounter.id!, `Patient/${patientId}`, triageData.vitalSigns || {});
 }
 
-export async function checkInPatientInTriage(patientId: string, chiefComplaint?: string): Promise<string> {
-  const medplum = await getMedplumClient();
-  const existing = await getActiveTriageEncounter(patientId);
+export async function checkInPatientInTriage(
+  patientId: string,
+  chiefComplaint?: string,
+  medplum?: MedplumClient
+): Promise<string> {
+  const client = medplum ?? (await getMedplumClient());
+  const existing = await getActiveTriageEncounter(patientId, client);
   if (existing) {
-    await updateQueueStatusForPatient(patientId, 'arrived');
+    await updateQueueStatusForPatient(patientId, 'arrived', client);
     return existing.id;
   }
 
   const queueAddedAtIso = new Date().toISOString();
-  const encounter = await validateAndCreate(medplum, {
+  const encounter = await validateAndCreate(client, {
     resourceType: 'Encounter',
     status: 'arrived',
     class: {
@@ -277,7 +294,7 @@ export async function checkInPatientInTriage(patientId: string, chiefComplaint?:
   });
 
   if (chiefComplaint) {
-    await createChiefComplaintObservation(encounter.id!, `Patient/${patientId}`, chiefComplaint);
+    await createChiefComplaintObservation(client, encounter.id!, `Patient/${patientId}`, chiefComplaint);
   }
 
   return encounter.id!;
@@ -285,16 +302,17 @@ export async function checkInPatientInTriage(patientId: string, chiefComplaint?:
 
 export async function updateTriageEncounter(
   patientId: string,
-  triageData: Partial<TriageData>
+  triageData: Partial<TriageData>,
+  medplum?: MedplumClient
 ): Promise<void> {
-  const medplum = await getMedplumClient();
-  const existing = await getActiveTriageEncounter(patientId);
+  const client = medplum ?? (await getMedplumClient());
+  const existing = await getActiveTriageEncounter(patientId, client);
 
   if (!existing) {
     throw new Error('No active triage encounter found to update');
   }
 
-  const encounter = await medplum.readResource('Encounter', existing.id);
+  const encounter = await client.readResource('Encounter', existing.id);
   const triageExt = buildTriageExtension(
     {
       triageLevel: triageData.triageLevel ?? existing.triage?.triageLevel ?? 3,
@@ -310,25 +328,29 @@ export async function updateTriageEncounter(
 
   const otherExtensions = (encounter as any).extension?.filter((ext: any) => ext.url !== TRIAGE_ENCOUNTER_EXTENSION_URL) || [];
 
-  await medplum.updateResource({
+  await client.updateResource({
     ...(encounter as any),
     extension: [...otherExtensions, triageExt],
   });
 }
 
-export async function updateQueueStatusForPatient(patientId: string, status: QueueStatus | null): Promise<void> {
-  const medplum = await getMedplumClient();
-  const existing = await getActiveTriageEncounter(patientId);
+export async function updateQueueStatusForPatient(
+  patientId: string,
+  status: QueueStatus | null,
+  medplum?: MedplumClient
+): Promise<void> {
+  const client = medplum ?? (await getMedplumClient());
+  const existing = await getActiveTriageEncounter(patientId, client);
 
   if (!existing) {
     if (status === 'arrived') {
-      await checkInPatientInTriage(patientId);
+      await checkInPatientInTriage(patientId, undefined, client);
       return;
     }
     throw new Error('No active triage encounter found');
   }
 
-  const encounter = await medplum.readResource<any>('Encounter', existing.id);
+  const encounter = await client.readResource<any>('Encounter', existing.id);
   const newStatus = encounterStatusFromQueue(status);
   if (!newStatus) {
     // If clearing status, mark encounter finished and drop queue extension fields
@@ -381,17 +403,18 @@ export async function updateQueueStatusForPatient(patientId: string, status: Que
     newExtensions.push(triageExt);
   }
 
-  await medplum.updateResource({
+  await client.updateResource({
     ...encounter,
     extension: newExtensions,
   });
 }
 
 export async function getActiveTriageEncounter(
-  patientId: string
+  patientId: string,
+  medplum?: MedplumClient
 ): Promise<TriageSummary & { id: string } | null> {
-  const medplum = await getMedplumClient();
-  const encounters = await medplum.searchResources('Encounter', {
+  const client = medplum ?? (await getMedplumClient());
+  const encounters = await client.searchResources('Encounter', {
     subject: `Patient/${patientId}`,
     status: 'arrived,triaged,in-progress',
     _count: '1',
@@ -415,20 +438,14 @@ export async function getActiveTriageEncounter(
   };
 }
 
-export async function getTriageForPatient(patientId: string): Promise<TriageSummary> {
-  const existing = await getActiveTriageEncounter(patientId);
+export async function getTriageForPatient(patientId: string, medplum?: MedplumClient): Promise<TriageSummary> {
+  const existing = await getActiveTriageEncounter(patientId, medplum);
   if (!existing) return {};
   return existing;
 }
 
-export async function getTriageQueueForToday(limit = 200): Promise<SavedPatient[]> {
-  let medplum;
-  try {
-    medplum = await getMedplumClient();
-  } catch (err) {
-    console.error('[triage] Medplum not configured:', err);
-    return [];
-  }
+export async function getTriageQueueForToday(limit = 200, medplum?: MedplumClient): Promise<SavedPatient[]> {
+  const client = medplum ?? (await getMedplumClient());
   const start = new Date();
   start.setHours(0, 0, 0, 0);
   const end = new Date(start);
@@ -438,7 +455,7 @@ export async function getTriageQueueForToday(limit = 200): Promise<SavedPatient[
   const endIso = end.toISOString();
   const query = `status=arrived,triaged,in-progress,finished&date=ge${startIso}&date=lt${endIso}&_count=${limit}&_sort=date`;
 
-  const encounters = await medplum.searchResources<any>('Encounter', query);
+  const encounters = await client.searchResources<any>('Encounter', query);
 
   const patients: SavedPatient[] = [];
 
@@ -447,7 +464,7 @@ export async function getTriageQueueForToday(limit = 200): Promise<SavedPatient[
     const patientId = subjectRef.replace('Patient/', '');
     if (!patientId) continue;
 
-    const patient = await getPatientFromMedplum(patientId);
+    const patient = await getPatientFromMedplum(patientId, undefined, client);
     if (!patient) continue;
 
     const parsed = parseTriageExtension(encounter.extension);

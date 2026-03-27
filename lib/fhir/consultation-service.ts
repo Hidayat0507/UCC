@@ -45,10 +45,9 @@ export interface SavedConsultation extends ConsultationData {
   createdAt: Date;
 }
 
+const CLINIC_IDENTIFIER_SYSTEM = 'clinic';
 let medplumClient: MedplumClient | undefined;
 let medplumInitPromise: Promise<MedplumClient> | undefined;
-
-const CLINIC_IDENTIFIER_SYSTEM = 'clinic';
 
 function addClinicIdentifier(identifiers: { system?: string; value?: string }[] | undefined, clinicId?: string) {
   if (!clinicId) return identifiers;
@@ -207,19 +206,20 @@ export async function saveConsultationToMedplum(
     phone?: string;
     address?: string;
   },
-  clinicId?: string
+  clinicId?: string,
+  medplum?: MedplumClient
 ): Promise<string> {
-  const medplum = await getMedplumClient();
+  const client = medplum ?? (await getMedplumClient());
   
   console.log(`💾 Saving consultation to Medplum (source of truth)...`);
 
   // 1. Verify patient exists in Medplum
-  const patient = await getOrCreatePatient(medplum, patientData, clinicId);
+  const patient = await getOrCreatePatient(client, patientData, clinicId);
   const patientReference = `Patient/${patient.id}`;
 
   // 2. Create Encounter (this is the consultation)
   const encounterDate = consultation.date?.toISOString() || new Date().toISOString();
-  const encounter = await validateAndCreate<Encounter>(medplum, withServiceProvider(withClinicIdentifiers({
+  const encounter = await validateAndCreate<Encounter>(client, withServiceProvider(withClinicIdentifiers({
       resourceType: 'Encounter',
       status: 'finished',
       class: {
@@ -246,7 +246,7 @@ export async function saveConsultationToMedplum(
 
   // 3. Create Chief Complaint (Observation)
   if (consultation.chiefComplaint) {
-    await validateAndCreate<Observation>(medplum, withClinicIdentifiers({
+    await validateAndCreate<Observation>(client, withClinicIdentifiers({
       resourceType: 'Observation',
       status: 'final',
       subject: { reference: patientReference },
@@ -282,7 +282,7 @@ export async function saveConsultationToMedplum(
       }
     }
 
-    await validateAndCreate<Condition>(medplum, withClinicIdentifiers({
+    await validateAndCreate<Condition>(client, withClinicIdentifiers({
       resourceType: 'Condition',
       subject: { reference: patientReference },
       encounter: { reference: `Encounter/${encounter.id}` },
@@ -311,7 +311,7 @@ export async function saveConsultationToMedplum(
 
   // 5. Create Clinical Notes (Observation)
   if (consultation.notes) {
-    await validateAndCreate<Observation>(medplum, withClinicIdentifiers({
+    await validateAndCreate<Observation>(client, withClinicIdentifiers({
       resourceType: 'Observation',
       status: 'final',
       subject: { reference: patientReference },
@@ -324,7 +324,7 @@ export async function saveConsultationToMedplum(
 
   // 5b. Progress Note
   if (consultation.progressNote) {
-    await validateAndCreate<Observation>(medplum, withClinicIdentifiers({
+    await validateAndCreate<Observation>(client, withClinicIdentifiers({
       resourceType: 'Observation',
       status: 'final',
       subject: { reference: patientReference },
@@ -353,7 +353,7 @@ export async function saveConsultationToMedplum(
           }
         : { text: proc.name };
 
-      await validateAndCreate<Procedure>(medplum, withClinicIdentifiers({
+      await validateAndCreate<Procedure>(client, withClinicIdentifiers({
         resourceType: 'Procedure',
         status: 'completed',
         subject: { reference: patientReference },
@@ -381,7 +381,7 @@ export async function saveConsultationToMedplum(
         ];
       }
 
-      await validateAndCreate<MedicationRequest>(medplum, withClinicIdentifiers({
+      await validateAndCreate<MedicationRequest>(client, withClinicIdentifiers({
         resourceType: 'MedicationRequest',
         status: 'active',
         intent: 'order',
@@ -404,6 +404,7 @@ export async function saveConsultationToMedplum(
   // Create Provenance for audit trail
   try {
     await createProvenanceForResource(
+      client,
       'Encounter',
       encounter.id!,
       consultation.practitionerId,
@@ -422,22 +423,26 @@ export async function saveConsultationToMedplum(
 /**
  * Get a consultation from Medplum by Encounter ID
  */
-export async function getConsultationFromMedplum(encounterId: string, clinicId?: string): Promise<SavedConsultation | null> {
+export async function getConsultationFromMedplum(
+  encounterId: string,
+  clinicId?: string,
+  medplum?: MedplumClient
+): Promise<SavedConsultation | null> {
   try {
-    const medplum = await getMedplumClient();
+    const client = medplum ?? (await getMedplumClient());
     
     // Get the encounter
-    const encounter = await medplum.readResource('Encounter', encounterId);
+    const encounter = await client.readResource('Encounter', encounterId);
     if (!matchesClinic(encounter as any, clinicId)) {
       return null;
     }
     
     // Get related resources
     const [conditions, observations, procedures, medications] = await Promise.all([
-      medplum.searchResources('Condition', { encounter: `Encounter/${encounterId}` }),
-      medplum.searchResources('Observation', { encounter: `Encounter/${encounterId}` }),
-      medplum.searchResources('Procedure', { encounter: `Encounter/${encounterId}` }),
-      medplum.searchResources('MedicationRequest', { encounter: `Encounter/${encounterId}` }),
+      client.searchResources('Condition', { encounter: `Encounter/${encounterId}` }),
+      client.searchResources('Observation', { encounter: `Encounter/${encounterId}` }),
+      client.searchResources('Procedure', { encounter: `Encounter/${encounterId}` }),
+      client.searchResources('MedicationRequest', { encounter: `Encounter/${encounterId}` }),
     ]);
 
     // Extract Firebase patient ID from encounter identifier
@@ -490,9 +495,13 @@ export async function getConsultationFromMedplum(encounterId: string, clinicId?:
 /**
  * Get all consultations for a patient (by Firebase patient ID)
  */
-export async function getPatientConsultationsFromMedplum(firebasePatientId: string, clinicId?: string): Promise<SavedConsultation[]> {
+export async function getPatientConsultationsFromMedplum(
+  firebasePatientId: string,
+  clinicId?: string,
+  medplum?: MedplumClient
+): Promise<SavedConsultation[]> {
   try {
-    const medplum = await getMedplumClient();
+    const client = medplum ?? (await getMedplumClient());
 
     // Find encounters scoped to clinic (if provided), then filter by patient identifier
     const searchParams: Record<string, string> = clinicId
@@ -506,7 +515,7 @@ export async function getPatientConsultationsFromMedplum(firebasePatientId: stri
           _sort: '-date',
         };
 
-    const encounters = await medplum.searchResources('Encounter', searchParams);
+    const encounters = await client.searchResources('Encounter', searchParams);
 
     // Convert each encounter to SavedConsultation
     const consultations = await Promise.all(
@@ -516,7 +525,7 @@ export async function getPatientConsultationsFromMedplum(firebasePatientId: stri
             matchesClinic(enc as any, clinicId) &&
             (enc as any).identifier?.some((id: any) => id.system === 'firebase-patient' && id.value === firebasePatientId)
         )
-        .map((encounter) => getConsultationFromMedplum(encounter.id!, clinicId))
+        .map((encounter) => getConsultationFromMedplum(encounter.id!, clinicId, client))
     );
 
     return consultations.filter((c): c is SavedConsultation => c !== null);
@@ -529,11 +538,15 @@ export async function getPatientConsultationsFromMedplum(firebasePatientId: stri
 /**
  * Get all recent consultations (for dashboard, etc.)
  */
-export async function getRecentConsultationsFromMedplum(limit = 10, clinicId?: string): Promise<SavedConsultation[]> {
+export async function getRecentConsultationsFromMedplum(
+  limit = 10,
+  clinicId?: string,
+  medplum?: MedplumClient
+): Promise<SavedConsultation[]> {
   try {
-    const medplum = await getMedplumClient();
+    const client = medplum ?? (await getMedplumClient());
     
-    const encounters = await medplum.searchResources('Encounter', {
+    const encounters = await client.searchResources('Encounter', {
       _count: String(limit),
       _sort: '-date',
       ...(clinicId ? { 'service-provider': `Organization/${clinicId}`, identifier: `${CLINIC_IDENTIFIER_SYSTEM}|${clinicId}` } : {}),
@@ -542,7 +555,7 @@ export async function getRecentConsultationsFromMedplum(limit = 10, clinicId?: s
     const consultations = await Promise.all(
       encounters
         .filter((enc) => matchesClinic(enc as any, clinicId))
-        .map((encounter) => getConsultationFromMedplum(encounter.id!, clinicId))
+        .map((encounter) => getConsultationFromMedplum(encounter.id!, clinicId, client))
     );
 
     return consultations.filter((c): c is SavedConsultation => c !== null);

@@ -24,35 +24,19 @@ export interface SavedAppointment extends AppointmentData {
   createdAt: Date;
 }
 
-async function getMedplumClient(): Promise<MedplumClient> {
-  const baseUrl = process.env.MEDPLUM_BASE_URL || process.env.NEXT_PUBLIC_MEDPLUM_BASE_URL || 'http://localhost:8103';
-  const clientId = process.env.MEDPLUM_CLIENT_ID;
-  const clientSecret = process.env.MEDPLUM_CLIENT_SECRET;
-
-  if (!clientId || !clientSecret) {
-    throw new Error('Medplum credentials not configured');
-  }
-
-  const medplum = new MedplumClient({ baseUrl, clientId, clientSecret });
-  await medplum.startClientLogin(clientId, clientSecret);
-  return medplum;
-}
-
 /**
  * Save appointment to Medplum
  */
-export async function saveAppointmentToMedplum(appointmentData: AppointmentData): Promise<string> {
-  const medplum = await getMedplumClient();
-  
-  const scheduledTime = typeof appointmentData.scheduledAt === 'string' 
-    ? appointmentData.scheduledAt 
+export async function saveAppointmentToMedplum(medplum: MedplumClient, appointmentData: AppointmentData): Promise<string> {
+  const scheduledTime = typeof appointmentData.scheduledAt === 'string'
+    ? appointmentData.scheduledAt
     : appointmentData.scheduledAt.toISOString();
 
   const endTime = new Date(scheduledTime);
   if (appointmentData.durationMinutes) {
     endTime.setMinutes(endTime.getMinutes() + appointmentData.durationMinutes);
   } else {
-    endTime.setMinutes(endTime.getMinutes() + 30); // Default 30 min
+    endTime.setMinutes(endTime.getMinutes() + 30);
   }
 
   const fhirAppointment: FHIRAppointment = {
@@ -83,18 +67,17 @@ export async function saveAppointmentToMedplum(appointmentData: AppointmentData)
 
   const saved = await medplum.createResource(fhirAppointment);
   console.log(`✅ Created FHIR Appointment: ${saved.id}`);
-  
+
   return saved.id!;
 }
 
 /**
  * Get appointment from Medplum
  */
-export async function getAppointmentFromMedplum(appointmentId: string): Promise<SavedAppointment | null> {
+export async function getAppointmentFromMedplum(medplum: MedplumClient, appointmentId: string): Promise<SavedAppointment | null> {
   try {
-    const medplum = await getMedplumClient();
     const fhirAppt = await medplum.readResource('Appointment', appointmentId);
-    
+
     const patientParticipant = fhirAppt.participant?.find(p => p.actor?.reference?.startsWith('Patient/'));
     const clinicianParticipant = fhirAppt.participant?.find(p => !p.actor?.reference?.startsWith('Patient/'));
 
@@ -120,10 +103,8 @@ export async function getAppointmentFromMedplum(appointmentId: string): Promise<
 /**
  * Get patient appointments from Medplum
  */
-export async function getPatientAppointmentsFromMedplum(patientId: string): Promise<SavedAppointment[]> {
+export async function getPatientAppointmentsFromMedplum(medplum: MedplumClient, patientId: string): Promise<SavedAppointment[]> {
   try {
-    const medplum = await getMedplumClient();
-    
     const appointments = await medplum.searchResources('Appointment', {
       actor: `Patient/${patientId}`,
       _sort: '-date',
@@ -131,7 +112,7 @@ export async function getPatientAppointmentsFromMedplum(patientId: string): Prom
 
     const mapped = await Promise.all(
       appointments.map(async (appt) => {
-        const saved = await getAppointmentFromMedplum(appt.id!);
+        const saved = await getAppointmentFromMedplum(medplum, appt.id!);
         return saved;
       })
     );
@@ -147,24 +128,11 @@ export async function getPatientAppointmentsFromMedplum(patientId: string): Prom
  * Update appointment status
  */
 export async function updateAppointmentStatus(
+  medplum: MedplumClient,
   appointmentId: string,
   status: 'proposed' | 'pending' | 'booked' | 'arrived' | 'fulfilled' | 'cancelled' | 'noshow'
 ): Promise<void> {
-  const medplum = await getMedplumClient();
-  
   const appointment = await medplum.readResource('Appointment', appointmentId);
-  await medplum.updateResource({
-    ...appointment,
-    status,
-  });
-  
+  await medplum.updateResource({ ...appointment, status });
   console.log(`✅ Updated Appointment ${appointmentId} status to ${status}`);
 }
-
-
-
-
-
-
-
-

@@ -257,15 +257,19 @@ function buildTriageExtension(triageData: Omit<TriageData, 'triageAt' | 'isTriag
 /**
  * Save a patient to Medplum as FHIR Patient resource
  */
-export async function savePatientToMedplum(patientData: PatientData, clinicId?: string): Promise<string> {
-  const medplum = await getMedplumClient();
+export async function savePatientToMedplum(
+  patientData: PatientData,
+  clinicId?: string,
+  medplum?: MedplumClient
+): Promise<string> {
+  const client = medplum ?? (await getMedplumClient());
 
   console.log(`💾 Saving patient to Medplum FHIR...`);
 
   // Check if patient already exists by NRIC
   let existingPatient: FHIRPatient | undefined;
   if (patientData.nric) {
-    existingPatient = await medplum.searchOne('Patient', {
+    existingPatient = await client.searchOne('Patient', {
       identifier: `nric|${patientData.nric}`,
     });
     if (existingPatient && !matchesClinic(existingPatient, clinicId)) {
@@ -332,7 +336,7 @@ export async function savePatientToMedplum(patientData: PatientData, clinicId?: 
   let savedPatient: FHIRPatient;
   if (existingPatient) {
     // Update existing patient
-    savedPatient = await medplum.updateResource({
+    savedPatient = await client.updateResource({
       ...fhirPatient,
       id: existingPatient.id,
     });
@@ -342,6 +346,7 @@ export async function savePatientToMedplum(patientData: PatientData, clinicId?: 
     if (savedPatient.id) {
       try {
         await createProvenanceForResource(
+          client,
           'Patient',
           savedPatient.id,
           undefined,
@@ -355,13 +360,14 @@ export async function savePatientToMedplum(patientData: PatientData, clinicId?: 
     }
   } else {
     // Create new patient
-    savedPatient = await validateAndCreate<FHIRPatient>(medplum, fhirPatient);
+    savedPatient = await validateAndCreate<FHIRPatient>(client, fhirPatient);
     console.log(`✅ Created FHIR Patient: ${savedPatient.id}`);
     
     // Create Provenance for audit trail (non-blocking)
     if (savedPatient.id) {
       try {
         await createProvenanceForResource(
+          client,
           'Patient',
           savedPatient.id,
           undefined,
@@ -380,7 +386,7 @@ export async function savePatientToMedplum(patientData: PatientData, clinicId?: 
     for (const allergy of patientData.medicalHistory.allergies) {
       if (!allergy.trim()) continue;
 
-      const allergyResource = await validateAndCreate<AllergyIntolerance>(medplum, {
+      const allergyResource = await validateAndCreate<AllergyIntolerance>(client, {
         resourceType: 'AllergyIntolerance',
         patient: { reference: `Patient/${savedPatient.id}` },
         code: { text: allergy },
@@ -396,6 +402,7 @@ export async function savePatientToMedplum(patientData: PatientData, clinicId?: 
       if (allergyResource.id) {
         try {
           await createProvenanceForResource(
+            client,
             'AllergyIntolerance',
             allergyResource.id,
             undefined,
@@ -415,7 +422,7 @@ export async function savePatientToMedplum(patientData: PatientData, clinicId?: 
     for (const condition of patientData.medicalHistory.conditions) {
       if (!condition.trim()) continue;
 
-      const conditionResource = await validateAndCreate<Condition>(medplum, {
+      const conditionResource = await validateAndCreate<Condition>(client, {
         resourceType: 'Condition',
         subject: { reference: `Patient/${savedPatient.id}` },
         code: { text: condition },
@@ -428,6 +435,7 @@ export async function savePatientToMedplum(patientData: PatientData, clinicId?: 
       if (conditionResource.id) {
         try {
           await createProvenanceForResource(
+            client,
             'Condition',
             conditionResource.id,
             undefined,
@@ -447,7 +455,7 @@ export async function savePatientToMedplum(patientData: PatientData, clinicId?: 
     for (const medication of patientData.medicalHistory.medications) {
       if (!medication.trim()) continue;
 
-      const medicationResource = await validateAndCreate<MedicationStatement>(medplum, {
+      const medicationResource = await validateAndCreate<MedicationStatement>(client, {
         resourceType: 'MedicationStatement',
         status: 'active',
         subject: { reference: `Patient/${savedPatient.id}` },
@@ -458,6 +466,7 @@ export async function savePatientToMedplum(patientData: PatientData, clinicId?: 
       if (medicationResource.id) {
         try {
           await createProvenanceForResource(
+            client,
             'MedicationStatement',
             medicationResource.id,
             undefined,
@@ -478,30 +487,34 @@ export async function savePatientToMedplum(patientData: PatientData, clinicId?: 
 /**
  * Get a patient from Medplum by ID
  */
-export async function getPatientFromMedplum(patientId: string, clinicId?: string): Promise<SavedPatient | null> {
+export async function getPatientFromMedplum(
+  patientId: string,
+  clinicId?: string,
+  medplum?: MedplumClient
+): Promise<SavedPatient | null> {
   try {
-    const medplum = await getMedplumClient();
+    const client = medplum ?? (await getMedplumClient());
 
-    const fhirPatient = await medplum.readResource('Patient', patientId);
+    const fhirPatient = await client.readResource('Patient', patientId);
     if (!matchesClinic(fhirPatient, clinicId)) {
       return null;
     }
     const patientData = fhirPatientToPatientData(fhirPatient);
 
     // Get allergies
-    const allergies = await medplum.searchResources('AllergyIntolerance', {
+    const allergies = await client.searchResources('AllergyIntolerance', {
       patient: `Patient/${patientId}`,
     });
     patientData.medicalHistory!.allergies = allergies.map(a => (a as any).code?.text || 'Unknown allergy');
 
     // Get conditions
-    const conditions = await medplum.searchResources('Condition', {
+    const conditions = await client.searchResources('Condition', {
       subject: `Patient/${patientId}`,
     });
     patientData.medicalHistory!.conditions = conditions.map(c => (c as any).code?.text || 'Unknown condition');
 
     // Get medications
-    const medications = await medplum.searchResources('MedicationStatement', {
+    const medications = await client.searchResources('MedicationStatement', {
       subject: `Patient/${patientId}`,
     });
     patientData.medicalHistory!.medications = medications.map(m => (m as any).medicationCodeableConcept?.text || 'Unknown medication');
@@ -601,11 +614,15 @@ export async function updateQueueStatusInMedplum(patientId: string, status: Queu
 /**
  * Search patients by name or NRIC
  */
-export async function searchPatientsInMedplum(query: string, clinicId?: string): Promise<SavedPatient[]> {
+export async function searchPatientsInMedplum(
+  query: string,
+  clinicId?: string,
+  medplum?: MedplumClient
+): Promise<SavedPatient[]> {
   try {
-    const medplum = await getMedplumClient();
+    const client = medplum ?? (await getMedplumClient());
 
-    const patients = await medplum.searchResources('Patient', {
+    const patients = await client.searchResources('Patient', {
       _query: query,
       _count: '50',
       ...(clinicId ? { identifier: `${CLINIC_IDENTIFIER_SYSTEM}|${clinicId}`, organization: `Organization/${clinicId}` } : {}),
@@ -623,11 +640,15 @@ export async function searchPatientsInMedplum(query: string, clinicId?: string):
 /**
  * Get all patients from Medplum
  */
-export async function getAllPatientsFromMedplum(limit = 100, clinicId?: string): Promise<SavedPatient[]> {
+export async function getAllPatientsFromMedplum(
+  limit = 100,
+  clinicId?: string,
+  medplum?: MedplumClient
+): Promise<SavedPatient[]> {
   try {
-    const medplum = await getMedplumClient();
+    const client = medplum ?? (await getMedplumClient());
 
-    const patients = await medplum.searchResources('Patient', {
+    const patients = await client.searchResources('Patient', {
       _count: String(limit),
       _sort: '-_lastUpdated',
       ...(clinicId ? { identifier: `${CLINIC_IDENTIFIER_SYSTEM}|${clinicId}`, organization: `Organization/${clinicId}` } : {}),
@@ -645,10 +666,15 @@ export async function getAllPatientsFromMedplum(limit = 100, clinicId?: string):
 /**
  * Update a patient in Medplum
  */
-export async function updatePatientInMedplum(patientId: string, updates: Partial<PatientData>, clinicId?: string): Promise<void> {
-  const medplum = await getMedplumClient();
+export async function updatePatientInMedplum(
+  patientId: string,
+  updates: Partial<PatientData>,
+  clinicId?: string,
+  medplum?: MedplumClient
+): Promise<void> {
+  const client = medplum ?? (await getMedplumClient());
 
-  const existingPatient = await medplum.readResource('Patient', patientId);
+  const existingPatient = await client.readResource('Patient', patientId);
   if (!matchesClinic(existingPatient, clinicId)) {
     throw new Error('Patient does not belong to this clinic');
   }
@@ -677,6 +703,6 @@ export async function updatePatientInMedplum(patientId: string, updates: Partial
     updatedPatient.address = [{ text: updates.address, postalCode: updates.postalCode }];
   }
 
-  await medplum.updateResource(updatedPatient);
+  await client.updateResource(updatedPatient);
   console.log(`✅ Updated FHIR Patient: ${patientId}`);
 }

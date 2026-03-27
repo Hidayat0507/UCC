@@ -159,8 +159,8 @@ async function getMedplumClient(): Promise<MedplumClient> {
 /**
  * Create an imaging order (ServiceRequest)
  */
-export async function createImagingOrder(order: ImagingOrderRequest): Promise<string> {
-  const medplum = await getMedplumClient();
+export async function createImagingOrder(order: ImagingOrderRequest, medplum?: MedplumClient): Promise<string> {
+  const client = medplum ?? (await getMedplumClient());
   
   console.log(`🏥 Creating imaging order for patient ${order.patientId}`);
 
@@ -170,7 +170,7 @@ export async function createImagingOrder(order: ImagingOrderRequest): Promise<st
     const procedure = IMAGING_PROCEDURES[procedureCode];
     const modality = IMAGING_MODALITIES[procedure.modality as ModalityCode];
     
-    const serviceRequest = await validateAndCreate<ServiceRequest>(medplum, {
+    const serviceRequest = await validateAndCreate<ServiceRequest>(client, {
       resourceType: 'ServiceRequest',
       status: 'active',
       intent: 'order',
@@ -218,6 +218,7 @@ export async function createImagingOrder(order: ImagingOrderRequest): Promise<st
     if (serviceRequest.id) {
       try {
         await createProvenanceForResource(
+          client,
           'ServiceRequest',
           serviceRequest.id,
           order.orderedBy?.startsWith('Practitioner/') ? order.orderedBy.split('/')[1] : undefined,
@@ -239,21 +240,22 @@ export async function createImagingOrder(order: ImagingOrderRequest): Promise<st
  */
 export async function receiveImagingStudy(
   serviceRequestId: string,
-  studyData: ImagingStudyData
+  studyData: ImagingStudyData,
+  medplum?: MedplumClient
 ): Promise<string> {
-  const medplum = await getMedplumClient();
+  const client = medplum ?? (await getMedplumClient());
   
   console.log(`📸 Receiving imaging study ${studyData.studyUid} for ServiceRequest ${serviceRequestId}`);
 
   // Get the original service request
-  const serviceRequest = await medplum.readResource('ServiceRequest', serviceRequestId);
+  const serviceRequest = await client.readResource('ServiceRequest', serviceRequestId);
   
   if (!serviceRequest.subject?.reference) {
     throw new Error('ServiceRequest has no patient reference');
   }
 
   // Create ImagingStudy resource
-  const imagingStudy = await validateAndCreate<ImagingStudy>(medplum, {
+  const imagingStudy = await validateAndCreate<ImagingStudy>(client, {
     resourceType: 'ImagingStudy',
     status: 'available',
     subject: {
@@ -304,6 +306,7 @@ export async function receiveImagingStudy(
   if (imagingStudy.id) {
     try {
       await createProvenanceForResource(
+        client,
         'ImagingStudy',
         imagingStudy.id,
         undefined, // Could extract from serviceRequest.requester if needed
@@ -317,7 +320,7 @@ export async function receiveImagingStudy(
   }
 
   // Update ServiceRequest status
-  await medplum.updateResource({
+  await client.updateResource({
     ...serviceRequest,
     status: 'completed',
   });
@@ -333,17 +336,18 @@ export async function createImagingReport(
   findings: string,
   impression: string,
   status: 'preliminary' | 'final' = 'final',
-  radiologist?: string
+  radiologist?: string,
+  medplum?: MedplumClient
 ): Promise<string> {
-  const medplum = await getMedplumClient();
+  const client = medplum ?? (await getMedplumClient());
   
   console.log(`📝 Creating imaging report for study ${imagingStudyId}`);
 
   // Get the imaging study
-  const imagingStudy = await medplum.readResource('ImagingStudy', imagingStudyId);
+  const imagingStudy = await client.readResource('ImagingStudy', imagingStudyId);
 
   // Create DiagnosticReport
-  const report = await validateAndCreate<DiagnosticReport>(medplum, {
+  const report = await validateAndCreate<DiagnosticReport>(client, {
     resourceType: 'DiagnosticReport',
     status,
     category: [{
@@ -381,6 +385,7 @@ export async function createImagingReport(
   if (report.id) {
     try {
       await createProvenanceForResource(
+        client,
         'DiagnosticReport',
         report.id,
         radiologist ? undefined : undefined, // Could parse radiologist ID if provided
@@ -399,10 +404,10 @@ export async function createImagingReport(
 /**
  * Get all imaging orders for a patient
  */
-export async function getPatientImagingOrders(patientId: string): Promise<ServiceRequest[]> {
-  const medplum = await getMedplumClient();
+export async function getPatientImagingOrders(patientId: string, medplum?: MedplumClient): Promise<ServiceRequest[]> {
+  const client = medplum ?? (await getMedplumClient());
   
-  const orders = await medplum.searchResources('ServiceRequest', {
+  const orders = await client.searchResources('ServiceRequest', {
     subject: `Patient/${patientId}`,
     category: '363679005', // SNOMED CT code for Imaging
     _sort: '-authored',
@@ -414,10 +419,10 @@ export async function getPatientImagingOrders(patientId: string): Promise<Servic
 /**
  * Get all imaging studies for a patient
  */
-export async function getPatientImagingStudies(patientId: string): Promise<ImagingReportSummary[]> {
-  const medplum = await getMedplumClient();
+export async function getPatientImagingStudies(patientId: string, medplum?: MedplumClient): Promise<ImagingReportSummary[]> {
+  const client = medplum ?? (await getMedplumClient());
   
-  const studies = await medplum.searchResources('ImagingStudy', {
+  const studies = await client.searchResources('ImagingStudy', {
     subject: `Patient/${patientId}`,
     _sort: '-started',
   });
@@ -426,7 +431,7 @@ export async function getPatientImagingStudies(patientId: string): Promise<Imagi
 
   for (const study of studies) {
     // Get associated diagnostic report if exists
-    const reports = await medplum.searchResources('DiagnosticReport', {
+    const reports = await client.searchResources('DiagnosticReport', {
       'imaging-study': `ImagingStudy/${study.id}`,
     });
 
@@ -478,10 +483,10 @@ export async function getPatientImagingStudies(patientId: string): Promise<Imagi
 /**
  * Get imaging studies for an encounter
  */
-export async function getEncounterImagingStudies(encounterId: string): Promise<ImagingReportSummary[]> {
-  const medplum = await getMedplumClient();
+export async function getEncounterImagingStudies(encounterId: string, medplum?: MedplumClient): Promise<ImagingReportSummary[]> {
+  const client = medplum ?? (await getMedplumClient());
   
-  const studies = await medplum.searchResources('ImagingStudy', {
+  const studies = await client.searchResources('ImagingStudy', {
     encounter: `Encounter/${encounterId}`,
     _sort: '-started',
   });
@@ -489,7 +494,7 @@ export async function getEncounterImagingStudies(encounterId: string): Promise<I
   const summaries: ImagingReportSummary[] = [];
 
   for (const study of studies) {
-    const reports = await medplum.searchResources('DiagnosticReport', {
+    const reports = await client.searchResources('DiagnosticReport', {
       'imaging-study': `ImagingStudy/${study.id}`,
     });
 
@@ -541,13 +546,13 @@ export async function getEncounterImagingStudies(encounterId: string): Promise<I
 /**
  * Get a specific imaging study
  */
-export async function getImagingStudy(studyId: string): Promise<ImagingReportSummary | null> {
+export async function getImagingStudy(studyId: string, medplum?: MedplumClient): Promise<ImagingReportSummary | null> {
   try {
-    const medplum = await getMedplumClient();
+    const client = medplum ?? (await getMedplumClient());
     
-    const study = await medplum.readResource('ImagingStudy', studyId);
+    const study = await client.readResource('ImagingStudy', studyId);
     
-    const reports = await medplum.searchResources('DiagnosticReport', {
+    const reports = await client.searchResources('DiagnosticReport', {
       'imaging-study': `ImagingStudy/${studyId}`,
     });
 

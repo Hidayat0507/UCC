@@ -1,37 +1,12 @@
 /**
  * Provenance Service - FHIR Audit Trail
- * 
+ *
  * Creates Provenance resources to track who created/updated clinical resources.
  * This provides an audit trail for compliance and accountability.
  */
 
 import { MedplumClient } from '@medplum/core';
 import type { Provenance } from '@medplum/fhirtypes';
-
-let medplumClient: MedplumClient | undefined;
-let medplumInitPromise: Promise<MedplumClient> | undefined;
-
-async function getMedplumClient(): Promise<MedplumClient> {
-  if (medplumClient) return medplumClient;
-  if (medplumInitPromise) return medplumInitPromise;
-
-  const baseUrl = process.env.MEDPLUM_BASE_URL || process.env.NEXT_PUBLIC_MEDPLUM_BASE_URL || 'http://localhost:8103';
-  const clientId = process.env.MEDPLUM_CLIENT_ID;
-  const clientSecret = process.env.MEDPLUM_CLIENT_SECRET;
-
-  if (!clientId || !clientSecret) {
-    throw new Error('Medplum credentials not configured');
-  }
-
-  medplumInitPromise = (async () => {
-    const medplum = new MedplumClient({ baseUrl, clientId, clientSecret });
-    await medplum.startClientLogin(clientId, clientSecret);
-    medplumClient = medplum;
-    return medplum;
-  })();
-
-  return medplumInitPromise;
-}
 
 export interface ProvenanceData {
   target: Array<{ reference: string }>;
@@ -52,9 +27,7 @@ export interface ProvenanceData {
 /**
  * Create a Provenance resource to track resource creation/update
  */
-export async function createProvenance(data: ProvenanceData): Promise<string> {
-  const medplum = await getMedplumClient();
-
+export async function createProvenance(medplum: MedplumClient, data: ProvenanceData): Promise<string> {
   const provenance: Provenance = {
     resourceType: 'Provenance',
     target: data.target,
@@ -79,48 +52,15 @@ export async function createProvenance(data: ProvenanceData): Promise<string> {
  * Create Provenance for a single resource
  */
 export async function createProvenanceForResource(
+  medplum: MedplumClient,
   resourceType: string,
   resourceId: string,
   practitionerId?: string,
   organizationId?: string,
   activity: 'CREATE' | 'UPDATE' | 'DELETE' = 'CREATE'
 ): Promise<string> {
-  return createProvenance({
+  return createProvenance(medplum, {
     target: [{ reference: `${resourceType}/${resourceId}` }],
-    recorded: new Date().toISOString(),
-    agent: [
-      {
-        who: practitionerId
-          ? { reference: `Practitioner/${practitionerId}` }
-          : undefined,
-        onBehalfOf: organizationId
-          ? { reference: `Organization/${organizationId}` }
-          : undefined,
-      },
-    ].filter(agent => agent.who || agent.onBehalfOf), // Filter out empty agents
-    activity: {
-      coding: [
-        {
-          system: 'http://terminology.hl7.org/CodeSystem/v3-DataOperation',
-          code: activity,
-          display: activity.toLowerCase(),
-        },
-      ],
-    },
-  });
-}
-
-/**
- * Create Provenance for multiple resources (e.g., consultation bundle)
- */
-export async function createProvenanceForResources(
-  resources: Array<{ resourceType: string; resourceId: string }>,
-  practitionerId?: string,
-  organizationId?: string,
-  activity: 'CREATE' | 'UPDATE' | 'DELETE' = 'CREATE'
-): Promise<string> {
-  return createProvenance({
-    target: resources.map(r => ({ reference: `${r.resourceType}/${r.resourceId}` })),
     recorded: new Date().toISOString(),
     agent: [
       {
@@ -144,3 +84,37 @@ export async function createProvenanceForResources(
   });
 }
 
+/**
+ * Create Provenance for multiple resources (e.g., consultation bundle)
+ */
+export async function createProvenanceForResources(
+  medplum: MedplumClient,
+  resources: Array<{ resourceType: string; resourceId: string }>,
+  practitionerId?: string,
+  organizationId?: string,
+  activity: 'CREATE' | 'UPDATE' | 'DELETE' = 'CREATE'
+): Promise<string> {
+  return createProvenance(medplum, {
+    target: resources.map(r => ({ reference: `${r.resourceType}/${r.resourceId}` })),
+    recorded: new Date().toISOString(),
+    agent: [
+      {
+        who: practitionerId
+          ? { reference: `Practitioner/${practitionerId}` }
+          : undefined,
+        onBehalfOf: organizationId
+          ? { reference: `Organization/${organizationId}` }
+          : undefined,
+      },
+    ].filter(agent => agent.who || agent.onBehalfOf),
+    activity: {
+      coding: [
+        {
+          system: 'http://terminology.hl7.org/CodeSystem/v3-DataOperation',
+          code: activity,
+          display: activity.toLowerCase(),
+        },
+      ],
+    },
+  });
+}

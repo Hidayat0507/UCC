@@ -24,26 +24,10 @@ export interface SavedReferral extends ReferralData {
   createdAt: Date;
 }
 
-async function getMedplumClient(): Promise<MedplumClient> {
-  const baseUrl = process.env.MEDPLUM_BASE_URL || process.env.NEXT_PUBLIC_MEDPLUM_BASE_URL || 'http://localhost:8103';
-  const clientId = process.env.MEDPLUM_CLIENT_ID;
-  const clientSecret = process.env.MEDPLUM_CLIENT_SECRET;
-
-  if (!clientId || !clientSecret) {
-    throw new Error('Medplum credentials not configured');
-  }
-
-  const medplum = new MedplumClient({ baseUrl, clientId, clientSecret });
-  await medplum.startClientLogin(clientId, clientSecret);
-  return medplum;
-}
-
 /**
  * Save referral to Medplum as ServiceRequest
  */
-export async function saveReferralToMedplum(referralData: ReferralData): Promise<string> {
-  const medplum = await getMedplumClient();
-  
+export async function saveReferralToMedplum(medplum: MedplumClient, referralData: ReferralData): Promise<string> {
   const serviceRequest: ServiceRequest = {
     resourceType: 'ServiceRequest',
     status: 'active',
@@ -65,25 +49,24 @@ export async function saveReferralToMedplum(referralData: ReferralData): Promise
     requester: referralData.doctorName ? {
       display: referralData.doctorName,
     } : undefined,
-    authoredOn: referralData.date 
+    authoredOn: referralData.date
       ? (typeof referralData.date === 'string' ? referralData.date : referralData.date.toISOString())
       : new Date().toISOString(),
   };
 
   const saved = await medplum.createResource(serviceRequest);
   console.log(`✅ Created FHIR ServiceRequest (Referral): ${saved.id}`);
-  
+
   return saved.id!;
 }
 
 /**
  * Get referral from Medplum
  */
-export async function getReferralFromMedplum(referralId: string): Promise<SavedReferral | null> {
+export async function getReferralFromMedplum(medplum: MedplumClient, referralId: string): Promise<SavedReferral | null> {
   try {
-    const medplum = await getMedplumClient();
     const serviceRequest = await medplum.readResource('ServiceRequest', referralId);
-    
+
     const performerDisplay = serviceRequest.performer?.[0]?.display || '';
     const [facility, department] = performerDisplay.split(' - ');
 
@@ -110,10 +93,8 @@ export async function getReferralFromMedplum(referralId: string): Promise<SavedR
 /**
  * Get patient referrals from Medplum
  */
-export async function getPatientReferralsFromMedplum(patientId: string): Promise<SavedReferral[]> {
+export async function getPatientReferralsFromMedplum(medplum: MedplumClient, patientId: string): Promise<SavedReferral[]> {
   try {
-    const medplum = await getMedplumClient();
-    
     const serviceRequests = await medplum.searchResources('ServiceRequest', {
       subject: `Patient/${patientId}`,
       _sort: '-authored',
@@ -121,7 +102,7 @@ export async function getPatientReferralsFromMedplum(patientId: string): Promise
 
     const mapped = await Promise.all(
       serviceRequests.map(async (sr) => {
-        const saved = await getReferralFromMedplum(sr.id!);
+        const saved = await getReferralFromMedplum(medplum, sr.id!);
         return saved;
       })
     );
@@ -132,11 +113,3 @@ export async function getPatientReferralsFromMedplum(patientId: string): Promise
     return [];
   }
 }
-
-
-
-
-
-
-
-
