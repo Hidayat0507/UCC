@@ -12,6 +12,13 @@ Related audit:
 - `bun run build`: passes
 - Trust-boundary issue around middleware-set admin/clinic UI context cookies has been resolved in the repo
 - The main remaining release gap is documented end-to-end verification on staging
+- 2026-03-30 progress: clinic Playwright verification was partially invalid because clinic auth setup wrote `tests/e2e/.auth/klinikputeri.json` while the main clinic project/specs loaded `tests/e2e/.auth/clinic.json`; repo has been corrected and must be rerun before release sign-off
+- 2026-03-30 progress: default clinic verification target was also misaligned with the authenticated fixture (`apex-group.drhidayat.com` vs `klinikputeri.drhidayat.com`); repo defaults now point at `klinikputeri.drhidayat.com` for clinic E2E runs
+- 2026-03-30 progress: fresh `bun run test:e2e:clinic` rerun after spec cleanup finished at `20 passed, 12 failed`
+- 2026-03-30 progress: remaining live blockers are concentrated in patient follow-on routes and workflow consistency, not broad session failure:
+  `/patients/{id}/triage` and `/patients/{id}/consultation` returned `404` in the deployed clinic target for fresh patients, and `/check-in` search did not surface a newly created patient
+- 2026-03-30 progress: targeted patient-spec rerun finished at `6 passed, 1 failed`; the remaining failure showed the old happy-path assertion was falsely accepting `/patients/new` as if it were a saved patient profile route
+- 2026-03-30 progress: `credential-check.spec.ts` **passed in GitHub Actions** (Site & Credential Check run #12, 48s) — production endpoints, login pages, and all Medplum credentials confirmed reachable and valid in CI; 11 clinical workflow specs exist but have not yet run in CI
 
 Before calling the system production-ready, check:
 
@@ -107,6 +114,8 @@ Typical symptom:
 
 1. Run `npm run validate-env`
 2. Run `npm run test:e2e`
+   - Credential check (`credential-check.spec.ts`): **passed in CI 2026-03-30** (GitHub Actions run #12)
+   - Clinical workflow specs (11 files): not yet run in CI; do not sign off release until these pass
 3. Confirm `MEDPLUM_BASE_URL` and `NEXT_PUBLIC_MEDPLUM_BASE_URL` point to the same intended Medplum instance
 4. Confirm `NEXT_PUBLIC_BASE_DOMAIN` matches real DNS
 5. Confirm `COOKIE_DOMAIN` matches the deployment strategy
