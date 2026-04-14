@@ -11,8 +11,8 @@ import { updateAppointment, type AppointmentStatus } from "@/lib/models";
 
 const statusOptions: AppointmentStatus[] = [
   "scheduled",
-  "checked_in",
   "in_progress",
+  "checked_in",
   "completed",
   "cancelled",
   "no_show",
@@ -20,8 +20,8 @@ const statusOptions: AppointmentStatus[] = [
 
 const statusLabels: Record<AppointmentStatus, string> = {
   scheduled: "Scheduled",
-  checked_in: "Checked in",
   in_progress: "In progress",
+  checked_in: "Checked in",
   completed: "Completed",
   cancelled: "Cancelled",
   no_show: "No show",
@@ -62,8 +62,6 @@ export default function AppointmentStatusForm({
 
         if (selectedStatus === "checked_in") {
           updatePayload.checkInTime = new Date();
-        } else if (selectedStatus === "in_progress") {
-          updatePayload.checkInTime = hasCheckIn ? undefined : new Date();
         } else if (selectedStatus === "completed") {
           updatePayload.completedAt = new Date();
         } else if (selectedStatus === "cancelled" || selectedStatus === "no_show") {
