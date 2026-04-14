@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Clock, RefreshCw, Users, CalendarDays, Activity } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { Patient } from "@/lib/models";
 import QueueTable from "@/components/queue-table";
 import Link from "next/link";
@@ -12,6 +13,14 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHeader, TableRow, TableHead } from "@/components/ui/table";
 import { toast } from "@/components/ui/use-toast";
 import { addPatientToQueue, removePatientFromQueue } from "@/lib/actions";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface Appointment {
   id: string;
@@ -22,11 +31,13 @@ interface Appointment {
 }
 
 export default function Dashboard() {
+  const router = useRouter();
   const [queue, setQueue] = useState<Patient[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [apptLoading, setApptLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [registerDialogOpen, setRegisterDialogOpen] = useState(false);
 
   const loadQueue = async () => {
     setLoading(true);
@@ -82,9 +93,12 @@ export default function Dashboard() {
     <div className="flex flex-col space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-        <Button variant="outline" size="icon" onClick={handleRefresh}>
-          <RefreshCw className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button onClick={() => setRegisterDialogOpen(true)}>Register</Button>
+          <Button variant="outline" size="icon" onClick={handleRefresh}>
+            <RefreshCw className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       {/* Stats row */}
@@ -205,6 +219,44 @@ export default function Dashboard() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <Dialog open={registerDialogOpen} onOpenChange={setRegisterDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Register Patient</DialogTitle>
+            <DialogDescription>
+              Choose how you want to start registration, just like front-desk flow.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Button
+              className="w-full justify-start"
+              variant="outline"
+              onClick={() => {
+                setRegisterDialogOpen(false);
+                router.push("/patients/new");
+              }}
+            >
+              Add new patient
+            </Button>
+            <Button
+              className="w-full justify-start"
+              variant="outline"
+              onClick={() => {
+                setRegisterDialogOpen(false);
+                router.push("/check-in");
+              }}
+            >
+              Search existing patient
+            </Button>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setRegisterDialogOpen(false)}>
+              Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
