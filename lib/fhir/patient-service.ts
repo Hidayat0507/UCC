@@ -5,6 +5,7 @@
  */
 
 import { MedplumClient } from '@medplum/core';
+import { getAdminMedplum } from '@/lib/server/medplum-admin';
 import type {
   Patient as FHIRPatient,
   AllergyIntolerance,
@@ -15,19 +16,12 @@ import { QueueStatus, TriageData, VitalSigns } from '../types';
 import { TRIAGE_EXTENSION_URL } from './structure-definitions';
 import { createProvenanceForResource } from './provenance-service';
 import { validateAndCreate } from './fhir-helpers';
-import { applyMyCoreProfile, MY_CORE_IDENTIFIERS, MY_CORE_EXTENSIONS } from './mycore';
 
 // Local Patient interface that matches your app
-export type IdentifierType = 'nric' | 'non_malaysian_ic' | 'passport';
-
 export interface PatientData {
   id?: string;
   fullName: string;
-  identifierType?: IdentifierType;
-  identifierValue?: string;
-  nric?: string;
-  mrn?: string;
-  ethnicity?: string;
+  nric: string;
   dateOfBirth: Date | string;
   gender: 'male' | 'female' | 'other';
   email?: string;
@@ -56,6 +50,7 @@ export interface SavedPatient extends PatientData {
   queueAddedAt?: Date | string | null;
   visitIntent?: string;
   payerType?: string;
+  paymentMethod?: string;
   billingPerson?: string;
   dependentName?: string;
   dependentRelationship?: string;
@@ -66,32 +61,12 @@ export interface SavedPatient extends PatientData {
   performedBy?: string;
 }
 
-let medplumClient: MedplumClient | undefined;
-let medplumInitPromise: Promise<MedplumClient> | undefined;
-
 const CLINIC_IDENTIFIER_SYSTEM = 'clinic';
-const IDENTIFIER_SYSTEMS: Record<IdentifierType, string> = {
-  nric: MY_CORE_IDENTIFIERS.MYKAD,
-  non_malaysian_ic: 'http://fhir.hie.moh.gov.my/sid/non-my-ic',
-  passport: 'http://hl7.org/fhir/sid/passport-MYS',
-};
-const IDENTIFIER_TYPE_CODING: Record<IdentifierType, { system: string; code: string; display: string }> = {
-  nric: {
-    system: 'http://terminology.hl7.org/CodeSystem/v2-0203',
-    code: 'NI',
-    display: 'National unique individual identifier',
-  },
-  non_malaysian_ic: {
-    system: 'http://terminology.hl7.org/CodeSystem/v2-0203',
-    code: 'NI',
-    display: 'National unique individual identifier',
-  },
-  passport: {
-    system: 'http://terminology.hl7.org/CodeSystem/v2-0203',
-    code: 'PPN',
-    display: 'Passport number',
-  },
-};
+
+// Backward-compatible alias used by older service modules on main.
+export async function getMedplumClient(): Promise<MedplumClient> {
+  return getAdminMedplum();
+}
 
 type Extension = { url: string;[key: string]: any };
 
@@ -105,12 +80,33 @@ function addClinicIdentifier(identifiers: { system?: string; value?: string }[] 
   return nextIdentifiers;
 }
 
-function matchesClinic(resource: { identifier?: { system?: string; value?: string }[]; managingOrganization?: { reference?: string } }, clinicId?: string) {
+function matchesClinic(
+  resource: { identifier?: { system?: string; value?: string }[]; managingOrganization?: { reference?: string } },
+  clinicId?: string
+): boolean {
+  // Explicitly no clinic scope: allow (used by admin-level callers only).
+  // All user-facing code paths must supply a clinicId.
   if (!clinicId) return true;
-  const identifierMatch = resource.identifier?.some((id) => id.system === CLINIC_IDENTIFIER_SYSTEM && id.value === clinicId);
+  const identifierMatch = resource.identifier?.some(
+    (id) => id.system === CLINIC_IDENTIFIER_SYSTEM && id.value === clinicId
+  );
   const orgRef = resource.managingOrganization?.reference;
   const organizationMatch = orgRef ? orgRef === `Organization/${clinicId}` : false;
   return Boolean(identifierMatch || organizationMatch);
+}
+
+/**
+ * Like matchesClinic, but throws instead of returning false.
+ * Use this on write paths (update, delete) where a mismatch is a security violation.
+ */
+function assertMatchesClinic(
+  resource: Parameters<typeof matchesClinic>[0],
+  clinicId: string,
+  resourceLabel = 'resource'
+): void {
+  if (!matchesClinic(resource, clinicId)) {
+    throw new Error(`Access denied: ${resourceLabel} does not belong to clinic '${clinicId}'`);
+  }
 }
 
 function addManagingOrganization<T extends { [key: string]: any }>(resource: T, clinicId?: string): T {
@@ -121,34 +117,6 @@ function addManagingOrganization<T extends { [key: string]: any }>(resource: T, 
   };
 }
 
-/**
- * Get authenticated Medplum client (singleton)
- */
-export async function getMedplumClient(): Promise<MedplumClient> {
-  if (medplumClient) return medplumClient;
-  if (medplumInitPromise) return medplumInitPromise;
-
-  const baseUrl = process.env.MEDPLUM_BASE_URL || process.env.NEXT_PUBLIC_MEDPLUM_BASE_URL || 'http://localhost:8103';
-  const clientId = process.env.MEDPLUM_CLIENT_ID;
-  const clientSecret = process.env.MEDPLUM_CLIENT_SECRET;
-
-  if (!clientId || !clientSecret) {
-    throw new Error('Medplum credentials not configured');
-  }
-
-  medplumInitPromise = (async () => {
-    const medplum = new MedplumClient({
-      baseUrl,
-      clientId,
-      clientSecret,
-    });
-    await medplum.startClientLogin(clientId, clientSecret);
-    medplumClient = medplum;
-    return medplum;
-  })();
-
-  return medplumInitPromise;
-}
 
 /**
  * Convert FHIR Patient to app PatientData format
@@ -157,30 +125,7 @@ function fhirPatientToPatientData(fhirPatient: FHIRPatient): SavedPatient {
   const name = fhirPatient.name?.[0];
   const fullName = name?.text || [name?.given?.join(' '), name?.family].filter(Boolean).join(' ') || 'Unknown';
 
-  const identifiers = fhirPatient.identifier ?? [];
-  const passportIdentifier = identifiers.find(
-    (id) => id.type?.coding?.some((coding) => coding.code === 'PPN') || id.system?.includes('passport')
-  );
-  const nonMyIdentifier = identifiers.find((id) => id.system === IDENTIFIER_SYSTEMS.non_malaysian_ic);
-  const nricIdentifier = identifiers.find(
-    (id) =>
-      id.system === IDENTIFIER_SYSTEMS.nric ||
-      id.system === 'nric' ||
-      id.system === 'ic'
-  );
-  const pickedIdentifier = passportIdentifier ?? nonMyIdentifier ?? nricIdentifier ?? identifiers[0];
-
-  let identifierType: IdentifierType = 'nric';
-  if (passportIdentifier || pickedIdentifier?.type?.coding?.some((coding) => coding.code === 'PPN')) {
-    identifierType = 'passport';
-  } else if (pickedIdentifier?.system === IDENTIFIER_SYSTEMS.non_malaysian_ic) {
-    identifierType = 'non_malaysian_ic';
-  }
-
-  const identifierValue = pickedIdentifier?.value || '';
-  const mrnIdentifier = identifiers.find((id) => id.system === MY_CORE_IDENTIFIERS.PATIENT_MRN);
-  const ethnicityExt = fhirPatient.extension?.find((ext) => ext.url === MY_CORE_EXTENSIONS.ETHNICITY);
-
+  const nricIdentifier = fhirPatient.identifier?.find(id => id.system === 'nric' || id.system === 'ic');
   const phoneContact = fhirPatient.telecom?.find(t => t.system === 'phone');
   const emailContact = fhirPatient.telecom?.find(t => t.system === 'email');
   const emergencyContact = fhirPatient.contact?.[0];
@@ -189,11 +134,7 @@ function fhirPatientToPatientData(fhirPatient: FHIRPatient): SavedPatient {
   return {
     id: fhirPatient.id!,
     fullName,
-    identifierType,
-    identifierValue,
-    nric: identifierValue,
-    mrn: mrnIdentifier?.value,
-    ethnicity: (ethnicityExt as any)?.valueString ?? undefined,
+    nric: nricIdentifier?.value || '',
     dateOfBirth: fhirPatient.birthDate || '',
     gender: (fhirPatient.gender as 'male' | 'female' | 'other') || 'other',
     email: emailContact?.value,
@@ -215,28 +156,6 @@ function fhirPatientToPatientData(fhirPatient: FHIRPatient): SavedPatient {
     triage: triageInfo.triage,
     queueStatus: triageInfo.queueStatus ?? null,
     queueAddedAt: triageInfo.queueAddedAt ?? null,
-  };
-}
-
-function normalizeIdentifier(patientData: PatientData): { type: IdentifierType; value: string } {
-  const value = patientData.identifierValue ?? patientData.nric ?? '';
-  const type = patientData.identifierType ?? 'nric';
-  return { type, value };
-}
-
-function buildIdentifier(type: IdentifierType, value: string) {
-  return {
-    system: IDENTIFIER_SYSTEMS[type],
-    value,
-    type: {
-      coding: [IDENTIFIER_TYPE_CODING[type]],
-      text:
-        type === 'nric'
-          ? 'NRIC'
-          : type === 'non_malaysian_ic'
-          ? 'Non-Malaysian IC'
-          : 'Passport',
-    },
   };
 }
 
@@ -345,27 +264,22 @@ function buildTriageExtension(triageData: Omit<TriageData, 'triageAt' | 'isTriag
 /**
  * Save a patient to Medplum as FHIR Patient resource
  */
-export async function savePatientToMedplum(patientData: PatientData, clinicId?: string): Promise<string> {
-  const medplum = await getMedplumClient();
+export async function savePatientToMedplum(
+  patientData: PatientData,
+  clinicId: string | undefined,
+  medplum: MedplumClient
+): Promise<string> {
+  const client = medplum;
 
   console.log(`💾 Saving patient to Medplum FHIR...`);
 
-  const { type: identifierType, value: identifierValue } = normalizeIdentifier(patientData);
-
-  // Check if patient already exists by identifier
+  // Check if patient already exists by NRIC
   let existingPatient: FHIRPatient | undefined;
-  if (identifierValue) {
-    const searchValues = [
-      `${IDENTIFIER_SYSTEMS[identifierType]}|${identifierValue}`,
-      ...(identifierType === 'nric'
-        ? [`nric|${identifierValue}`, `ic|${identifierValue}`]
-        : []),
-    ];
-    for (const identifier of searchValues) {
-      existingPatient = await medplum.searchOne('Patient', { identifier });
-      if (existingPatient && matchesClinic(existingPatient, clinicId)) {
-        break;
-      }
+  if (patientData.nric) {
+    existingPatient = await client.searchOne('Patient', {
+      identifier: `nric|${patientData.nric}`,
+    });
+    if (existingPatient && !matchesClinic(existingPatient, clinicId)) {
       existingPatient = undefined;
     }
   }
@@ -390,30 +304,12 @@ export async function savePatientToMedplum(patientData: PatientData, clinicId?: 
     }
   }
 
-  const identifiers = [buildIdentifier(identifierType, identifierValue)];
-  if (patientData.mrn) {
-    identifiers.push({
-      system: MY_CORE_IDENTIFIERS.PATIENT_MRN,
-      value: patientData.mrn,
-      type: {
-        coding: [{ system: 'http://terminology.hl7.org/CodeSystem/v2-0203', code: 'MR', display: 'Medical Record Number' }],
-        text: 'MRN',
-      },
-    });
-  }
-
-  const extensions: FHIRPatient['extension'] = [];
-  if (patientData.ethnicity) {
-    extensions.push({
-      url: MY_CORE_EXTENSIONS.ETHNICITY,
-      valueString: patientData.ethnicity,
-    });
-  }
-
   const basePatient: FHIRPatient = {
     resourceType: 'Patient',
-    active: true,
-    identifier: addClinicIdentifier(identifiers, clinicId),
+    active: true,  // FHIR compliance: mark patient as active
+    identifier: addClinicIdentifier([
+      { system: 'nric', value: patientData.nric },
+    ], clinicId),
     name: [
       {
         text: patientData.fullName,
@@ -440,26 +336,24 @@ export async function savePatientToMedplum(patientData: PatientData, clinicId?: 
         telecom: [{ system: 'phone', value: patientData.emergencyContact.phone }],
       },
     ] : undefined,
-    ...(extensions.length > 0 ? { extension: extensions } : {}),
   };
 
-  const fhirPatient = applyMyCoreProfile(addManagingOrganization(basePatient, clinicId));
+  const fhirPatient = addManagingOrganization(basePatient, clinicId);
 
   let savedPatient: FHIRPatient;
   if (existingPatient) {
     // Update existing patient
-    savedPatient = await medplum.updateResource(
-      applyMyCoreProfile({
-        ...fhirPatient,
-        id: existingPatient.id,
-      })
-    );
+    savedPatient = await client.updateResource({
+      ...fhirPatient,
+      id: existingPatient.id,
+    });
     console.log(`✅ Updated FHIR Patient: ${savedPatient.id}`);
     
     // Create Provenance for update (non-blocking)
     if (savedPatient.id) {
       try {
         await createProvenanceForResource(
+          client,
           'Patient',
           savedPatient.id,
           undefined,
@@ -473,13 +367,14 @@ export async function savePatientToMedplum(patientData: PatientData, clinicId?: 
     }
   } else {
     // Create new patient
-    savedPatient = await validateAndCreate<FHIRPatient>(medplum, fhirPatient);
+    savedPatient = await validateAndCreate<FHIRPatient>(client, fhirPatient);
     console.log(`✅ Created FHIR Patient: ${savedPatient.id}`);
     
     // Create Provenance for audit trail (non-blocking)
     if (savedPatient.id) {
       try {
         await createProvenanceForResource(
+          client,
           'Patient',
           savedPatient.id,
           undefined,
@@ -498,7 +393,7 @@ export async function savePatientToMedplum(patientData: PatientData, clinicId?: 
     for (const allergy of patientData.medicalHistory.allergies) {
       if (!allergy.trim()) continue;
 
-      const allergyResource = await validateAndCreate<AllergyIntolerance>(medplum, {
+      const allergyResource = await validateAndCreate<AllergyIntolerance>(client, {
         resourceType: 'AllergyIntolerance',
         patient: { reference: `Patient/${savedPatient.id}` },
         code: { text: allergy },
@@ -514,6 +409,7 @@ export async function savePatientToMedplum(patientData: PatientData, clinicId?: 
       if (allergyResource.id) {
         try {
           await createProvenanceForResource(
+            client,
             'AllergyIntolerance',
             allergyResource.id,
             undefined,
@@ -533,7 +429,7 @@ export async function savePatientToMedplum(patientData: PatientData, clinicId?: 
     for (const condition of patientData.medicalHistory.conditions) {
       if (!condition.trim()) continue;
 
-      const conditionResource = await validateAndCreate<Condition>(medplum, {
+      const conditionResource = await validateAndCreate<Condition>(client, {
         resourceType: 'Condition',
         subject: { reference: `Patient/${savedPatient.id}` },
         code: { text: condition },
@@ -546,6 +442,7 @@ export async function savePatientToMedplum(patientData: PatientData, clinicId?: 
       if (conditionResource.id) {
         try {
           await createProvenanceForResource(
+            client,
             'Condition',
             conditionResource.id,
             undefined,
@@ -565,7 +462,7 @@ export async function savePatientToMedplum(patientData: PatientData, clinicId?: 
     for (const medication of patientData.medicalHistory.medications) {
       if (!medication.trim()) continue;
 
-      const medicationResource = await validateAndCreate<MedicationStatement>(medplum, {
+      const medicationResource = await validateAndCreate<MedicationStatement>(client, {
         resourceType: 'MedicationStatement',
         status: 'active',
         subject: { reference: `Patient/${savedPatient.id}` },
@@ -576,6 +473,7 @@ export async function savePatientToMedplum(patientData: PatientData, clinicId?: 
       if (medicationResource.id) {
         try {
           await createProvenanceForResource(
+            client,
             'MedicationStatement',
             medicationResource.id,
             undefined,
@@ -596,37 +494,45 @@ export async function savePatientToMedplum(patientData: PatientData, clinicId?: 
 /**
  * Get a patient from Medplum by ID
  */
-export async function getPatientFromMedplum(patientId: string, clinicId?: string): Promise<SavedPatient | null> {
+export async function getPatientFromMedplum(
+  patientId: string,
+  clinicId?: string,
+  medplum?: MedplumClient
+): Promise<SavedPatient | null> {
   try {
-    const medplum = await getMedplumClient();
+    const client = medplum ?? (await getAdminMedplum());
 
-    const fhirPatient = await medplum.readResource('Patient', patientId);
+    const fhirPatient = await client.readResource('Patient', patientId);
     if (!matchesClinic(fhirPatient, clinicId)) {
       return null;
     }
     const patientData = fhirPatientToPatientData(fhirPatient);
 
     // Get allergies
-    const allergies = await medplum.searchResources('AllergyIntolerance', {
+    const allergies = await client.searchResources('AllergyIntolerance', {
       patient: `Patient/${patientId}`,
     });
-    patientData.medicalHistory!.allergies = allergies.map(a => (a as any).code?.text || 'Unknown allergy');
+    patientData.medicalHistory!.allergies = allergies.map((a: AllergyIntolerance) => (a as any).code?.text || 'Unknown allergy');
 
     // Get conditions
-    const conditions = await medplum.searchResources('Condition', {
+    const conditions = await client.searchResources('Condition', {
       subject: `Patient/${patientId}`,
     });
-    patientData.medicalHistory!.conditions = conditions.map(c => (c as any).code?.text || 'Unknown condition');
+    patientData.medicalHistory!.conditions = conditions.map((c: Condition) => (c as any).code?.text || 'Unknown condition');
 
     // Get medications
-    const medications = await medplum.searchResources('MedicationStatement', {
+    const medications = await client.searchResources('MedicationStatement', {
       subject: `Patient/${patientId}`,
     });
-    patientData.medicalHistory!.medications = medications.map(m => (m as any).medicationCodeableConcept?.text || 'Unknown medication');
+    patientData.medicalHistory!.medications = medications.map((m: MedicationStatement) => (m as any).medicationCodeableConcept?.text || 'Unknown medication');
 
     return patientData;
-  } catch (error) {
-    console.error('Failed to get patient from Medplum:', error);
+  } catch (error: any) {
+    const status = error?.status ?? error?.statusCode;
+    console.error(
+      `Failed to get patient from Medplum (patientId=${patientId}, status=${status}):`,
+      error?.message ?? error
+    );
     return null;
   }
 }
@@ -639,11 +545,10 @@ export async function saveTriageToMedplum(
   triageData: Omit<TriageData, 'triageAt' | 'isTriaged'> & { triageBy?: string },
   clinicId?: string
 ): Promise<void> {
-  const medplum = await getMedplumClient();
-  const existingPatient = await medplum.readResource<FHIRPatient>('Patient', patientId);
-  if (!matchesClinic(existingPatient, clinicId)) {
-    throw new Error('Patient does not belong to this clinic');
-  }
+  const { getAdminMedplum } = await import('@/lib/server/medplum-admin');
+  const medplum = await getAdminMedplum();
+  const existingPatient = await medplum.readResource('Patient', patientId);
+  if (clinicId) assertMatchesClinic(existingPatient, clinicId, `Patient/${patientId}`);
 
   const newExtension = buildTriageExtension({
     ...triageData,
@@ -654,24 +559,21 @@ export async function saveTriageToMedplum(
   const existingExtensions = existingPatient.extension || [];
   const filteredExtensions = existingExtensions.filter((ext: any) => ext.url !== TRIAGE_EXTENSION_URL);
 
-  await medplum.updateResource(
-    applyMyCoreProfile({
-      ...existingPatient,
-      identifier: addClinicIdentifier(existingPatient.identifier, clinicId),
-      extension: [...filteredExtensions, newExtension],
-    })
-  );
+  await medplum.updateResource({
+    ...existingPatient,
+    identifier: addClinicIdentifier(existingPatient.identifier, clinicId),
+    extension: [...filteredExtensions, newExtension],
+  });
 }
 
 /**
  * Update only queue status on the triage extension
  */
 export async function updateQueueStatusInMedplum(patientId: string, status: QueueStatus | null, clinicId?: string): Promise<void> {
-  const medplum = await getMedplumClient();
-  const existingPatient = await medplum.readResource<FHIRPatient>('Patient', patientId);
-  if (!matchesClinic(existingPatient, clinicId)) {
-    throw new Error('Patient does not belong to this clinic');
-  }
+  const { getAdminMedplum } = await import('@/lib/server/medplum-admin');
+  const medplum = await getAdminMedplum();
+  const existingPatient = await medplum.readResource('Patient', patientId);
+  if (clinicId) assertMatchesClinic(existingPatient, clinicId, `Patient/${patientId}`);
   const extensions = existingPatient.extension || [];
   const nowIso = new Date().toISOString();
 
@@ -711,43 +613,41 @@ export async function updateQueueStatusInMedplum(patientId: string, status: Queu
     newExtensions.push(triageExt);
   }
 
-  await medplum.updateResource(
-    applyMyCoreProfile({
-      ...existingPatient,
-      identifier: addClinicIdentifier(existingPatient.identifier, clinicId),
-      extension: newExtensions,
-    })
-  );
+  await medplum.updateResource({
+    ...existingPatient,
+    identifier: addClinicIdentifier(existingPatient.identifier, clinicId),
+    extension: newExtensions,
+  });
 }
 
 /**
  * Search patients by name or NRIC
  */
-export async function searchPatientsInMedplum(query: string, clinicId?: string): Promise<SavedPatient[]> {
+export async function searchPatientsInMedplum(
+  query: string,
+  clinicId: string | undefined,
+  medplum: MedplumClient
+): Promise<SavedPatient[]> {
   try {
-    const medplum = await getMedplumClient();
-
-    const normalizedQuery = query.trim().toLowerCase();
-    if (!normalizedQuery) {
+    const trimmed = query.trim().toLowerCase();
+    if (!trimmed) {
       return [];
     }
 
-    // Medplum search behavior for Patient + clinic-scoped custom identifiers is not
-    // consistent enough here, so fetch a bounded recent slice and filter locally.
-    const patients = await medplum.searchResources('Patient', {
-      _count: '200',
-      _sort: '-_lastUpdated',
-    });
+    // Medplum free-text `_query` matching has been unreliable for freshly-created
+    // patients in this app's clinic-scoped flows. Pull the clinic-scoped patient set
+    // and apply local matching so NRIC / name / phone searches behave deterministically.
+    const patients = await getAllPatientsFromMedplum(300, clinicId, medplum);
 
     return patients
-      .filter((patient) => matchesClinic(patient as any, clinicId))
-      .map(fhirPatientToPatientData)
       .filter((patient) => {
+        const fullName = patient.fullName?.toLowerCase() ?? '';
+        const nric = patient.nric?.toLowerCase() ?? '';
+        const phone = patient.phone?.toLowerCase() ?? '';
         return (
-          patient.fullName?.toLowerCase().includes(normalizedQuery) ||
-          patient.nric?.toLowerCase().includes(normalizedQuery) ||
-          patient.phone?.toLowerCase().includes(normalizedQuery) ||
-          patient.identifierValue?.toLowerCase().includes(normalizedQuery)
+          fullName.includes(trimmed) ||
+          nric.includes(trimmed) ||
+          phone.includes(trimmed)
         );
       })
       .slice(0, 50);
@@ -760,57 +660,50 @@ export async function searchPatientsInMedplum(query: string, clinicId?: string):
 /**
  * Get all patients from Medplum
  */
-export async function getAllPatientsFromMedplum(limit = 100, clinicId?: string): Promise<SavedPatient[]> {
+export async function getAllPatientsFromMedplum(
+  limit = 100,
+  clinicId: string | undefined,
+  medplum: MedplumClient
+): Promise<SavedPatient[]> {
   try {
-    const medplum = await getMedplumClient();
+    const client = medplum;
 
-    const patients = await medplum.searchResources('Patient', {
+    // Scope by clinic identifier only; `matchesClinic` still enforces org + identifier.
+    // A combined `organization` search param was overly strict for some records and is unnecessary here.
+    const patients = await client.searchResources('Patient', {
       _count: String(limit),
       _sort: '-_lastUpdated',
+      ...(clinicId ? { identifier: `${CLINIC_IDENTIFIER_SYSTEM}|${clinicId}` } : {}),
     });
 
     return patients
       .filter((patient) => matchesClinic(patient as any, clinicId))
       .map(fhirPatientToPatientData);
-  } catch (error: any) {
+  } catch (error) {
     console.error('Failed to get patients from Medplum:', error);
-    
-    // Provide more specific error information
-    if (error?.message?.includes('credentials') || error?.message?.includes('not configured')) {
-      throw new Error('Medplum credentials not configured. Please set MEDPLUM_CLIENT_ID and MEDPLUM_CLIENT_SECRET environment variables.');
-    }
-    if (error?.outcome?.issue?.[0]?.code === 'forbidden' || error?.message?.includes('Unauthorized')) {
-      throw new Error('Unauthorized access to Medplum. Please check your credentials and permissions.');
-    }
-    if (error?.message?.includes('Token expired')) {
-      throw new Error('Medplum authentication token expired. Please refresh your session.');
-    }
-    
-    throw new Error(error?.message || 'Failed to get patients from Medplum');
+    return [];
   }
 }
 
 /**
  * Update a patient in Medplum
  */
-export async function updatePatientInMedplum(patientId: string, updates: Partial<PatientData>, clinicId?: string): Promise<void> {
-  const medplum = await getMedplumClient();
+export async function updatePatientInMedplum(
+  patientId: string,
+  updates: Partial<PatientData>,
+  clinicId: string | undefined,
+  medplum: MedplumClient
+): Promise<void> {
+  const client = medplum;
 
-  const existingPatient = await medplum.readResource('Patient', patientId);
-  if (!matchesClinic(existingPatient, clinicId)) {
-    throw new Error('Patient does not belong to this clinic');
-  }
+  const existingPatient = await client.readResource('Patient', patientId);
+  if (clinicId) assertMatchesClinic(existingPatient, clinicId, `Patient/${patientId}`);
 
   // Merge updates
-  const updatedPatient: FHIRPatient = applyMyCoreProfile(
-    addManagingOrganization(
-      {
-        ...existingPatient,
-        identifier: addClinicIdentifier(existingPatient.identifier, clinicId),
-      },
-      clinicId
-    )
-  );
+  const updatedPatient: FHIRPatient = addManagingOrganization({
+    ...existingPatient,
+    identifier: addClinicIdentifier(existingPatient.identifier, clinicId),
+  }, clinicId);
 
   if (updates.fullName) {
     const nameParts = updates.fullName.split(' ');
@@ -830,6 +723,6 @@ export async function updatePatientInMedplum(patientId: string, updates: Partial
     updatedPatient.address = [{ text: updates.address, postalCode: updates.postalCode }];
   }
 
-  await medplum.updateResource(updatedPatient);
+  await client.updateResource(updatedPatient);
   console.log(`✅ Updated FHIR Patient: ${patientId}`);
 }

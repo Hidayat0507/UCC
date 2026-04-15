@@ -57,6 +57,7 @@ export interface Patient {
   queueAddedAt?: Date | string | null;
   visitIntent?: string;
   payerType?: string;
+  paymentMethod?: string;
   billingPerson?: string;
   dependentName?: string;
   dependentRelationship?: string;

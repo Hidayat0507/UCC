@@ -38,6 +38,7 @@ interface TriageSummary {
   queueAddedAt?: string | null;
   visitIntent?: string;
   payerType?: string;
+  paymentMethod?: string;
   billingPerson?: string;
   dependentName?: string;
   dependentRelationship?: string;
@@ -178,6 +179,19 @@ function buildTriageExtension(triageData: Omit<TriageData, 'triageAt' | 'isTriag
       { url: 'isTriaged', valueBoolean: true },
       { url: 'queueStatus', valueString: queueStatus },
       { url: 'queueAddedAt', valueDateTime: triageAtIso },
+      ...buildCheckInMetadataExtension(
+        triageData.visitIntent,
+        triageData.payerType,
+        triageData.paymentMethod,
+        triageData.assignedClinician,
+        triageData.billingPerson,
+        triageData.dependentName,
+        triageData.dependentRelationship,
+        triageData.dependentPhone,
+        triageData.registrationSource,
+        triageData.registrationAt,
+        triageData.performedBy
+      ),
       { url: 'vitalSigns', extension: vitalExtensions },
       ...(redFlagExtensions.length
         ? [
@@ -205,6 +219,7 @@ function buildQueueOnlyExtension(queueStatus: QueueStatus, queueAddedAtIso: stri
 function buildCheckInMetadataExtension(
   visitIntent?: string,
   payerType?: string,
+  paymentMethod?: string,
   assignedClinician?: string,
   billingPerson?: string,
   dependentName?: string,
@@ -217,6 +232,7 @@ function buildCheckInMetadataExtension(
   const entries: Extension[] = [];
   if (visitIntent) entries.push({ url: 'visitIntent', valueString: visitIntent });
   if (payerType) entries.push({ url: 'payerType', valueString: payerType });
+  if (paymentMethod) entries.push({ url: 'paymentMethod', valueString: paymentMethod });
   if (assignedClinician) entries.push({ url: 'assignedClinician', valueString: assignedClinician });
   if (billingPerson) entries.push({ url: 'billingPerson', valueString: billingPerson });
   if (dependentName) entries.push({ url: 'dependentName', valueString: dependentName });
@@ -287,6 +303,7 @@ function parseTriageExtension(extensions?: Extension[]): TriageSummary {
     queueAddedAt,
     visitIntent: getSub('visitIntent')?.valueString,
     payerType: getSub('payerType')?.valueString,
+    paymentMethod: getSub('paymentMethod')?.valueString,
     billingPerson: getSub('billingPerson')?.valueString,
     dependentName: getSub('dependentName')?.valueString,
     dependentRelationship: getSub('dependentRelationship')?.valueString,
@@ -365,34 +382,83 @@ export async function saveTriageEncounter(
   clinicId?: string
 ): Promise<void> {
   const client = medplum;
-  const triageAtIso = new Date().toISOString();
+  const existing = await getActiveTriageEncounter(patientId, client, clinicId);
   const queueStatus: QueueStatus = 'waiting';
+  const triageAtIso =
+    existing?.triage?.triageAt?.toString() ||
+    existing?.queueAddedAt?.toString() ||
+    new Date().toISOString();
 
-  const encounter = await validateAndCreate(client, {
-    resourceType: 'Encounter',
-    status: 'triaged',
-    class: {
-      system: 'http://terminology.hl7.org/CodeSystem/v3-ActCode',
-      code: 'AMB',
-      display: 'ambulatory',
-    },
-    subject: { reference: `Patient/${patientId}` },
-    period: { start: triageAtIso },
-    priority: {
-      coding: [
-        {
-          system: 'http://terminology.hl7.org/CodeSystem/v3-ActPriority',
-          code: String(triageData.triageLevel),
-          display: `Triage Level ${triageData.triageLevel}`,
-        },
-      ],
-    },
-    extension: [buildTriageExtension(triageData, triageAtIso, queueStatus)],
-    ...clinicEncounterScope(clinicId),
-  });
+  const triagePayload = {
+    ...triageData,
+    visitIntent: triageData.visitIntent ?? existing?.visitIntent,
+    payerType: triageData.payerType ?? existing?.payerType,
+    paymentMethod: triageData.paymentMethod ?? existing?.paymentMethod,
+    billingPerson: triageData.billingPerson ?? existing?.billingPerson,
+    dependentName: triageData.dependentName ?? existing?.dependentName,
+    dependentRelationship: triageData.dependentRelationship ?? existing?.dependentRelationship,
+    dependentPhone: triageData.dependentPhone ?? existing?.dependentPhone,
+    assignedClinician: triageData.assignedClinician ?? existing?.assignedClinician,
+    registrationSource: triageData.registrationSource ?? existing?.registrationSource,
+    registrationAt: triageData.registrationAt ?? existing?.registrationAt,
+    performedBy: triageData.performedBy ?? existing?.performedBy,
+  };
 
-  await createChiefComplaintObservation(client, encounter.id!, `Patient/${patientId}`, triageData.chiefComplaint);
-  await createVitalsObservations(client, encounter.id!, `Patient/${patientId}`, triageData.vitalSigns || {});
+  let encounterId: string;
+
+  if (existing?.id) {
+    const encounter = await client.readResource('Encounter', existing.id) as any;
+    assertEncounterBelongsToClinic(encounter, clinicId);
+    const otherExtensions =
+      (encounter.extension || []).filter((ext: any) => ext.url !== TRIAGE_ENCOUNTER_EXTENSION_URL);
+
+    const updatedEncounter = await client.updateResource({
+      ...encounter,
+      status: 'triaged',
+      period: {
+        ...(encounter.period || {}),
+        start: encounter.period?.start || triageAtIso,
+      },
+      priority: {
+        coding: [
+          {
+            system: 'http://terminology.hl7.org/CodeSystem/v3-ActPriority',
+            code: String(triagePayload.triageLevel),
+            display: `Triage Level ${triagePayload.triageLevel}`,
+          },
+        ],
+      },
+      extension: [...otherExtensions, buildTriageExtension(triagePayload, triageAtIso, queueStatus)],
+    });
+    encounterId = updatedEncounter.id!;
+  } else {
+    const encounter = await validateAndCreate(client, {
+      resourceType: 'Encounter',
+      status: 'triaged',
+      class: {
+        system: 'http://terminology.hl7.org/CodeSystem/v3-ActCode',
+        code: 'AMB',
+        display: 'ambulatory',
+      },
+      subject: { reference: `Patient/${patientId}` },
+      period: { start: triageAtIso },
+      priority: {
+        coding: [
+          {
+            system: 'http://terminology.hl7.org/CodeSystem/v3-ActPriority',
+            code: String(triagePayload.triageLevel),
+            display: `Triage Level ${triagePayload.triageLevel}`,
+          },
+        ],
+      },
+      extension: [buildTriageExtension(triagePayload, triageAtIso, queueStatus)],
+      ...clinicEncounterScope(clinicId),
+    });
+    encounterId = encounter.id!;
+  }
+
+  await createChiefComplaintObservation(client, encounterId, `Patient/${patientId}`, triagePayload.chiefComplaint);
+  await createVitalsObservations(client, encounterId, `Patient/${patientId}`, triagePayload.vitalSigns || {});
 }
 
 export async function checkInPatientInTriage(
@@ -401,6 +467,7 @@ export async function checkInPatientInTriage(
   metadata?: {
     visitIntent?: string;
     payerType?: string;
+    paymentMethod?: string;
     assignedClinician?: string;
     billingPerson?: string;
     dependentName?: string;
@@ -424,6 +491,7 @@ export async function checkInPatientInTriage(
   const checkInMetadataExt = buildCheckInMetadataExtension(
     metadata?.visitIntent,
     metadata?.payerType,
+    metadata?.paymentMethod,
     metadata?.assignedClinician,
     metadata?.billingPerson,
     metadata?.dependentName,
@@ -474,6 +542,17 @@ export async function updateTriageEncounter(
       triageLevel: triageData.triageLevel ?? existing.triage?.triageLevel ?? 3,
       chiefComplaint: triageData.chiefComplaint ?? existing.triage?.chiefComplaint ?? '',
       vitalSigns: triageData.vitalSigns ?? existing.triage?.vitalSigns ?? {},
+      visitIntent: triageData.visitIntent ?? existing.visitIntent,
+      payerType: triageData.payerType ?? existing.payerType,
+      paymentMethod: triageData.paymentMethod ?? existing.paymentMethod,
+      billingPerson: triageData.billingPerson ?? existing.billingPerson,
+      dependentName: triageData.dependentName ?? existing.dependentName,
+      dependentRelationship: triageData.dependentRelationship ?? existing.dependentRelationship,
+      dependentPhone: triageData.dependentPhone ?? existing.dependentPhone,
+      assignedClinician: triageData.assignedClinician ?? existing.assignedClinician,
+      registrationSource: triageData.registrationSource ?? existing.registrationSource,
+      registrationAt: triageData.registrationAt ?? existing.registrationAt,
+      performedBy: triageData.performedBy ?? existing.performedBy,
       triageNotes: triageData.triageNotes ?? existing.triage?.triageNotes,
       redFlags: triageData.redFlags ?? existing.triage?.redFlags,
       triageBy: triageData.triageBy ?? existing.triage?.triageBy,
@@ -666,6 +745,7 @@ export async function getTriageQueueForToday(
       queueAddedAt: queueAddedAtIso,
       visitIntent: parsed.visitIntent,
       payerType: parsed.payerType,
+      paymentMethod: parsed.paymentMethod,
       billingPerson: parsed.billingPerson,
       dependentName: parsed.dependentName,
       dependentRelationship: parsed.dependentRelationship,

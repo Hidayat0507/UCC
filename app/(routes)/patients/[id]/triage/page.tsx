@@ -29,6 +29,14 @@ export default async function TriagePage({ params }: TriagePageProps) {
     triage: triage.triage,
     queueStatus: triage.queueStatus ?? null,
     queueAddedAt: triage.queueAddedAt ?? null,
+    visitIntent: triage.visitIntent ?? patient.visitIntent,
+    payerType: triage.payerType ?? patient.payerType,
+    paymentMethod: triage.paymentMethod ?? patient.paymentMethod,
+    billingPerson: triage.billingPerson ?? patient.billingPerson,
+    dependentName: triage.dependentName ?? patient.dependentName,
+    dependentRelationship: triage.dependentRelationship ?? patient.dependentRelationship,
+    dependentPhone: triage.dependentPhone ?? patient.dependentPhone,
+    assignedClinician: triage.assignedClinician ?? patient.assignedClinician,
   } as any;
 
   // Check if patient is already triaged and in queue

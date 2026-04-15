@@ -17,6 +17,7 @@ export async function POST(request: NextRequest) {
       chiefComplaint,
       visitIntent,
       payerType,
+      paymentMethod,
       assignedClinician,
       billingPerson,
       dependentName,
@@ -40,6 +41,7 @@ export async function POST(request: NextRequest) {
       {
         visitIntent,
         payerType,
+        paymentMethod,
         assignedClinician,
         billingPerson,
         dependentName,
