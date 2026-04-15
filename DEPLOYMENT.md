@@ -65,6 +65,12 @@ Before calling the system production-ready, check:
 - Browser auth: Medplum login from the frontend
 - Server auth bridge: `medplum-session` cookie
 
+### Vercel production branch
+
+Production deployments are expected to track **`claude/condescending-kirch`** (not `main`), so pushes to that branch update the live site and domain aliases.
+
+In Vercel: **Project → Settings → Git** (or **Production Branch**), set the production branch to **`claude/condescending-kirch`** and save. See [Using a custom production branch](https://vercel.com/docs/deployments/git#production-branch).
+
 ## Required Environment Variables
 
 Validate the environment before building or promoting:
