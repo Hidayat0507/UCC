@@ -52,6 +52,17 @@ const TAB_EMPTY: Record<TreatmentPlanTab, string> = {
   documents: "No documents in this catalog yet.",
 };
 
+function isDraftPersistenceUnavailable(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return (
+    message.includes("UNAUTHENTICATED") ||
+    message.includes("invalid authentication credentials") ||
+    message.includes("Failed to load treatment plan draft") ||
+    message.includes("Failed to save treatment plan entry") ||
+    message.includes("Failed to delete entry")
+  );
+}
+
 export function OrderComposer({
   draftId,
   patientId,
@@ -73,6 +84,7 @@ export function OrderComposer({
   const [summary, setSummary] = React.useState<TreatmentPlanSummary>(() => computeTreatmentPlanSummary([]));
   const [hydrated, setHydrated] = React.useState(false);
   const [savingIds, setSavingIds] = React.useState<Record<string, boolean>>({});
+  const [persistenceDisabled, setPersistenceDisabled] = React.useState(false);
 
   const catalogByTab = React.useMemo<Record<TreatmentPlanTab, CatalogItem[]>>(
     () => ({
@@ -122,6 +134,9 @@ export function OrderComposer({
       } catch (error) {
         if (!active) return;
         publishPlan(initialEntries);
+        if (isDraftPersistenceUnavailable(error)) {
+          setPersistenceDisabled(true);
+        }
         console.error("Failed to hydrate treatment plan draft:", error);
       } finally {
         if (active) setHydrated(true);
@@ -141,6 +156,9 @@ export function OrderComposer({
 
   const persistEntry = React.useCallback(
     async (entry: TreatmentPlanEntryInput, rollback: () => void) => {
+      if (persistenceDisabled) {
+        return;
+      }
       const pendingKey = entry.id || `${entry.tab}:${entry.catalogRef || entry.name}`;
       setSavingIds((prev) => ({ ...prev, [pendingKey]: true }));
       try {
@@ -155,6 +173,10 @@ export function OrderComposer({
         }
         publishPlan(data.plan.entries as TreatmentPlanEntry[]);
       } catch (error) {
+        if (isDraftPersistenceUnavailable(error)) {
+          setPersistenceDisabled(true);
+          return;
+        }
         rollback();
         toast({
           title: "Autosave failed",
@@ -169,7 +191,7 @@ export function OrderComposer({
         });
       }
     },
-    [consultationId, draftId, patientId, publishPlan, toast]
+    [consultationId, draftId, patientId, persistenceDisabled, publishPlan, toast]
   );
 
   const addCatalogItem = React.useCallback(
@@ -219,6 +241,9 @@ export function OrderComposer({
       const prev = entries;
       const next = prev.filter((item) => item.id !== entry.id);
       publishPlan(next);
+      if (persistenceDisabled) {
+        return;
+      }
       try {
         const response = await fetch("/api/consultations/plan", {
           method: "DELETE",
@@ -231,6 +256,10 @@ export function OrderComposer({
         }
         publishPlan(data.plan.entries as TreatmentPlanEntry[]);
       } catch (error) {
+        if (isDraftPersistenceUnavailable(error)) {
+          setPersistenceDisabled(true);
+          return;
+        }
         publishPlan(prev);
         toast({
           title: "Autosave failed",
@@ -239,7 +268,7 @@ export function OrderComposer({
         });
       }
     },
-    [draftId, entries, publishPlan, toast]
+    [draftId, entries, persistenceDisabled, publishPlan, toast]
   );
 
   const updateEntryField = React.useCallback(
@@ -489,5 +518,4 @@ export function OrderComposer({
     </Card>
   );
 }
-
 

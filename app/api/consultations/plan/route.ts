@@ -23,6 +23,32 @@ type StoredPlan = {
   updatedAt: Timestamp;
 };
 
+function buildEmptySnapshot(
+  draftId: string,
+  patientId: string,
+  consultationId?: string
+): TreatmentPlanSnapshot {
+  return {
+    draftId,
+    patientId,
+    consultationId,
+    entries: [],
+    summary: computeTreatmentPlanSummary([]),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function isPlanStoreUnavailable(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return (
+    message.includes("UNAUTHENTICATED") ||
+    message.includes("invalid authentication credentials") ||
+    message.includes("Could not load the default credentials") ||
+    message.includes("service account") ||
+    message.includes("Firestore")
+  );
+}
+
 function tsToIso(value?: Timestamp): string {
   return value?.toDate().toISOString() || new Date().toISOString();
 }
@@ -52,12 +78,13 @@ function deriveDraftId(params: URLSearchParams): string | null {
 }
 
 export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const draftId = deriveDraftId(searchParams);
+  const patientId = searchParams.get("patientId") || "";
+  const consultationId = searchParams.get("consultationId") || undefined;
+
   try {
     await requireClinicAuth(request);
-    const { searchParams } = new URL(request.url);
-    const draftId = deriveDraftId(searchParams);
-    const patientId = searchParams.get("patientId") || "";
-    const consultationId = searchParams.get("consultationId") || undefined;
 
     if (!draftId) {
       return NextResponse.json({ success: false, error: "draftId or patientId is required" }, { status: 400 });
@@ -67,20 +94,16 @@ export async function GET(request: NextRequest) {
     const snap = await docRef.get();
 
     if (!snap.exists) {
-      const empty: TreatmentPlanSnapshot = {
-        draftId,
-        patientId,
-        consultationId,
-        entries: [],
-        summary: computeTreatmentPlanSummary([]),
-        updatedAt: new Date().toISOString(),
-      };
-      return NextResponse.json({ success: true, plan: empty });
+      return NextResponse.json({ success: true, plan: buildEmptySnapshot(draftId, patientId, consultationId) });
     }
 
     const data = snap.data() as StoredPlan;
     return NextResponse.json({ success: true, plan: toSnapshot(data) });
   } catch (error) {
+    if (draftId && isPlanStoreUnavailable(error)) {
+      console.warn("[consultations/plan] Falling back to empty draft:", error);
+      return NextResponse.json({ success: true, plan: buildEmptySnapshot(draftId, patientId, consultationId) });
+    }
     return handleRouteError(error, "GET /api/consultations/plan");
   }
 }
@@ -197,4 +220,3 @@ export async function DELETE(request: NextRequest) {
     return handleRouteError(error, "DELETE /api/consultations/plan");
   }
 }
-

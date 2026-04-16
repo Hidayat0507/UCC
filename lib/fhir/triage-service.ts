@@ -482,7 +482,16 @@ export async function checkInPatientInTriage(
 ): Promise<string> {
   const client = medplum ?? (await getAdminMedplum());
   const existing = await getActiveTriageEncounter(patientId, client, clinicId);
-  if (existing) {
+
+  // Reuse only genuinely active visits. Historical finished encounters should not
+  // be resurrected for a new walk-in, otherwise the patient never appears in
+  // today's queue because the old encounter keeps its historical timestamps.
+  if (
+    existing &&
+    existing.queueStatus &&
+    existing.queueStatus !== 'completed' &&
+    existing.queueStatus !== 'meds_and_bills'
+  ) {
     await updateQueueStatusForPatient(patientId, 'arrived', client, clinicId);
     return existing.id;
   }
