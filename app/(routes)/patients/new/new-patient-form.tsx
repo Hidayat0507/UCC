@@ -259,7 +259,7 @@ export default function NewPatientForm({ initialFullName = "", initialNric = "" 
     };
   }, [form, patientEntryMode, nric, phone]);
 
-  const useExistingPatient = (patient: PatientSearchResult) => {
+  const selectExistingPatient = (patient: PatientSearchResult) => {
     setSelectedExistingPatient(patient);
     setExistingSearchQuery(patient.fullName || "");
     setExistingSearchResults([]);
@@ -563,7 +563,7 @@ export default function NewPatientForm({ initialFullName = "", initialNric = "" 
                                 key={patient.id}
                                 type="button"
                                 className="w-full rounded-md border p-2 text-left hover:bg-muted"
-                                onClick={() => useExistingPatient(patient)}
+                                onClick={() => selectExistingPatient(patient)}
                               >
                                 <p className="font-medium">{patient.fullName}</p>
                                 <p className="text-xs text-muted-foreground">
@@ -605,7 +605,7 @@ export default function NewPatientForm({ initialFullName = "", initialNric = "" 
                                 <div className="mt-2">
                                   <Button size="sm" variant="outline" type="button" onClick={() => {
                                     setPatientEntryMode("existing");
-                                    useExistingPatient(candidate);
+                                    selectExistingPatient(candidate);
                                   }}>
                                     Use this existing patient
                                   </Button>
@@ -969,5 +969,4 @@ export default function NewPatientForm({ initialFullName = "", initialNric = "" 
     </div>
   );
 }
-
 

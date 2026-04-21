@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Plus, Search, Clock, CheckCircle2, UserRound } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { getAllPatients, type Patient } from "@/lib/fhir/patient-client";
 import {
   Table,
@@ -44,7 +44,7 @@ export default function PatientsPage() {
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
 
-  const loadPatients = async () => {
+  const loadPatients = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -84,11 +84,11 @@ export default function PatientsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
 
   useEffect(() => {
     loadPatients();
-  }, []);
+  }, [loadPatients]);
 
   const handleAddToQueue = async (patient: Patient) => {
     try {
