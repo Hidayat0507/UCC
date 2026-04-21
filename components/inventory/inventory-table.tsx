@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Search, Trash2, Pencil } from "lucide-react";
 import { Medication } from "@/lib/inventory";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -49,20 +50,20 @@ export function InventoryTable({
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center space-x-2">
+      <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50/70 px-3 py-2">
         <Search className="w-4 h-4 text-muted-foreground" />
         <Input
           placeholder="Search medications..."
           value={searchTerm}
           onChange={(e) => onSearchChange(e.target.value.trim())}
-          className="max-w-sm"
+          className="max-w-sm border-0 bg-transparent shadow-none focus-visible:ring-0"
         />
       </div>
 
-      <div className="border rounded-lg">
+      <div className="overflow-hidden rounded-2xl border border-slate-200/80">
         <Table>
           <TableHeader>
-            <TableRow>
+            <TableRow className="bg-slate-50/80">
               <TableHead>Name</TableHead>
               <TableHead>Category</TableHead>
               <TableHead>Stock</TableHead>
@@ -73,20 +74,34 @@ export function InventoryTable({
             </TableRow>
           </TableHeader>
           <TableBody>
+            {filteredMedications.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
+                  No medications match the current filter.
+                </TableCell>
+              </TableRow>
+            ) : null}
             {filteredMedications.map((medication) => (
               <TableRow key={medication.id}>
                 <TableCell>
-                  <div>
-                    <p className="font-medium">{medication.name}</p>
+                  <div className="space-y-1">
+                    <p className="font-medium text-slate-900">{medication.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {medication.dosageForm || "Medication"} • {medication.unit}
+                    </p>
                   </div>
                 </TableCell>
-                <TableCell>{medication.category}</TableCell>
-                <TableCell className={medication.stock <= medication.minimumStock ? "text-red-500 font-medium" : ""}>
+                <TableCell>
+                  <Badge variant="secondary" className="bg-slate-100 text-slate-700">
+                    {medication.category}
+                  </Badge>
+                </TableCell>
+                <TableCell className={medication.stock <= medication.minimumStock ? "font-medium text-rose-600" : ""}>
                   {medication.stock} {medication.unit}
                 </TableCell>
                 <TableCell>{medication.minimumStock}</TableCell>
-                <TableCell>${medication.unitPrice?.toFixed(2) || "N/A"}</TableCell>
-                <TableCell>{medication.expiryDate}</TableCell>
+                <TableCell>RM {medication.unitPrice?.toFixed(2) || "0.00"}</TableCell>
+                <TableCell>{medication.expiryDate || "-"}</TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-2">
                     <Button

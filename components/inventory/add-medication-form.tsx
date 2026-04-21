@@ -14,30 +14,23 @@ import {
 import { type Medication } from "@/lib/inventory";
 import { MEDICATION_CATEGORIES } from "@/lib/constants";
 
-const dosageForms = [
-  "Tablet",
-  "Capsule",
-  "Syrup",
-  "Injection",
-  "Cream",
-  "Ointment",
-];
-
 interface AddMedicationFormProps {
   onSubmit: (data: Omit<Medication, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   onCancel: () => void;
 }
 
 export function AddMedicationForm({ onSubmit, onCancel }: AddMedicationFormProps) {
+  const [category, setCategory] = React.useState("");
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const form = e.currentTarget;
     const formData = new FormData(form);
     
     const medicationData = {
-      name: formData.get('name') as string,
-      category: formData.get('category') as string,
-      dosageForm: formData.get('dosageForm') as string,
+      name: (formData.get('name') as string).trim(),
+      category,
+      dosageForm: (formData.get('dosageForm') as string).trim(),
       strengths: [], // You'll need to handle this separately
       stock: parseInt(formData.get('stock') as string),
       minimumStock: parseInt(formData.get('minimumStock') as string),
@@ -59,7 +52,7 @@ export function AddMedicationForm({ onSubmit, onCancel }: AddMedicationFormProps
         </div>
         <div className="space-y-2">
           <Label htmlFor="category">Category</Label>
-          <Select name="category" required>
+          <Select value={category} onValueChange={setCategory} required>
             <SelectTrigger>
               <SelectValue placeholder="Select category" />
             </SelectTrigger>
@@ -104,7 +97,7 @@ export function AddMedicationForm({ onSubmit, onCancel }: AddMedicationFormProps
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="unitPrice">Unit Price ($)</Label>
+          <Label htmlFor="unitPrice">Unit Price (RM)</Label>
           <Input
             id="unitPrice"
             name="unitPrice"

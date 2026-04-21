@@ -5,7 +5,6 @@
 
 export const TRIAGE_EXTENSION_URL = 'https://ucc.emr/triage';
 export const STORAGE_PATH_EXTENSION_URL = 'https://ucc.emr/storage-path';
-export const INVENTORY_EXTENSION_URL = 'https://ucc.emr/inventory';
 
 export type ExtensionDefinition = {
   url: string;
@@ -32,21 +31,6 @@ export const STRUCTURE_DEFINITIONS: Record<string, ExtensionDefinition> = {
     example: {
       url: STORAGE_PATH_EXTENSION_URL,
       valueString: 'patients/123/documents/abc.pdf',
-    },
-  },
-  [INVENTORY_EXTENSION_URL]: {
-    url: INVENTORY_EXTENSION_URL,
-    purpose: 'Carries clinic inventory metadata for Medication resources such as stock levels, unit price, units, and strengths.',
-    example: {
-      url: INVENTORY_EXTENSION_URL,
-      extension: [
-        { url: 'category', valueString: 'antibiotic' },
-        { url: 'stock', valueInteger: 42 },
-        { url: 'minimumStock', valueInteger: 10 },
-        { url: 'unit', valueString: 'units' },
-        { url: 'unitPrice', valueDecimal: 12.5 },
-        { url: 'strength', valueString: '500mg' },
-      ],
     },
   },
 };
@@ -212,161 +196,6 @@ export async function registerStructureDefinitions(medplum: any): Promise<void> 
       console.log('✅ Registered triage extension');
     } else {
       console.log('✅ Triage extension already registered');
-    }
-
-    const existingInventory = await medplum.searchOne('StructureDefinition', {
-      url: INVENTORY_EXTENSION_URL,
-    });
-    if (!existingInventory) {
-      const inventoryExtension = {
-        resourceType: 'StructureDefinition',
-        url: INVENTORY_EXTENSION_URL,
-        name: 'InventoryExtension',
-        status: 'active',
-        fhirVersion: '4.0.1',
-        kind: 'complex-type',
-        abstract: false,
-        context: [{ type: 'element', expression: 'Medication' }],
-        type: 'Extension',
-        baseDefinition: 'http://hl7.org/fhir/StructureDefinition/Extension',
-        derivation: 'constraint',
-        snapshot: {
-          element: [
-            {
-              id: 'Extension',
-              path: 'Extension',
-              short: 'Inventory metadata for medication catalog records',
-              definition: 'Contains operational inventory information such as stock, threshold, unit price, unit label, and strengths for a Medication resource.',
-              min: 0,
-              max: '1',
-              base: { path: 'Extension', min: 0, max: '*' },
-            },
-            {
-              id: 'Extension.url',
-              path: 'Extension.url',
-              fixedUri: INVENTORY_EXTENSION_URL,
-            },
-            {
-              id: 'Extension.extension',
-              path: 'Extension.extension',
-              min: 0,
-              max: '*',
-            },
-            {
-              id: 'Extension.extension:category',
-              path: 'Extension.extension',
-              sliceName: 'category',
-              min: 0,
-              max: '1',
-              type: [{ code: 'Extension' }],
-            },
-            {
-              id: 'Extension.extension:category.url',
-              path: 'Extension.extension.url',
-              fixedUri: 'category',
-            },
-            {
-              id: 'Extension.extension:category.value[x]',
-              path: 'Extension.extension.value[x]',
-              type: [{ code: 'string' }],
-            },
-            {
-              id: 'Extension.extension:stock',
-              path: 'Extension.extension',
-              sliceName: 'stock',
-              min: 0,
-              max: '1',
-              type: [{ code: 'Extension' }],
-            },
-            {
-              id: 'Extension.extension:stock.url',
-              path: 'Extension.extension.url',
-              fixedUri: 'stock',
-            },
-            {
-              id: 'Extension.extension:stock.value[x]',
-              path: 'Extension.extension.value[x]',
-              type: [{ code: 'integer' }],
-            },
-            {
-              id: 'Extension.extension:minimumStock',
-              path: 'Extension.extension',
-              sliceName: 'minimumStock',
-              min: 0,
-              max: '1',
-              type: [{ code: 'Extension' }],
-            },
-            {
-              id: 'Extension.extension:minimumStock.url',
-              path: 'Extension.extension.url',
-              fixedUri: 'minimumStock',
-            },
-            {
-              id: 'Extension.extension:minimumStock.value[x]',
-              path: 'Extension.extension.value[x]',
-              type: [{ code: 'integer' }],
-            },
-            {
-              id: 'Extension.extension:unit',
-              path: 'Extension.extension',
-              sliceName: 'unit',
-              min: 0,
-              max: '1',
-              type: [{ code: 'Extension' }],
-            },
-            {
-              id: 'Extension.extension:unit.url',
-              path: 'Extension.extension.url',
-              fixedUri: 'unit',
-            },
-            {
-              id: 'Extension.extension:unit.value[x]',
-              path: 'Extension.extension.value[x]',
-              type: [{ code: 'string' }],
-            },
-            {
-              id: 'Extension.extension:unitPrice',
-              path: 'Extension.extension',
-              sliceName: 'unitPrice',
-              min: 0,
-              max: '1',
-              type: [{ code: 'Extension' }],
-            },
-            {
-              id: 'Extension.extension:unitPrice.url',
-              path: 'Extension.extension.url',
-              fixedUri: 'unitPrice',
-            },
-            {
-              id: 'Extension.extension:unitPrice.value[x]',
-              path: 'Extension.extension.value[x]',
-              type: [{ code: 'decimal' }],
-            },
-            {
-              id: 'Extension.extension:strength',
-              path: 'Extension.extension',
-              sliceName: 'strength',
-              min: 0,
-              max: '*',
-              type: [{ code: 'Extension' }],
-            },
-            {
-              id: 'Extension.extension:strength.url',
-              path: 'Extension.extension.url',
-              fixedUri: 'strength',
-            },
-            {
-              id: 'Extension.extension:strength.value[x]',
-              path: 'Extension.extension.value[x]',
-              type: [{ code: 'string' }],
-            },
-          ],
-        },
-      };
-      await medplum.createResource(inventoryExtension);
-      console.log('✅ Registered inventory extension');
-    } else {
-      console.log('✅ Inventory extension already registered');
     }
   } catch (error) {
     console.error('❌ Failed to register StructureDefinitions:', error);

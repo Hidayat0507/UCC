@@ -1,3 +1,18 @@
+import { db } from './firebase';
+import { 
+  collection, 
+  doc, 
+  getDocs, 
+  getDoc, 
+  addDoc, 
+  updateDoc,
+  deleteDoc,
+  query,
+  where,
+  Timestamp,
+  DocumentData 
+} from 'firebase/firestore';
+
 export interface Medication {
   id: string;
   name: string;
@@ -13,44 +28,46 @@ export interface Medication {
   updatedAt?: Date;
 }
 
-async function parseResponse<T>(response: Response): Promise<T> {
-  const data = await response.json();
-  if (!response.ok || !data.success) {
-    throw new Error(data.error || 'Inventory request failed');
-  }
-  return data;
-}
+const MEDICATIONS = 'medications';
 
-function hydrateMedication(medication: any): Medication {
-  return {
-    ...medication,
-    createdAt: medication.createdAt ? new Date(medication.createdAt) : undefined,
-    updatedAt: medication.updatedAt ? new Date(medication.updatedAt) : undefined,
-  };
-}
+// Helper function to convert Firestore data to our types
+const convertTimestamps = (data: DocumentData) => {
+  const result = { ...data };
+  if (result.createdAt) {
+    result.createdAt = result.createdAt.toDate();
+  }
+  if (result.updatedAt) {
+    result.updatedAt = result.updatedAt.toDate();
+  }
+  return result;
+};
 
 export async function getMedications(): Promise<Medication[]> {
   try {
-    const response = await fetch('/api/inventory');
-    const data = await parseResponse<{ medications: any[] }>(response);
-    return data.medications.map(hydrateMedication);
-  } catch {
+    const snapshot = await getDocs(collection(db, MEDICATIONS));
+    return snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...convertTimestamps(doc.data())
+    } as Medication));
+  } catch (error) {
+    console.error('Error fetching medications:', error);
     return [];
   }
 }
 
-export function getBuiltInMedicationList(): Medication[] {
-  return [];
-}
-
 export async function getMedicationById(id: string): Promise<Medication | null> {
   try {
-    const response = await fetch(`/api/inventory?id=${encodeURIComponent(id)}`);
-    if (response.status === 404) {
+    const docRef = doc(db, MEDICATIONS, id);
+    const docSnap = await getDoc(docRef);
+    
+    if (!docSnap.exists()) {
       return null;
     }
-    const data = await parseResponse<{ medication: any }>(response);
-    return hydrateMedication(data.medication);
+    
+    return {
+      id: docSnap.id,
+      ...convertTimestamps(docSnap.data())
+    } as Medication;
   } catch (error) {
     console.error('Error fetching medication:', error);
     return null;
@@ -59,13 +76,12 @@ export async function getMedicationById(id: string): Promise<Medication | null> 
 
 export async function createMedication(data: Omit<Medication, 'id' | 'createdAt' | 'updatedAt'>): Promise<string | null> {
   try {
-    const response = await fetch('/api/inventory', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
+    const docRef = await addDoc(collection(db, MEDICATIONS), {
+      ...data,
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now()
     });
-    const result = await parseResponse<{ medicationId: string }>(response);
-    return result.medicationId;
+    return docRef.id;
   } catch (error) {
     console.error('Error creating medication:', error);
     return null;
@@ -74,12 +90,11 @@ export async function createMedication(data: Omit<Medication, 'id' | 'createdAt'
 
 export async function updateMedication(id: string, data: Partial<Medication>): Promise<boolean> {
   try {
-    const response = await fetch('/api/inventory', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ medicationId: id, ...data }),
+    const docRef = doc(db, MEDICATIONS, id);
+    await updateDoc(docRef, {
+      ...data,
+      updatedAt: Timestamp.now()
     });
-    await parseResponse<{ message: string }>(response);
     return true;
   } catch (error) {
     console.error('Error updating medication:', error);
@@ -89,10 +104,7 @@ export async function updateMedication(id: string, data: Partial<Medication>): P
 
 export async function deleteMedication(id: string): Promise<boolean> {
   try {
-    const response = await fetch(`/api/inventory?id=${encodeURIComponent(id)}`, {
-      method: 'DELETE',
-    });
-    await parseResponse<{ message: string }>(response);
+    await deleteDoc(doc(db, MEDICATIONS, id));
     return true;
   } catch (error) {
     console.error('Error deleting medication:', error);
