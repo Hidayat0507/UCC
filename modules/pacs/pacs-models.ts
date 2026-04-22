@@ -46,10 +46,10 @@ const STATUS_TO_SERVICEREQUEST: Record<ImagingStudy['status'], ServiceRequest['s
 const SERVICEREQUEST_TO_STATUS: Record<ServiceRequest['status'], ImagingStudy['status']> = {
   draft: 'ordered',
   active: 'ordered',
-  on-hold: 'scheduled',
+  'on-hold': 'scheduled',
   revoked: 'cancelled',
   completed: 'completed',
-  entered-in-error: 'cancelled',
+  'entered-in-error': 'cancelled',
   unknown: 'ordered',
 };
 

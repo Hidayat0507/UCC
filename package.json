@@ -7,7 +7,7 @@
     "build": "BASELINE_BROWSER_MAPPING_IGNORE_OLD_DATA=true next build --webpack",
     "build:suppress-baseline-warning": "BASELINE_BROWSER_MAPPING_IGNORE_OLD_DATA=true next build --webpack",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
     "refresh:baseline-browser-mapping": "bun add baseline-browser-mapping@latest -d",
     "cleanup:dev-seed": "rm -rf app/api/dev/seed tests/seeds/seed.ts",
     "seed:procedures": "bun tsx tests/seeds/seed-procedures.ts",
