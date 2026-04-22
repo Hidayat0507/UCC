@@ -19,14 +19,16 @@ interface EditMedicationFormProps {
 }
 
 export function EditMedicationForm({ medication, onSubmit, onCancel }: EditMedicationFormProps) {
+  const [category, setCategory] = React.useState(medication.category);
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     
     const medicationData: Partial<Medication> = {
-      name: formData.get('name') as string,
-      category: formData.get('category') as string,
-      dosageForm: formData.get('dosageForm') as string,
+      name: (formData.get('name') as string).trim(),
+      category,
+      dosageForm: (formData.get('dosageForm') as string).trim(),
       strengths: [], // You'll need to handle this separately
       stock: parseInt(formData.get('stock') as string),
       minimumStock: parseInt(formData.get('minimumStock') as string),
@@ -53,7 +55,7 @@ export function EditMedicationForm({ medication, onSubmit, onCancel }: EditMedic
         </div>
         <div className="space-y-2">
           <Label htmlFor="category">Category</Label>
-          <Select name="category" defaultValue={medication.category}>
+          <Select value={category} onValueChange={setCategory}>
             <SelectTrigger>
               <SelectValue placeholder="Select category" />
             </SelectTrigger>
@@ -106,7 +108,7 @@ export function EditMedicationForm({ medication, onSubmit, onCancel }: EditMedic
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="unitPrice">Unit Price ($)</Label>
+          <Label htmlFor="unitPrice">Unit Price (RM)</Label>
           <Input
             id="unitPrice"
             name="unitPrice"

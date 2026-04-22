@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { ProcedureItem } from "@/lib/procedures";
+import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -31,17 +32,17 @@ export default function ProceduresTable({ procedures, searchTerm, onSearchChange
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50/70 px-3 py-2">
           <Search className="w-4 h-4 text-muted-foreground" />
-          <Input placeholder="Search procedures..." value={searchTerm} onChange={(e) => onSearchChange(e.target.value)} className="max-w-sm" />
+          <Input placeholder="Search procedures..." value={searchTerm} onChange={(e) => onSearchChange(e.target.value)} className="max-w-sm border-0 bg-transparent shadow-none focus-visible:ring-0" />
         </div>
         <Button onClick={() => setCreating(true)}>Add Procedure</Button>
       </div>
 
-      <div className="border rounded-lg overflow-hidden">
+      <div className="overflow-hidden rounded-2xl border border-slate-200/80">
         <Table>
           <TableHeader>
-            <TableRow>
+            <TableRow className="bg-slate-50/80">
               <TableHead>Name</TableHead>
               <TableHead>Code</TableHead>
               <TableHead>Category</TableHead>
@@ -50,12 +51,27 @@ export default function ProceduresTable({ procedures, searchTerm, onSearchChange
             </TableRow>
           </TableHeader>
           <TableBody>
+            {filtered.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">
+                  No procedures match the current filter.
+                </TableCell>
+              </TableRow>
+            ) : null}
             {filtered.map(p => (
               <TableRow key={p.id}>
-                <TableCell className="font-medium">{p.name}</TableCell>
+                <TableCell className="font-medium text-slate-900">{p.name}</TableCell>
                 <TableCell>{p.codingCode || '-'}</TableCell>
-                <TableCell>{p.category || '-'}</TableCell>
-                <TableCell>${p.defaultPrice.toFixed(2)}</TableCell>
+                <TableCell>
+                  {p.category ? (
+                    <Badge variant="secondary" className="bg-slate-100 text-slate-700">
+                      {p.category}
+                    </Badge>
+                  ) : (
+                    "-"
+                  )}
+                </TableCell>
+                <TableCell>RM {p.defaultPrice.toFixed(2)}</TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-2">
                     <Button variant="ghost" size="icon" onClick={() => setEditing(p)}>
@@ -164,5 +180,4 @@ function ProcedureForm({ initial, onSubmit, onCancel }: { initial?: Partial<Proc
     </form>
   );
 }
-
 
