@@ -10,7 +10,8 @@ import React, { useState } from 'react';
 import { storage } from '@/lib/firebase';
 import { useMedplumAuth } from '@/lib/auth-medplum';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { fetchOrganizationDetails, saveOrganizationDetails } from '@/lib/org';
+import { db } from '@/lib/firebase';
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import Image from 'next/image';
 import { SmartTextManager } from '@/components/settings/smart-text-manager';
 import { ModuleManager } from '@/components/settings/module-manager';
@@ -24,6 +25,7 @@ interface UserSettings {
 export default function SettingsPage() {
   const { toast } = useToast();
   const { profile, signOut } = useMedplumAuth();
+  const profileEmail = (profile as any)?.telecom?.find((t: any) => t.system === 'email')?.value ?? (profile as any)?.name?.[0]?.text ?? profile?.id ?? 'Unknown';
   // Placeholder state - connect to user data later
   const [settings, setSettings] = useState<UserSettings>({
     fullName: 'Dr. John Doe', // Example data
@@ -40,11 +42,15 @@ export default function SettingsPage() {
     // Load org settings (singleton doc)
     (async () => {
       try {
-        const data = await fetchOrganizationDetails();
-        if (data?.logoUrl) setLogoUrl(String(data.logoUrl));
-        if (data?.name) setOrgName(String(data.name));
-        if (data?.address) setOrgAddress(String(data.address));
-        if (data?.phone) setOrgPhone(String(data.phone));
+        const docRef = doc(db, 'settings', 'org');
+        const snap = await getDoc(docRef);
+        if (snap.exists()) {
+          const data = snap.data() as any;
+          if (data?.logoUrl) setLogoUrl(data.logoUrl as string);
+          if (data?.name) setOrgName(String(data.name));
+          if (data?.address) setOrgAddress(String(data.address));
+          if (data?.phone) setOrgPhone(String(data.phone));
+        }
       } catch (e) {
         // ignore
       }
@@ -60,12 +66,13 @@ export default function SettingsPage() {
       await uploadBytes(objectRef, file, { contentType: file.type });
       const url = await getDownloadURL(objectRef);
       setLogoUrl(url);
-      await saveOrganizationDetails({
-        name: orgName,
-        address: orgAddress,
-        phone: orgPhone,
-        logoUrl: url,
-      });
+      const docRef = doc(db, 'settings', 'org');
+      const snap = await getDoc(docRef);
+      if (snap.exists()) {
+        await updateDoc(docRef, { logoUrl: url });
+      } else {
+        await setDoc(docRef, { logoUrl: url });
+      }
       toast({ title: 'Logo updated', description: 'Company logo will appear on MCs, bills, and referral letters.' });
     } catch (e: any) {
       toast({ title: 'Upload failed', description: e.message || 'Could not upload logo', variant: 'destructive' });
@@ -93,9 +100,7 @@ export default function SettingsPage() {
   return (
     <div className="space-y-8">
       <h1 className="text-2xl font-bold">Settings</h1>
-      <div className="text-sm text-muted-foreground">
-        Signed in as: {profile ? `${profile.resourceType}/${profile.id}` : 'Unknown'}
-      </div>
+      <div className="text-sm text-muted-foreground">Signed in as: {profileEmail}</div>
 
       <Card>
         <CardHeader>
@@ -145,15 +150,7 @@ export default function SettingsPage() {
           <CardDescription>Session controls</CardDescription>
         </CardHeader>
         <CardContent>
-          <Button
-            variant="outline"
-            onClick={async () => {
-              await signOut();
-              if (typeof window !== 'undefined') window.location.assign('/login');
-            }}
-          >
-            Sign out
-          </Button>
+          <Button variant="outline" onClick={async () => { try { await fetch('/api/auth/medplum-session', { method: 'DELETE' }); } catch {}; await signOut(); if (typeof window !== 'undefined') window.location.assign('/login'); }}>Sign out</Button>
         </CardContent>
       </Card>
 
@@ -219,12 +216,14 @@ export default function SettingsPage() {
               type="button"
               onClick={async () => {
                 try {
-                  await saveOrganizationDetails({
-                    name: orgName,
-                    address: orgAddress,
-                    phone: orgPhone,
-                    logoUrl: logoUrl || null,
-                  });
+                  const docRef = doc(db, 'settings', 'org');
+                  const snap = await getDoc(docRef);
+                  const payload = { name: orgName, address: orgAddress, phone: orgPhone, logoUrl: logoUrl || null };
+                  if (snap.exists()) {
+                    await updateDoc(docRef, payload as any);
+                  } else {
+                    await setDoc(docRef, payload as any);
+                  }
                   toast({ title: 'Organization saved', description: 'Details will appear on documents.' });
                 } catch (e: any) {
                   toast({ title: 'Save failed', description: e.message || 'Could not save', variant: 'destructive' });

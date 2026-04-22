@@ -100,7 +100,7 @@ const PatientCombobox = forwardRef<HTMLButtonElement, PatientComboboxProps>(func
   const isOpen = !disabled && open;
 
   return (
-    <Popover open={isOpen} onOpenChange={(nextOpen) => setOpen(disabled ? false : nextOpen)}>
+    <Popover open={isOpen} onOpenChange={(nextOpen) => !disabled && setOpen(nextOpen)}>
       <PopoverTrigger asChild>
         <Button
           ref={ref}

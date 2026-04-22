@@ -15,18 +15,12 @@ import {
 
 type NameValue = { name: string; value: number };
 type Point = { name: string; value: number };
+type TooltipPayloadEntry = { value?: number | string };
+type CustomTooltipProps = { active?: boolean; payload?: TooltipPayloadEntry[]; label?: string };
 
 const COLORS = ["#2563eb", "#16a34a", "#f59e0b", "#ef4444", "#a855f7", "#06b6d4"]; // primary, green, amber, red, violet, cyan
 
-interface AnalyticsChartsProps {
-  genderData: NameValue[];
-  ageData: NameValue[];
-  weeklyVisits: Point[];
-  diagnosisTop: NameValue[];
-  revenueMonthly?: Point[];
-}
-
-function CustomTooltip({ active, payload, label }: any) {
+function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
   if (!active || !payload || !payload.length) return null;
   const item = payload[0];
   return (
@@ -35,6 +29,14 @@ function CustomTooltip({ active, payload, label }: any) {
       <div className="text-sm font-semibold text-gray-900">{item.value}</div>
     </div>
   );
+}
+
+interface AnalyticsChartsProps {
+  genderData: NameValue[];
+  ageData: NameValue[];
+  weeklyVisits: Point[];
+  diagnosisTop: NameValue[];
+  revenueMonthly?: Point[];
 }
 
 export default function AnalyticsCharts({ genderData, ageData, weeklyVisits, diagnosisTop, revenueMonthly = [] }: AnalyticsChartsProps) {

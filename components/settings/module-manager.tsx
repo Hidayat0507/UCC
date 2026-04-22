@@ -28,7 +28,9 @@ const ICON_MAP = {
 };
 
 export function ModuleManager() {
-  const [moduleStates, setModuleStates] = useState<Record<ModuleId, boolean>>(() => getAllModuleStates());
+  const [moduleStates, setModuleStates] = useState<Record<ModuleId, boolean>>(
+    () => getAllModuleStates()
+  );
   const { toast } = useToast();
   const router = useRouter();
 

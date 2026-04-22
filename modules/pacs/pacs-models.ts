@@ -5,34 +5,10 @@
  */
 
 import { Buffer } from 'buffer';
-import { MedplumClient } from '@medplum/core';
+import type { MedplumClient } from '@medplum/core';
 import type { DiagnosticReport, ServiceRequest } from '@medplum/fhirtypes';
+import { getAdminMedplum } from '@/lib/server/medplum-auth';
 import type { ImagingReport, ImagingStudy } from './types';
-
-let medplumClient: MedplumClient | undefined;
-let medplumInitPromise: Promise<MedplumClient> | undefined;
-
-async function getMedplumClient(): Promise<MedplumClient> {
-  if (medplumClient) return medplumClient;
-  if (medplumInitPromise) return medplumInitPromise;
-
-  const baseUrl = process.env.MEDPLUM_BASE_URL || process.env.NEXT_PUBLIC_MEDPLUM_BASE_URL || 'http://localhost:8103';
-  const clientId = process.env.MEDPLUM_CLIENT_ID;
-  const clientSecret = process.env.MEDPLUM_CLIENT_SECRET;
-
-  if (!clientId || !clientSecret) {
-    throw new Error('Medplum credentials not configured');
-  }
-
-  medplumInitPromise = (async () => {
-    const medplum = new MedplumClient({ baseUrl, clientId, clientSecret });
-    await medplum.startClientLogin(clientId, clientSecret);
-    medplumClient = medplum;
-    return medplum;
-  })();
-
-  return medplumInitPromise;
-}
 
 const STATUS_TO_SERVICEREQUEST: Record<ImagingStudy['status'], ServiceRequest['status']> = {
   ordered: 'active',
@@ -88,7 +64,7 @@ function mapServiceRequestToImaging(sr: ServiceRequest, report?: ImagingReport):
 }
 
 async function findReportForRequest(medplum: MedplumClient, serviceRequestId: string): Promise<ImagingReport | undefined> {
-  const reports = await medplum.searchResources<DiagnosticReport>('DiagnosticReport', {
+  const reports = await medplum.searchResources('DiagnosticReport', {
     basedOn: `ServiceRequest/${serviceRequestId}`,
     _sort: '-issued',
     _count: '1',
@@ -110,11 +86,11 @@ async function findReportForRequest(medplum: MedplumClient, serviceRequestId: st
 export async function createImagingStudy(
   studyData: Omit<ImagingStudy, "id" | "createdAt" | "updatedAt">
 ): Promise<string> {
-  const medplum = await getMedplumClient();
+  const medplum = await getAdminMedplum();
   const authoredOn = typeof studyData.orderedAt === 'string' ? studyData.orderedAt : studyData.orderedAt?.toISOString() || new Date().toISOString();
   const status = STATUS_TO_SERVICEREQUEST[studyData.status] || 'active';
 
-  const serviceRequest = await medplum.createResource<ServiceRequest>({
+  const serviceRequest = await medplum.createResource({
     resourceType: 'ServiceRequest',
     status,
     intent: 'order',
@@ -145,17 +121,18 @@ export async function createImagingStudy(
     ],
   });
 
-  if (!serviceRequest.id) {
+  const sr = serviceRequest as any;
+  if (!sr.id) {
     throw new Error('Failed to create imaging ServiceRequest');
   }
 
-  return serviceRequest.id;
+  return sr.id as string;
 }
 
 export async function getImagingStudyById(id: string): Promise<ImagingStudy | null> {
-  const medplum = await getMedplumClient();
+  const medplum = await getAdminMedplum();
   try {
-    const sr = await medplum.readResource<ServiceRequest>('ServiceRequest', id);
+    const sr = await medplum.readResource('ServiceRequest', id);
     const report = await findReportForRequest(medplum, id);
     return mapServiceRequestToImaging(sr, report);
   } catch (err) {
@@ -165,9 +142,9 @@ export async function getImagingStudyById(id: string): Promise<ImagingStudy | nu
 }
 
 export async function getImagingStudiesByPatient(patientId: string): Promise<ImagingStudy[]> {
-  const medplum = await getMedplumClient();
+  const medplum = await getAdminMedplum();
   try {
-    const requests = await medplum.searchResources<ServiceRequest>('ServiceRequest', {
+    const requests = await medplum.searchResources('ServiceRequest', {
       subject: `Patient/${patientId}`,
       category: 'imaging',
       _sort: '-authored',
@@ -186,10 +163,10 @@ export async function getImagingStudiesByPatient(patientId: string): Promise<Ima
 }
 
 export async function getImagingStudiesByStatus(status: ImagingStudy['status']): Promise<ImagingStudy[]> {
-  const medplum = await getMedplumClient();
+  const medplum = await getAdminMedplum();
   const srStatus = STATUS_TO_SERVICEREQUEST[status] || 'active';
   try {
-    const requests = await medplum.searchResources<ServiceRequest>('ServiceRequest', {
+    const requests = await medplum.searchResources('ServiceRequest', {
       category: 'imaging',
       status: srStatus,
       _sort: '-authored',
@@ -208,13 +185,13 @@ export async function getImagingStudiesByStatus(status: ImagingStudy['status']):
 }
 
 export async function getTodaysImagingStudies(): Promise<ImagingStudy[]> {
-  const medplum = await getMedplumClient();
+  const medplum = await getAdminMedplum();
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const start = today.toISOString().split('T')[0];
 
   try {
-    const requests = await medplum.searchResources<ServiceRequest>('ServiceRequest', {
+    const requests = await medplum.searchResources('ServiceRequest', {
       category: 'imaging',
       authored: `ge${start}`,
       _sort: '-authored',
@@ -236,8 +213,8 @@ export async function updateImagingStudy(
   id: string,
   updates: Partial<ImagingStudy>
 ): Promise<void> {
-  const medplum = await getMedplumClient();
-  const sr = await medplum.readResource<ServiceRequest>('ServiceRequest', id);
+  const medplum = await getAdminMedplum();
+  const sr = await medplum.readResource('ServiceRequest', id);
 
   const status = updates.status ? STATUS_TO_SERVICEREQUEST[updates.status] : sr.status;
 
@@ -262,13 +239,13 @@ export async function addImagingReport(
   report: ImagingStudy['report'],
   reportedBy: string
 ): Promise<void> {
-  const medplum = await getMedplumClient();
-  const sr = await medplum.readResource<ServiceRequest>('ServiceRequest', id);
+  const medplum = await getAdminMedplum();
+  const sr = await medplum.readResource('ServiceRequest', id);
 
-  await medplum.createResource<DiagnosticReport>({
+  await medplum.createResource({
     resourceType: 'DiagnosticReport',
     status: 'final',
-    code: sr.code,
+    code: sr.code ?? { text: 'Imaging Report' },
     subject: sr.subject,
     encounter: sr.encounter,
     basedOn: [{ reference: `ServiceRequest/${id}` }],

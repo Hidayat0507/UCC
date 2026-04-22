@@ -19,15 +19,15 @@ export interface Module {
 export const MODULES: Record<ModuleId, Omit<Module, 'enabled'>> = {
   triage: {
     id: 'triage',
-    name: 'Triage System',
+    name: 'Triage',
     description: 'Patient triage and priority queue management',
     icon: 'AlertTriangle',
-    // route removed - triage is now integrated into Dashboard
+    route: '/triage',
     category: 'clinical',
   },
   poct: {
     id: 'poct',
-    name: 'POCT (Point of Care Testing)',
+    name: 'POCT',
     description: 'On-site laboratory testing and results management',
     icon: 'TestTube',
     route: '/poct',
@@ -35,7 +35,7 @@ export const MODULES: Record<ModuleId, Omit<Module, 'enabled'>> = {
   },
   pacs: {
     id: 'pacs',
-    name: 'PACS (Medical Imaging)',
+    name: 'PACS',
     description: 'Picture Archiving and Communication System for medical images',
     icon: 'Image',
     route: '/pacs',
@@ -43,7 +43,7 @@ export const MODULES: Record<ModuleId, Omit<Module, 'enabled'>> = {
   },
   inventory: {
     id: 'inventory',
-    name: 'Inventory Management',
+    name: 'Inventory',
     description: 'Medication and supplies inventory tracking',
     icon: 'Package',
     route: '/inventory',
@@ -59,7 +59,7 @@ export const MODULES: Record<ModuleId, Omit<Module, 'enabled'>> = {
   },
   analytics: {
     id: 'analytics',
-    name: 'Analytics & Reports',
+    name: 'Analytics',
     description: 'Statistical analysis and reporting',
     icon: 'BarChart',
     route: '/analytics',

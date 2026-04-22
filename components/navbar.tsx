@@ -42,6 +42,9 @@ export default function Navbar() {
               variant="outline"
               size="sm"
               onClick={async () => {
+                try {
+                  await fetch('/api/auth/medplum-session', { method: 'DELETE' });
+                } catch {}
                 await signOut();
                 if (typeof window !== 'undefined') window.location.assign('/login');
               }}
