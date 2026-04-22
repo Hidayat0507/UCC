@@ -28,7 +28,7 @@ const navigation = [
 export default function AdminSidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { signOut, userLabel } = useMedplumAuth();
+  const { profile, signOut } = useMedplumAuth();
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   if (pathname?.startsWith("/login")) return null;
@@ -98,33 +98,30 @@ export default function AdminSidebar() {
         {/* Footer */}
         <div className="mt-auto border-t">
           {!isCollapsed && (
-            <div className="px-4 py-2 space-y-2">
-              {userLabel && (
-                <div className="text-xs text-muted-foreground truncate" title={userLabel}>
-                  {userLabel}
-                </div>
-              )}
+            <div className="px-4 py-2">
               <ThemeToggle />
             </div>
           )}
           <div className="p-2">
-            <Button
-              variant="ghost"
-              className={cn(
-                "w-full text-muted-foreground hover:text-accent-foreground",
-                isCollapsed
-                  ? "justify-center w-8 h-8 p-2 mx-auto"
-                  : "justify-start px-3 py-2"
-              )}
-              onClick={async () => {
-                await signOut();
-                router.replace("/login");
-              }}
-              title={isCollapsed ? "Logout" : undefined}
-            >
-              <LogOut className="h-4 w-4 flex-shrink-0" />
-              {!isCollapsed && <span className="ml-2">Logout</span>}
-            </Button>
+            {profile && (
+              <Button
+                variant="ghost"
+                className={cn(
+                  "w-full text-muted-foreground hover:text-accent-foreground",
+                  isCollapsed
+                    ? "justify-center w-8 h-8 p-2 mx-auto"
+                    : "justify-start px-3 py-2"
+                )}
+                onClick={async () => {
+                  await signOut();
+                  router.replace("/login");
+                }}
+                title={isCollapsed ? "Logout" : undefined}
+              >
+                <LogOut className="h-4 w-4 flex-shrink-0" />
+                {!isCollapsed && <span className="ml-2">Logout</span>}
+              </Button>
+            )}
           </div>
         </div>
       </div>

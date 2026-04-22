@@ -23,6 +23,17 @@ export class ForbiddenError extends Error {
 }
 
 /**
+ * Host / session is missing clinic scope (subdomain or clinic cookie).
+ * Not an authentication failure — user may be signed in on localhost or apex.
+ */
+export class ClinicContextError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ClinicContextError';
+  }
+}
+
+/**
  * Maps a caught error to the correct HTTP response.
  *
  * - AuthError      → 401  (client should re-authenticate)
@@ -50,6 +61,17 @@ export function handleRouteError(
     return NextResponse.json(
       { error: 'You do not have permission to perform this action.' },
       { status: 403 }
+    );
+  }
+
+  if (error instanceof ClinicContextError) {
+    console.warn(`${label} Clinic context:`, error.message);
+    return NextResponse.json(
+      {
+        error: error.message,
+        code: 'NO_CLINIC_CONTEXT',
+      },
+      { status: 400 }
     );
   }
 

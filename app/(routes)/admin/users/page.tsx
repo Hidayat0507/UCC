@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Users, UserPlus } from "lucide-react";
 import Link from "next/link";
-import DeleteUserButton from "@/components/admin/delete-user-button";
 
 export default async function UsersPage() {
   const practitioners = await getPractitionersFromMedplum().catch(() => []);
@@ -45,7 +44,7 @@ export default async function UsersPage() {
           ) : (
             <div className="divide-y">
               {practitioners.map((p) => (
-                <div key={p.id} className="flex items-center justify-between gap-4 py-3">
+                <div key={p.id} className="flex items-center justify-between py-3">
                   <div className="flex items-center gap-3">
                     <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center font-semibold text-primary text-sm">
                       {p.name.charAt(0).toUpperCase()}
@@ -55,17 +54,9 @@ export default async function UsersPage() {
                       {p.email && (
                         <p className="text-xs text-muted-foreground">{p.email}</p>
                       )}
-                      {p.organizations && p.organizations.length > 0 && (
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Clinic: {p.organizations.map((o) => o.name).join(", ")}
-                        </p>
-                      )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="secondary">Practitioner</Badge>
-                    <DeleteUserButton userId={p.id} userName={p.name} />
-                  </div>
+                  <Badge variant="secondary">Practitioner</Badge>
                 </div>
               ))}
             </div>

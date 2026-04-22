@@ -1,25 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getOrganizationsFromMedplum } from "@/lib/fhir/admin-service";
-import { saveOrganizationDetailsToMedplum } from "@/lib/fhir/organization-service";
+import { saveOrganizationDetailsToMedplum } from "@/lib/fhir/admin-service";
 import { requirePlatformAdmin } from "@/lib/server/medplum-auth";
-
-/**
- * GET /api/admin/clinics
- * List clinics (Organisations) for admin flows.
- */
-export async function GET(req: NextRequest) {
-  try {
-    await requirePlatformAdmin(req);
-    const clinics = await getOrganizationsFromMedplum();
-    return NextResponse.json({ clinics });
-  } catch (error: any) {
-    console.error("Failed to list clinics:", error);
-    return NextResponse.json(
-      { error: error.message || "Failed to list clinics" },
-      { status: 500 }
-    );
-  }
-}
+import { handleRouteError } from "@/lib/server/route-helpers";
 
 /**
  * POST /api/admin/clinics
@@ -28,7 +10,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     await requirePlatformAdmin(req);
-    const { name, subdomain, phone, address, logoUrl, parentOrganizationId } = await req.json();
+    const { name, subdomain, phone, address, logoUrl } = await req.json();
 
     if (!name || !subdomain) {
       return NextResponse.json(
@@ -46,22 +28,12 @@ export async function POST(req: NextRequest) {
     }
 
     await saveOrganizationDetailsToMedplum(
-      {
-        name,
-        phone: phone || undefined,
-        address: address || undefined,
-        logoUrl: logoUrl || undefined,
-        parentOrganizationId: parentOrganizationId || undefined,
-      },
+      { name, phone: phone || undefined, address: address || undefined, logoUrl: logoUrl || undefined },
       subdomain
     );
 
     return NextResponse.json({ success: true, subdomain });
-  } catch (error: any) {
-    console.error("Failed to create clinic:", error);
-    return NextResponse.json(
-      { error: error.message || "Failed to create clinic" },
-      { status: /Platform admin access required/i.test(error.message || "") ? 403 : 500 }
-    );
+  } catch (error) {
+    return handleRouteError(error, 'POST /api/admin/clinics');
   }
 }

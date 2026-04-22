@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requirePlatformAdmin } from "@/lib/server/medplum-auth";
+import { handleRouteError } from "@/lib/server/route-helpers";
 
 /**
  * Server-side API route to create Medplum ClientApplication
@@ -6,6 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
  */
 export async function POST(req: NextRequest) {
   try {
+    await requirePlatformAdmin(req);
     const body = await req.json();
     const { medplumUrl, email, password } = body;
 
@@ -122,12 +125,8 @@ export async function POST(req: NextRequest) {
       clientSecret: client.secret,
     });
 
-  } catch (error: any) {
-    console.error('❌ Error:', error);
-    return NextResponse.json(
-      { error: error.message || 'Unknown error' },
-      { status: 500 }
-    );
+  } catch (error) {
+    return handleRouteError(error, 'POST /api/admin/create-medplum-client');
   }
 }
 
