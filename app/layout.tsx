@@ -51,6 +51,13 @@ export default async function RootLayout({
   const isRootPath = pathname === "/" || pathname === "";
   const isMarketingPage = isApexHost && isRootPath && !isAdminContext;
 
+  // On a non-apex host (e.g. demo.drhidayat.com) `/` is not the marketing
+  // page — it's the app entry. Bounce into /dashboard so a shared session
+  // cookie doesn't accidentally render the landing component here.
+  if (!isApexHost && isRootPath) {
+    redirect("/dashboard");
+  }
+
   // Paths that render without requiring authentication (login page itself,
   // marketing landing, error pages, API handlers, and Next.js internals).
   const isPublicPath =
