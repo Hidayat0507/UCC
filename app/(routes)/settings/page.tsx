@@ -24,6 +24,7 @@ interface UserSettings {
 export default function SettingsPage() {
   const { toast } = useToast();
   const { profile, signOut } = useMedplumAuth();
+  const profileEmail = (profile as any)?.telecom?.find((t: any) => t.system === 'email')?.value ?? (profile as any)?.name?.[0]?.text ?? profile?.id ?? 'Unknown';
   // Placeholder state - connect to user data later
   const [settings, setSettings] = useState<UserSettings>({
     fullName: 'Dr. John Doe', // Example data
@@ -93,9 +94,7 @@ export default function SettingsPage() {
   return (
     <div className="space-y-8">
       <h1 className="text-2xl font-bold">Settings</h1>
-      <div className="text-sm text-muted-foreground">
-        Signed in as: {profile ? `${profile.resourceType}/${profile.id}` : 'Unknown'}
-      </div>
+      <div className="text-sm text-muted-foreground">Signed in as: {profileEmail}</div>
 
       <Card>
         <CardHeader>
@@ -145,15 +144,7 @@ export default function SettingsPage() {
           <CardDescription>Session controls</CardDescription>
         </CardHeader>
         <CardContent>
-          <Button
-            variant="outline"
-            onClick={async () => {
-              await signOut();
-              if (typeof window !== 'undefined') window.location.assign('/login');
-            }}
-          >
-            Sign out
-          </Button>
+          <Button variant="outline" onClick={async () => { try { await fetch('/api/auth/medplum-session', { method: 'DELETE' }); } catch {}; await signOut(); if (typeof window !== 'undefined') window.location.assign('/login'); }}>Sign out</Button>
         </CardContent>
       </Card>
 

@@ -15,7 +15,7 @@ import { KLINIK_PUTERI_URL } from "./support/env";
 const RUN_ID = String(Date.now()).slice(-4);
 const PATIENT_NAME = `Triage E2E ${RUN_ID}`;
 const PATIENT_NRIC = `900615-07-${RUN_ID.padStart(4, "0")}`;
-const CLINIC_URL = KLINIK_PUTERI_URL || "https://klinikputeri.drhidayat.com";
+const CLINIC_URL = KLINIK_PUTERI_URL || "https://klinikputeri.iatrum.com";
 
 async function selectGender(page: Page, gender: "male" | "female"): Promise<void> {
   const trigger = page.getByRole("combobox").first();

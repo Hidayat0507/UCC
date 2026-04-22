@@ -39,9 +39,23 @@ export default function NewPOCTOrderPage() {
     setSubmitting(true);
 
     try {
-      // TODO: Implement actual API call to create POCT order
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
-      
+      const res = await fetch('/api/labs/order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          patientId: patientSearch,
+          tests: [testType],
+          priority: urgency as 'routine' | 'urgent' | 'stat',
+          clinicalNotes: notes || undefined,
+        }),
+      });
+
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        throw new Error(payload?.error || `Request failed (${res.status})`);
+      }
+
       toast({
         title: "Test Ordered",
         description: "Point of care test has been ordered successfully.",
@@ -52,7 +66,7 @@ export default function NewPOCTOrderPage() {
       console.error("Error creating POCT order:", error);
       toast({
         title: "Error",
-        description: "Failed to create test order. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to create test order. Please try again.",
         variant: "destructive",
       });
     } finally {

@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 /**
  * Quick test to verify Medplum auth is working
- * Run: bun run scripts/quick-medplum-test.ts
+ * Run: bun run tests/dev-scripts/quick-medplum-test.ts
  */
 
 import { MedplumClient } from '@medplum/core';
@@ -138,4 +138,3 @@ testMedplumAuth().catch((error) => {
   console.error('❌ Test failed:', error);
   process.exit(1);
 });
-

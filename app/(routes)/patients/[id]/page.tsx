@@ -61,6 +61,7 @@ export default async function PatientProfilePage({ params }: PatientProfilePageP
       const scheduledAt = appointment.scheduledAt instanceof Date ? appointment.scheduledAt : new Date(appointment.scheduledAt);
       return (
         !Number.isNaN(scheduledAt.getTime()) &&
+        scheduledAt.getTime() >= Date.now() &&
         ["booked", "arrived", "pending", "proposed"].includes(appointment.status)
       );
     })

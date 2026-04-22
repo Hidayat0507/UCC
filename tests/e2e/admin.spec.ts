@@ -12,7 +12,7 @@ import { test, expect } from "@playwright/test";
 import fs from "fs";
 import path from "path";
 
-// baseURL is set to https://admin.drhidayat.com in playwright.config.ts for this project
+// baseURL is set to https://admin.iatrum.com in playwright.config.ts for this project
 
 // Detect whether the admin auth setup succeeded (non-empty cookies = real session)
 const AUTH_STATE_PATH = path.join(__dirname, ".auth/admin.json");
@@ -31,7 +31,7 @@ test.describe("Admin portal", () => {
       testInfo.annotations.push({
         type: "skip-reason",
         description:
-          "Admin portal requires support@drhidayat.com to be added as a " +
+          "Admin portal requires support@iatrum.com to be added as a " +
           "UCC Production project member in Medplum. Once added, re-run auth setup.",
       });
       test.skip();

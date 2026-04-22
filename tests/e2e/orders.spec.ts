@@ -15,7 +15,7 @@
 import { test, expect } from "@playwright/test";
 
 const CLINIC_URL =
-  process.env.EMR_CLINIC_URL || "https://apex-group.drhidayat.com";
+  process.env.EMR_CLINIC_URL || "https://apex-group.iatrum.com";
 
 // ── Page structure ────────────────────────────────────────────────────────────
 

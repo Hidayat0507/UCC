@@ -12,9 +12,9 @@ import { expectAuthRedirectOrBlock } from "./support/auth";
 import { EMR_URL, KLINIK_PUTERI_URL } from "./support/env";
 
 // The login *form* only exists on clinic subdomains.
-// The root domain (drhidayat.com) redirects to /landing.
+// The root domain (iatrum.com) redirects to /landing.
 const CLINIC_URL =
-  process.env.EMR_CLINIC_URL || "https://apex-group.drhidayat.com";
+  process.env.EMR_CLINIC_URL || "https://apex-group.iatrum.com";
 
 test.describe("EMR authentication and access control", () => {
   const protectedPages = ["/dashboard", "/patients"];

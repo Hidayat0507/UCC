@@ -112,13 +112,6 @@ function addManagingOrganization<T extends { [key: string]: any }>(resource: T, 
   };
 }
 
-/**
- * Compatibility export retained for services on main that still obtain a Medplum
- * client through patient-service.
- */
-export async function getMedplumClient(): Promise<MedplumClient> {
-  return getAdminMedplum();
-}
 
 
 /**

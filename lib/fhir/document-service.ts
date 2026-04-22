@@ -10,31 +10,6 @@ import { STORAGE_PATH_EXTENSION_URL } from './structure-definitions';
 import { validateFhirResource, logValidation } from './validation';
 import { createProvenanceForResource } from './provenance-service';
 
-let medplumClient: MedplumClient | undefined;
-let medplumInitPromise: Promise<MedplumClient> | undefined;
-
-async function getMedplumClient(): Promise<MedplumClient> {
-  if (medplumClient) return medplumClient;
-  if (medplumInitPromise) return medplumInitPromise;
-
-  const baseUrl = process.env.MEDPLUM_BASE_URL || process.env.NEXT_PUBLIC_MEDPLUM_BASE_URL || 'http://localhost:8103';
-  const clientId = process.env.MEDPLUM_CLIENT_ID;
-  const clientSecret = process.env.MEDPLUM_CLIENT_SECRET;
-
-  if (!clientId || !clientSecret) {
-    throw new Error('Medplum credentials not configured');
-  }
-
-  medplumInitPromise = (async () => {
-    const medplum = new MedplumClient({ baseUrl, clientId, clientSecret });
-    await medplum.startClientLogin(clientId, clientSecret);
-    medplumClient = medplum;
-    return medplum;
-  })();
-
-  return medplumInitPromise;
-}
-
 export interface DocumentRegistration {
   patientId: string; // FHIR Patient ID
   title: string;
@@ -59,8 +34,7 @@ export interface PatientDocumentSummary {
 /**
  * Register a bucket-hosted document as a DocumentReference in Medplum.
  */
-export async function createPatientDocument(doc: DocumentRegistration): Promise<string> {
-  const medplum = await getMedplumClient();
+export async function createPatientDocument(medplum: MedplumClient, doc: DocumentRegistration): Promise<string> {
   const nowIso = new Date().toISOString();
 
   const resource: DocumentReference = {
@@ -113,13 +87,7 @@ export async function createPatientDocument(doc: DocumentRegistration): Promise<
 
   // Create Provenance for audit trail (non-blocking)
   try {
-    await createProvenanceForResource(
-      'DocumentReference',
-      created.id,
-      doc.uploadedBy ? undefined : undefined, // Could parse uploadedBy if it's a Practitioner ID
-      undefined,
-      'CREATE'
-    );
+    await createProvenanceForResource(medplum, 'DocumentReference', created.id, undefined, undefined, 'CREATE');
     console.log(`✅ Created Provenance for DocumentReference/${created.id}`);
   } catch (error) {
     console.warn(`⚠️  Failed to create Provenance for DocumentReference (non-blocking):`, error);
@@ -131,8 +99,7 @@ export async function createPatientDocument(doc: DocumentRegistration): Promise<
 /**
  * List patient documents stored as DocumentReference resources.
  */
-export async function listPatientDocuments(patientId: string): Promise<PatientDocumentSummary[]> {
-  const medplum = await getMedplumClient();
+export async function listPatientDocuments(medplum: MedplumClient, patientId: string): Promise<PatientDocumentSummary[]> {
   const docs = (await medplum.searchResources('DocumentReference', {
     subject: `Patient/${patientId}`,
     _sort: '-date',
@@ -161,7 +128,6 @@ export async function listPatientDocuments(patientId: string): Promise<PatientDo
 /**
  * Delete a DocumentReference in Medplum by id.
  */
-export async function deletePatientDocument(documentId: string): Promise<void> {
-  const medplum = await getMedplumClient();
+export async function deletePatientDocument(medplum: MedplumClient, documentId: string): Promise<void> {
   await medplum.deleteResource('DocumentReference', documentId);
 }

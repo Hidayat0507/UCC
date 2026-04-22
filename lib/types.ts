@@ -48,6 +48,17 @@ export interface TriageData {
   triageLevel: TriageLevel;
   chiefComplaint: string;
   vitalSigns: VitalSigns;
+  visitIntent?: string;
+  payerType?: string;
+  paymentMethod?: string;
+  billingPerson?: string;
+  dependentName?: string;
+  dependentRelationship?: string;
+  dependentPhone?: string;
+  assignedClinician?: string;
+  registrationSource?: string;
+  registrationAt?: string;
+  performedBy?: string;
   triageNotes?: string;
   redFlags?: string[]; // e.g., ["Chest pain", "Difficulty breathing"]
   triageBy?: string; // Staff member who performed triage

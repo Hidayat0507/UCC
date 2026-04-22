@@ -100,34 +100,34 @@
   --chart-5: oklch(0.645 0.246 16.439);
 }
 
-.v3 {
-  --background: 32 44% 97%;
-  --foreground: 220 20% 16%;
-  --card: 0 0% 100%;
-  --card-foreground: 220 20% 16%;
+/* Hospitality / Airbnb-adjacent: coral accent, warm neutrals, soft contrast */
+.warm {
+  --background: 40 33% 98%;
+  --foreground: 220 16% 18%;
+  --card: 40 40% 99%;
+  --card-foreground: 220 16% 18%;
   --color-card: hsl(var(--card));
   --color-card-foreground: hsl(var(--card-foreground));
-  --popover: 0 0% 100%;
-  --popover-foreground: 220 20% 16%;
+  --popover: 40 40% 99%;
+  --popover-foreground: 220 16% 18%;
   --color-popover: hsl(var(--popover));
   --color-popover-foreground: hsl(var(--popover-foreground));
-  --primary: 347 86% 58%;
+  --primary: 355 78% 56%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 25 42% 95%;
+  --secondary: 35 30% 94%;
   --secondary-foreground: 220 16% 22%;
-  --muted: 25 38% 95%;
-  --muted-foreground: 220 10% 40%;
-  --accent: 25 38% 92%;
+  --muted: 35 22% 93%;
+  --muted-foreground: 220 10% 42%;
+  --accent: 35 35% 94%;
   --accent-foreground: 220 16% 22%;
-  --destructive: 0 78% 57%;
+  --destructive: 0 72% 51%;
   --destructive-foreground: 0 0% 100%;
-  --border: 24 28% 88%;
-  --input: 24 28% 88%;
-  --ring: 347 86% 58%;
-  --radius: 1rem;
-}
-
-html.v3 body {
-  background-image: radial-gradient(circle at 15% -10%, rgba(255, 56, 92, 0.08), transparent 40%),
-    radial-gradient(circle at 95% 0%, rgba(255, 90, 95, 0.08), transparent 35%);
+  --border: 35 18% 90%;
+  --input: 35 18% 90%;
+  --ring: 355 78% 56%;
+  --chart-1: oklch(0.68 0.2 25);
+  --chart-2: oklch(0.62 0.14 180);
+  --chart-3: oklch(0.72 0.12 85);
+  --chart-4: oklch(0.58 0.18 300);
+  --chart-5: oklch(0.65 0.16 45);
 }

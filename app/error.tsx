@@ -3,7 +3,11 @@
 import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 
-export default function GlobalError({
+/**
+ * Segment-level error boundary. Renders inside the root layout,
+ * so it inherits the app shell (sidebar, theme, etc.).
+ */
+export default function Error({
   error,
   reset,
 }: {
@@ -11,22 +15,29 @@ export default function GlobalError({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error(error);
+    console.error("[Error boundary]", error);
   }, [error]);
 
   return (
-    <html>
-      <body className="p-8">
-        <div className="max-w-xl mx-auto space-y-4">
-          <h2 className="text-xl font-semibold">Something went wrong</h2>
-          <p className="text-sm text-gray-600">Please try again. If the issue persists, refresh the page.</p>
-          <div className="flex gap-2">
-            <Button onClick={() => reset()}>Try again</Button>
-            <Button variant="secondary" onClick={() => window.location.reload()}>Refresh</Button>
-          </div>
+    <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 p-8">
+      <div className="max-w-md space-y-3 text-center">
+        <h2 className="text-xl font-semibold">Something went wrong</h2>
+        <p className="text-sm text-muted-foreground">
+          {error.message || "An unexpected error occurred. Please try again."}
+        </p>
+        {error.digest && (
+          <p className="font-mono text-xs text-muted-foreground">
+            Error ID: {error.digest}
+          </p>
+        )}
+        <div className="flex justify-center gap-2 pt-2">
+          <Button onClick={() => reset()}>Try again</Button>
+          <Button variant="secondary" onClick={() => window.location.reload()}>
+            Refresh page
+          </Button>
         </div>
-      </body>
-    </html>
+      </div>
+    </div>
   );
 }
 

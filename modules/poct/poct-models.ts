@@ -5,34 +5,10 @@
  */
 
 import { Buffer } from 'buffer';
-import { MedplumClient } from '@medplum/core';
-import type { DiagnosticReport, Observation, ServiceRequest } from '@medplum/fhirtypes';
+import type { MedplumClient } from '@medplum/core';
+import type { DiagnosticReport, ServiceRequest } from '@medplum/fhirtypes';
+import { getAdminMedplum } from '@/lib/server/medplum-auth';
 import type { POCTTest, POCTTestResult } from './types';
-
-let medplumClient: MedplumClient | undefined;
-let medplumInitPromise: Promise<MedplumClient> | undefined;
-
-async function getMedplumClient(): Promise<MedplumClient> {
-  if (medplumClient) return medplumClient;
-  if (medplumInitPromise) return medplumInitPromise;
-
-  const baseUrl = process.env.MEDPLUM_BASE_URL || process.env.NEXT_PUBLIC_MEDPLUM_BASE_URL || 'http://localhost:8103';
-  const clientId = process.env.MEDPLUM_CLIENT_ID;
-  const clientSecret = process.env.MEDPLUM_CLIENT_SECRET;
-
-  if (!clientId || !clientSecret) {
-    throw new Error('Medplum credentials not configured');
-  }
-
-  medplumInitPromise = (async () => {
-    const medplum = new MedplumClient({ baseUrl, clientId, clientSecret });
-    await medplum.startClientLogin(clientId, clientSecret);
-    medplumClient = medplum;
-    return medplum;
-  })();
-
-  return medplumInitPromise;
-}
 
 const STATUS_TO_SERVICEREQUEST: Record<POCTTest['status'], ServiceRequest['status']> = {
   pending: 'active',
@@ -92,7 +68,7 @@ function mapServiceRequestToPOCT(sr: ServiceRequest, report?: DiagnosticReport):
 }
 
 async function findReportForRequest(medplum: MedplumClient, serviceRequestId: string): Promise<DiagnosticReport | undefined> {
-  const reports = await medplum.searchResources<DiagnosticReport>('DiagnosticReport', {
+  const reports = await medplum.searchResources('DiagnosticReport', {
     basedOn: `ServiceRequest/${serviceRequestId}`,
     _sort: '-issued',
     _count: '1',
@@ -103,11 +79,11 @@ async function findReportForRequest(medplum: MedplumClient, serviceRequestId: st
 export async function createPOCTTest(
   testData: Omit<POCTTest, "id" | "createdAt" | "updatedAt">
 ): Promise<string> {
-  const medplum = await getMedplumClient();
+  const medplum = await getAdminMedplum();
   const authoredOn = typeof testData.orderedAt === 'string' ? testData.orderedAt : testData.orderedAt?.toISOString() || new Date().toISOString();
   const status = STATUS_TO_SERVICEREQUEST[testData.status] || 'active';
 
-  const sr = await medplum.createResource<ServiceRequest>({
+  const sr = await medplum.createResource({
     resourceType: 'ServiceRequest',
     status,
     intent: 'order',
@@ -133,16 +109,17 @@ export async function createPOCTTest(
     note: testData.notes ? [{ text: testData.notes }] : undefined,
   });
 
-  if (!sr.id) {
+  const created = sr as any;
+  if (!created.id) {
     throw new Error('Failed to create POCT ServiceRequest');
   }
-  return sr.id;
+  return created.id as string;
 }
 
 export async function getPOCTTestById(id: string): Promise<POCTTest | null> {
-  const medplum = await getMedplumClient();
+  const medplum = await getAdminMedplum();
   try {
-    const sr = await medplum.readResource<ServiceRequest>('ServiceRequest', id);
+    const sr = await medplum.readResource('ServiceRequest', id);
     const report = await findReportForRequest(medplum, id);
     return mapServiceRequestToPOCT(sr, report);
   } catch (err) {
@@ -152,9 +129,9 @@ export async function getPOCTTestById(id: string): Promise<POCTTest | null> {
 }
 
 export async function getPOCTTestsByPatient(patientId: string): Promise<POCTTest[]> {
-  const medplum = await getMedplumClient();
+  const medplum = await getAdminMedplum();
   try {
-    const requests = await medplum.searchResources<ServiceRequest>('ServiceRequest', {
+    const requests = await medplum.searchResources('ServiceRequest', {
       subject: `Patient/${patientId}`,
       category: 'laboratory',
       _sort: '-authored',
@@ -173,10 +150,10 @@ export async function getPOCTTestsByPatient(patientId: string): Promise<POCTTest
 }
 
 export async function getPOCTTestsByStatus(status: POCTTest['status']): Promise<POCTTest[]> {
-  const medplum = await getMedplumClient();
+  const medplum = await getAdminMedplum();
   const srStatus = STATUS_TO_SERVICEREQUEST[status] || 'active';
   try {
-    const requests = await medplum.searchResources<ServiceRequest>('ServiceRequest', {
+    const requests = await medplum.searchResources('ServiceRequest', {
       category: 'laboratory',
       status: srStatus,
       _sort: '-authored',
@@ -195,13 +172,13 @@ export async function getPOCTTestsByStatus(status: POCTTest['status']): Promise<
 }
 
 export async function getTodaysPOCTTests(): Promise<POCTTest[]> {
-  const medplum = await getMedplumClient();
+  const medplum = await getAdminMedplum();
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const start = today.toISOString().split('T')[0];
 
   try {
-    const requests = await medplum.searchResources<ServiceRequest>('ServiceRequest', {
+    const requests = await medplum.searchResources('ServiceRequest', {
       category: 'laboratory',
       authored: `ge${start}`,
       _sort: '-authored',
@@ -223,8 +200,8 @@ export async function updatePOCTTest(
   id: string,
   updates: Partial<POCTTest>
 ): Promise<void> {
-  const medplum = await getMedplumClient();
-  const sr = await medplum.readResource<ServiceRequest>('ServiceRequest', id);
+  const medplum = await getAdminMedplum();
+  const sr = await medplum.readResource('ServiceRequest', id);
   const status = updates.status ? STATUS_TO_SERVICEREQUEST[updates.status] : sr.status;
 
   await medplum.updateResource<ServiceRequest>({
@@ -240,13 +217,13 @@ export async function completePOCTTest(
   result: POCTTest['result'],
   performedBy: string
 ): Promise<void> {
-  const medplum = await getMedplumClient();
-  const sr = await medplum.readResource<ServiceRequest>('ServiceRequest', id);
+  const medplum = await getAdminMedplum();
+  const sr = await medplum.readResource('ServiceRequest', id);
 
-  await medplum.createResource<DiagnosticReport>({
+  await medplum.createResource({
     resourceType: 'DiagnosticReport',
     status: 'final',
-    code: sr.code,
+    code: sr.code ?? { text: 'POCT Report' },
     subject: sr.subject,
     encounter: sr.encounter,
     basedOn: [{ reference: `ServiceRequest/${id}` }],

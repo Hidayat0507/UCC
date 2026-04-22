@@ -11,7 +11,7 @@
  *   CLINIC_EMAIL=... CLINIC_PASSWORD=... bun run test:e2e
  *
  * Required:
- *   CLINIC_EMAIL       e.g. apex-group-admin@drhidayat.com
+ *   CLINIC_EMAIL       e.g. apex-group-admin@iatrum.com
  *   CLINIC_PASSWORD
  *
  * Optional (admin portal — skip gracefully if not set):

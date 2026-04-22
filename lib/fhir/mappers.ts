@@ -5,7 +5,22 @@ import { findDiagnosisByText } from "./terminologies/diagnoses";
 import { findMedicationByName } from "./terminologies/medications";
 import { validateFhirResource, logValidation } from "./validation";
 
-export async function toFhirPatient(app: AppPatient): Promise<{ reference: string; id: string }> {
+type PatientInput = Omit<AppPatient, 'email' | 'postalCode' | 'address' | 'emergencyContact' | 'medicalHistory'> & {
+  email?: string;
+  postalCode?: string;
+  address?: string;
+  emergencyContact?: { name: string; relationship: string; phone: string };
+  medicalHistory?: { allergies: string[]; conditions: string[]; medications: string[] };
+};
+
+type ConsultationInput = {
+  date?: Date;
+  updatedAt?: Date | string;
+  type?: string;
+  chiefComplaint?: string;
+};
+
+export async function toFhirPatient(app: PatientInput): Promise<{ reference: string; id: string }> {
   // MEDPLUM ONLY - No Firebase fallback
   const nameParts = app.fullName.trim().split(/\s+/);
   const family = nameParts.pop() || '';
@@ -81,11 +96,11 @@ export async function toFhirPatient(app: AppPatient): Promise<{ reference: strin
 
 export async function toFhirEncounter(
   patientRef: string,
-  consult: Consultation,
+  consult: ConsultationInput,
   practitionerRef?: string  // Optional practitioner reference for FHIR compliance
 ): Promise<{ reference: string; id: string }> {
   // MEDPLUM ONLY - No Firebase fallback
-  const startDate = new Date(consult.date).toISOString();
+  const startDate = new Date(consult.date ?? new Date()).toISOString();
   const endDate = consult.updatedAt
     ? new Date(consult.updatedAt).toISOString()
     : startDate;

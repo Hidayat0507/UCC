@@ -44,6 +44,7 @@ export async function validateAndCreateWithProvenance<T extends { resourceType: 
   // Create Provenance for audit trail (non-blocking)
   try {
     await createProvenanceForResource(
+      medplum,
       resource.resourceType,
       created.id,
       practitionerId,
@@ -90,6 +91,7 @@ export async function validateAndCreate<T extends { resourceType: string }>(
  * Use this if you created a resource without Provenance and want to add it
  */
 export async function addProvenanceToResource(
+  medplum: MedplumClient,
   resourceType: string,
   resourceId: string,
   practitionerId?: string,
@@ -98,6 +100,7 @@ export async function addProvenanceToResource(
 ): Promise<void> {
   try {
     await createProvenanceForResource(
+      medplum,
       resourceType,
       resourceId,
       practitionerId,

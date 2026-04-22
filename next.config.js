@@ -1,12 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'standalone',
-  typescript: {
-    // ⚠️ TEMPORARY: Ignore type errors during build
-    // TODO: Fix Medplum FHIR type incompatibilities
-    ignoreBuildErrors: true,
-  },
   outputFileTracingRoot: __dirname,
+  allowedDevOrigins: ["127.0.0.1"],
   experimental: {
     optimizePackageImports: [
       "lucide-react",

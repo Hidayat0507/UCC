@@ -42,9 +42,24 @@ export default function NewImagingOrderPage() {
     setSubmitting(true);
 
     try {
-      // TODO: Implement actual API call to create imaging order
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
-      
+      const res = await fetch('/api/imaging/order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          patientId: patientSearch,
+          procedures: [studyType],
+          priority: priority as 'routine' | 'urgent' | 'asap' | 'stat',
+          clinicalIndication: indication || undefined,
+          clinicalQuestion: clinicalNotes || undefined,
+        }),
+      });
+
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        throw new Error(payload?.error || `Request failed (${res.status})`);
+      }
+
       toast({
         title: "Order Created",
         description: "Imaging study has been ordered successfully.",
@@ -55,7 +70,7 @@ export default function NewImagingOrderPage() {
       console.error("Error creating imaging order:", error);
       toast({
         title: "Error",
-        description: "Failed to create imaging order. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to create imaging order. Please try again.",
         variant: "destructive",
       });
     } finally {

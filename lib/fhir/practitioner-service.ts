@@ -5,40 +5,11 @@
  */
 
 import { MedplumClient } from '@medplum/core';
+import { getAdminMedplum } from '@/lib/server/medplum-admin';
 import type { Practitioner } from '@medplum/fhirtypes';
 import { applyMyCoreProfile, MY_CORE_IDENTIFIERS } from './mycore';
 
-let medplumClient: MedplumClient | undefined;
-let medplumInitPromise: Promise<MedplumClient> | undefined;
-
-/**
- * Get authenticated Medplum client (singleton)
- */
-async function getMedplumClient(): Promise<MedplumClient> {
-    if (medplumClient) return medplumClient;
-    if (medplumInitPromise) return medplumInitPromise;
-
-    const baseUrl = process.env.MEDPLUM_BASE_URL || process.env.NEXT_PUBLIC_MEDPLUM_BASE_URL || 'http://localhost:8103';
-    const clientId = process.env.MEDPLUM_CLIENT_ID;
-    const clientSecret = process.env.MEDPLUM_CLIENT_SECRET;
-
-    if (!clientId || !clientSecret) {
-        throw new Error('Medplum credentials not configured');
-    }
-
-    medplumInitPromise = (async () => {
-        const medplum = new MedplumClient({
-            baseUrl,
-            clientId,
-            clientSecret,
-        });
-        await medplum.startClientLogin(clientId, clientSecret);
-        medplumClient = medplum;
-        return medplum;
-    })();
-
-    return medplumInitPromise;
-}
+const getMedplumClient = getAdminMedplum;
 
 /**
  * Get or create a practitioner by user ID

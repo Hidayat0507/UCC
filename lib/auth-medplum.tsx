@@ -59,7 +59,7 @@ export function MedplumAuthProvider({ children }: { children: React.ReactNode })
   const [loading, setLoading] = useState(true);
   const [clinicId, setClinicIdState] = useState<string | null>(null);
 
-  const refreshAuthState = useCallback(async (): Promise<AuthMeResponse> => {
+  const refreshAuthState = async (): Promise<AuthMeResponse> => {
     const [sessionRes, authMeRes] = await Promise.all([
       fetch('/api/auth/medplum-session', { credentials: 'include' }),
       fetch('/api/auth/me', { credentials: 'include' }),
@@ -99,7 +99,7 @@ export function MedplumAuthProvider({ children }: { children: React.ReactNode })
       isAdmin: nextIsAdmin,
       profile: nextProfile,
     };
-  }, [medplum]);
+  };
 
   const persistClinicId = async (nextClinicId: string | null) => {
     setClinicIdState(nextClinicId);
@@ -187,7 +187,7 @@ export function MedplumAuthProvider({ children }: { children: React.ReactNode })
     return () => {
       cancelled = true;
     };
-  }, [medplum, refreshAuthState]);
+  }, [medplum]);
 
   const signIn = async (email: string, password: string): Promise<{ isAdmin: boolean }> => {
     try {

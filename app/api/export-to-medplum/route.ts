@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase-admin';
-import { MedplumClient } from '@medplum/core';
+import { getAdminMedplum } from '@/lib/server/medplum-auth';
 
 type ConsultationData = {
   id: string;
@@ -23,43 +23,38 @@ type ConsultationData = {
 };
 
 /**
- * Get authenticated Medplum client using client_credentials
- */
-async function getMedplumClient(): Promise<MedplumClient> {
-  const baseUrl = process.env.MEDPLUM_BASE_URL || 'http://localhost:8103';
-  const clientId = process.env.MEDPLUM_CLIENT_ID;
-  const clientSecret = process.env.MEDPLUM_CLIENT_SECRET;
-
-  if (!clientId || !clientSecret) {
-    throw new Error('MEDPLUM_CLIENT_ID and MEDPLUM_CLIENT_SECRET must be set');
-  }
-
-  const medplum = new MedplumClient({
-    baseUrl,
-    clientId,
-    clientSecret,
-  });
-
-  await medplum.startClientLogin(clientId, clientSecret);
-  
-  console.log('✅ Authenticated with Medplum using client_credentials');
-  
-  return medplum;
-}
-
-/**
- * Export Firebase consultations to Medplum as FHIR resources
+ * Bulk migration: Firebase → Medplum.
+ *
+ * Uses the service account (getAdminMedplum) because this is a one-off migration
+ * job that may need to create many resources across all patients.
+ * Practitioner tokens are for routine clinical API use only.
+ *
+ * Must be called with Authorization: Bearer <MEDPLUM_BULK_EXPORT_SECRET>
+ * to prevent public access while keeping admin FHIR write access.
  */
 export async function POST(request: NextRequest) {
   try {
+    const bulkSecret = process.env.MEDPLUM_BULK_EXPORT_SECRET;
+    if (!bulkSecret) {
+      return NextResponse.json(
+        { error: 'Bulk export is disabled. Set MEDPLUM_BULK_EXPORT_SECRET env var.' },
+        { status: 503 }
+      );
+    }
+
+    const auth = request.headers.get('authorization');
+    const token = auth?.startsWith('Bearer ') ? auth.slice(7).trim() : '';
+    if (!token || token !== bulkSecret) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { action } = await request.json();
 
     if (action !== 'export_all') {
       return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
     }
 
-    // Get Medplum client with OAuth2 credentials
-    const medplum = await getMedplumClient();
+    const medplum = await getAdminMedplum();
 
     // Fetch all consultations from Firebase
     const consultationsSnapshot = await adminDb.collection('consultations').get();

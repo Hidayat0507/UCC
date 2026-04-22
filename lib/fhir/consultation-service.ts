@@ -105,6 +105,7 @@ function withServiceProvider<T extends { [key: string]: any }>(resource: T, clin
   };
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function validateAndCreate(medplum: MedplumClient, resource: any) {
   const validation = validateFhirResource(resource);
   logValidation(resource.resourceType, validation);

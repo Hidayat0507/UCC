@@ -18,7 +18,7 @@ import {
   KLINIK_PUTERI_PASSWORD,
 } from "./support/env";
 
-const CLINIC_URL = KLINIK_PUTERI_URL || "https://klinikputeri.drhidayat.com";
+const CLINIC_URL = KLINIK_PUTERI_URL || "https://klinikputeri.iatrum.com";
 const RUN_ID = String(Date.now()).slice(-4).padStart(4, "0");
 const PATIENT_NAME = `Referral E2E ${RUN_ID}`;
 const PATIENT_NRIC = `910101-10-${RUN_ID}`;
