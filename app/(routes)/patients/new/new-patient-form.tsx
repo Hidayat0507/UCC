@@ -46,9 +46,14 @@ const RequiredLabel = ({ children }: { children: React.ReactNode }) => (
 interface NewPatientFormProps {
   initialFullName?: string;
   initialNric?: string;
+  initialVisitIntent?: "consultation" | "otc" | "follow_up";
 }
 
-export default function NewPatientForm({ initialFullName = "", initialNric = "" }: NewPatientFormProps) {
+export default function NewPatientForm({
+  initialFullName = "",
+  initialNric = "",
+  initialVisitIntent = "consultation",
+}: NewPatientFormProps) {
   const { toast } = useToast();
   const router = useRouter();
 
@@ -159,8 +164,18 @@ export default function NewPatientForm({ initialFullName = "", initialNric = "" 
       });
       
       console.log(`✅ Patient saved to Medplum FHIR: ${patientId}`);
-      
-      router.push(`/patients/${patientId}`);
+
+      if (initialVisitIntent === "otc") {
+        const params = new URLSearchParams({
+          source: "registration-otc",
+          patientId,
+          patientName: data.fullName,
+        });
+        router.push(`/orders?${params.toString()}`);
+        return;
+      }
+
+      router.push(`/patients/${patientId}/triage`);
     } catch (error: any) {
       console.error('Failed to register patient:', error);
       toast({ 
@@ -362,4 +377,3 @@ export default function NewPatientForm({ initialFullName = "", initialNric = "" 
     </div>
   );
 }
-
