@@ -4,7 +4,7 @@ This file is the operational source of truth for deploying and verifying UCC EMR
 
 Related audit:
 
-- [`PRODUCTION_READINESS.md`](/Users/hidayat/Documents/Projects/UCC/PRODUCTION_READINESS.md)
+- [`PRODUCTION_READINESS.md`](./PRODUCTION_READINESS.md)
 
 ## Current Release Status
 
@@ -53,7 +53,7 @@ Related audit:
 
 Before calling the system production-ready, check:
 
-- [`PRODUCTION_READINESS.md`](/Users/hidayat/Documents/Projects/UCC/PRODUCTION_READINESS.md)
+- [`PRODUCTION_READINESS.md`](./PRODUCTION_READINESS.md)
 
 ## Topology
 
@@ -99,7 +99,7 @@ Important optional variables:
 
 Production/self-hosted Medplum details live in:
 
-- [`MEDPLUM_SELF_HOSTED_DETAILS.md`](/Users/hidayat/Documents/Projects/UCC/MEDPLUM_SELF_HOSTED_DETAILS.md)
+- [`MEDPLUM_SELF_HOSTED_DETAILS.md`](./MEDPLUM_SELF_HOSTED_DETAILS.md)
 
 Keep that file updated whenever:
 
@@ -183,7 +183,7 @@ Typical symptom:
 
 When deployment assumptions change, update both:
 
-- [`DEPLOYMENT.md`](/Users/hidayat/Documents/Projects/UCC/DEPLOYMENT.md)
-- [`MEDPLUM_SELF_HOSTED_DETAILS.md`](/Users/hidayat/Documents/Projects/UCC/MEDPLUM_SELF_HOSTED_DETAILS.md)
+- [`DEPLOYMENT.md`](./DEPLOYMENT.md)
+- [`MEDPLUM_SELF_HOSTED_DETAILS.md`](./MEDPLUM_SELF_HOSTED_DETAILS.md)
 
 That keeps the code, infra assumptions, and operator workflow aligned.

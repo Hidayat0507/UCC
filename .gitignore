@@ -14,7 +14,7 @@
 tests/e2e/.auth/
 
 # credentials / docs with secrets
-MEDPLUM_SELF_HOSTED_DETAILS.md
+docs/MEDPLUM_SELF_HOSTED_DETAILS.md
 
 # next.js
 /.next/

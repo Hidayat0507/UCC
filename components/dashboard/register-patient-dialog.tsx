@@ -38,7 +38,7 @@ export type RegisterPatientDialogProps = {
 
 /**
  * Yezza-style “Register patient” chooser: visit purpose → search → OR → MyKad / new patient.
- * Matches the layout described in YEZZA.md and the demo modal (visit radios, search, OR, two actions).
+ * Matches the layout described in docs/YEZZA.md and the demo modal (visit radios, search, OR, two actions).
  */
 export function RegisterPatientDialog({ open, onOpenChange }: RegisterPatientDialogProps) {
   const router = useRouter();

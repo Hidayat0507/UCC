@@ -2,7 +2,7 @@
 
 Date tested: 2026-04-14
 Environment tested: `https://klinikputeri.iatrum.com`
-Source of access details: `MEDPLUM_SELF_HOSTED_DETAILS.md` and `DEPLOYMENT.md`
+Source of access details: `MEDPLUM_SELF_HOSTED_DETAILS.md` and `DEPLOYMENT.md` (both in this `docs/` folder)
 Comparison target: `YEZZA_DEMO_ACCOUNT_REPORT.md`
 
 ## Scope

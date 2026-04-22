@@ -5,6 +5,7 @@
 
 import { MedplumClient, type ProfileResource } from '@medplum/core';
 import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
 import { NextRequest } from 'next/server';
 import { REFRESH_COOKIE, SESSION_COOKIE } from '@/lib/server/cookie-constants';
 import { AuthError, ClinicContextError, ForbiddenError } from '@/lib/server/route-helpers';
@@ -271,6 +272,28 @@ export async function requirePlatformAdmin(req: NextRequest): Promise<MedplumCli
   const medplum = await getMedplumForRequest(req);
   if (!(await isPlatformAdmin(medplum))) {
     throw new ForbiddenError('Platform admin access required.');
+  }
+  return medplum;
+}
+
+/**
+ * Page/layout variant of `requirePlatformAdmin` that uses `redirect()` so
+ * visitors land on `/login` instead of an error boundary.
+ *
+ * - Not signed in -> `/login?next=<nextPath>`
+ * - Signed in but not a platform admin -> `/login?error=admin_required&next=<nextPath>`
+ */
+export async function requirePlatformAdminPage(
+  nextPath: string = '/admin'
+): Promise<MedplumClient> {
+  let medplum: MedplumClient;
+  try {
+    medplum = await getMedplumForRequest();
+  } catch {
+    redirect(`/login?next=${encodeURIComponent(nextPath)}`);
+  }
+  if (!(await isPlatformAdmin(medplum))) {
+    redirect(`/login?error=admin_required&next=${encodeURIComponent(nextPath)}`);
   }
   return medplum;
 }
