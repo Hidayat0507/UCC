@@ -1,7 +1,5 @@
 import type { NextRequest } from "next/server";
 
-const BASE_DOMAIN = process.env.NEXT_PUBLIC_BASE_DOMAIN || "";
-
 export type SubdomainContext =
   | { type: "admin" }
   | { type: "clinic"; clinicId: string }
@@ -21,8 +19,10 @@ export function deriveSubdomainContext(host: string | null): SubdomainContext {
   const parts = bare.split(".");
   if (parts.length < 3) return { type: "none" };
 
-  const [sub, ...rest] = parts;
-  if (BASE_DOMAIN && rest.join(".") !== BASE_DOMAIN) return { type: "none" };
+  // Any 3+ part host is treated as a subdomain. BASE_DOMAIN is ignored so
+  // secondary domains (e.g. drhidayat.com) work the same way as the primary
+  // iatrum.com domain without extra configuration.
+  const [sub] = parts;
 
   if (sub === "admin") return { type: "admin" };
   if (["www", "app", "auth"].includes(sub)) return { type: "none" };
