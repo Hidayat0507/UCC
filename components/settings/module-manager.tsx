@@ -28,15 +28,11 @@ const ICON_MAP = {
 };
 
 export function ModuleManager() {
-  const [moduleStates, setModuleStates] = useState<Record<ModuleId, boolean>>({} as Record<ModuleId, boolean>);
+  const [moduleStates, setModuleStates] = useState<Record<ModuleId, boolean>>(() => getAllModuleStates());
   const { toast } = useToast();
   const router = useRouter();
 
   useEffect(() => {
-    // Load initial states
-    const states = getAllModuleStates();
-    setModuleStates(states);
-
     // Listen for changes
     const handleModuleToggle = () => {
       const newStates = getAllModuleStates();
@@ -242,4 +238,3 @@ export function ModuleManager() {
     </div>
   );
 }
-

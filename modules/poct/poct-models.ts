@@ -44,10 +44,10 @@ const STATUS_TO_SERVICEREQUEST: Record<POCTTest['status'], ServiceRequest['statu
 const SERVICEREQUEST_TO_STATUS: Record<ServiceRequest['status'], POCTTest['status']> = {
   draft: 'pending',
   active: 'pending',
-  on-hold: 'pending',
+  'on-hold': 'pending',
   revoked: 'cancelled',
   completed: 'completed',
-  entered-in-error: 'cancelled',
+  'entered-in-error': 'cancelled',
   unknown: 'pending',
 };
 

@@ -1,10 +1,7 @@
 import { NextRequest } from "next/server";
-import { getConsultationById, getPatientById } from "@/lib/models";
-import { toFhirPatient, toFhirEncounter, toFhirCondition, toFhirMedicationRequest, toFhirServiceRequest } from "@/lib/fhir/mappers";
 import { z } from "zod";
 import { writeServerAuditLog } from "@/lib/server/logging";
 import { AUTH_DISABLED } from "@/lib/auth-config";
-import { getCurrentProfile } from "@/lib/server/medplum-auth";
 
 const exportBodySchema = z.object({
   consultationId: z.string().min(1),
@@ -16,6 +13,7 @@ export async function POST(req: NextRequest) {
 
     if (!AUTH_DISABLED) {
       try {
+        const { getCurrentProfile } = await import("@/lib/server/medplum-auth");
         const profile = await getCurrentProfile(req);
         userId = profile.id ?? 'unknown';
       } catch {
@@ -29,6 +27,15 @@ export async function POST(req: NextRequest) {
       return new Response(JSON.stringify({ error: 'Invalid body' }), { status: 400 });
     }
     const { consultationId } = parsed.data;
+
+    const { getConsultationById, getPatientById } = await import("@/lib/models");
+    const {
+      toFhirPatient,
+      toFhirEncounter,
+      toFhirCondition,
+      toFhirMedicationRequest,
+      toFhirServiceRequest,
+    } = await import("@/lib/fhir/mappers");
 
     const consultation = await getConsultationById(consultationId);
     if (!consultation) return new Response(JSON.stringify({ error: 'Consultation not found' }), { status: 404 });

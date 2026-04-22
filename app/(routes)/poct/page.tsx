@@ -5,16 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, TestTube, Clock, CheckCircle, AlertCircle, Settings } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { isModuleEnabled } from "@/lib/modules";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export default function POCTPage() {
-  const [moduleEnabled, setModuleEnabled] = useState(true);
-
-  useEffect(() => {
-    setModuleEnabled(isModuleEnabled('poct'));
-  }, []);
+  const [moduleEnabled] = useState(() => isModuleEnabled('poct'));
 
   if (!moduleEnabled) {
     return (
@@ -173,4 +169,3 @@ export default function POCTPage() {
     </div>
   );
 }
-

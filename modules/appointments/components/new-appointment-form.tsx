@@ -71,15 +71,12 @@ const PatientCombobox = forwardRef<
 >(function PatientCombobox({ value, onChange, onBlur, options, placeholder = "Search patient...", disabled }, ref) {
   const [open, setOpen] = useState(false);
   const selected = useMemo(() => options.find((o) => o.id === value), [options, value]);
-
-  useEffect(() => {
-    if (disabled) setOpen(false);
-  }, [disabled]);
+  const isOpen = !disabled && open;
 
   return (
-    <Popover open={open} onOpenChange={(next) => !disabled && setOpen(next)}>
+    <Popover open={isOpen} onOpenChange={(next) => setOpen(disabled ? false : next)}>
       <PopoverTrigger asChild>
-        <Button ref={ref} variant="outline" role="combobox" aria-expanded={open} disabled={disabled} className="w-full justify-between">
+        <Button ref={ref} variant="outline" role="combobox" aria-expanded={isOpen} disabled={disabled} className="w-full justify-between">
           <span className="truncate">{selected ? selected.name : placeholder}</span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
