@@ -49,8 +49,8 @@ export default function AdminSidebar() {
             <Link href={adminPath("/")} className="flex items-center space-x-2">
               <Activity className="h-6 w-6 text-primary" />
               <div>
-                <p className="text-sm font-bold leading-none">UCC Admin</p>
-                <p className="text-xs text-muted-foreground">Portal</p>
+                <p className="text-sm font-bold leading-none">Iatrum</p>
+                <p className="text-xs text-muted-foreground">Admin Portal</p>
               </div>
             </Link>
           )}

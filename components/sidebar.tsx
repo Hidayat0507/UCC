@@ -115,7 +115,7 @@ export default function Sidebar({ modules = [] }: SidebarProps) {
           {!isCollapsed && (
             <Link href="/" className="flex items-center space-x-2">
               <Activity className="h-6 w-6" />
-              <span className="text-xl font-bold">MediFlow</span>
+              <span className="text-xl font-bold">Iatrum</span>
             </Link>
           )}
           {isCollapsed && <Activity className="h-6 w-6 mx-auto" />}
