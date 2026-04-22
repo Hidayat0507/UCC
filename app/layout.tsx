@@ -37,10 +37,19 @@ export default async function RootLayout({
       clinicCookieValue: cookieStore.get(CLINIC_COOKIE)?.value,
     });
 
-  // Marketing landing page — no clinic subdomain, no admin, root path.
-  // `/` is only public on the apex/www host; on admin.* or clinic.* the same
-  // pathname still needs authentication.
-  const isMarketingPage = !isAdminContext && !clinicId && (pathname === "/" || pathname === "");
+  // Marketing landing page — root path on the apex host (no admin, no clinic
+  // subdomain). Cookies are ignored here so drhidayat.com/ always shows the
+  // landing page regardless of any stale clinic/session cookies.
+  const isApexHost = (() => {
+    const bare = (host ?? "").split(":")[0];
+    if (!bare) return true;
+    if (bare.startsWith("localhost") || /^\d{1,3}(\.\d{1,3}){3}/.test(bare)) return true;
+    const parts = bare.split(".");
+    if (parts.length < 3) return true;
+    return parts[0] === "www";
+  })();
+  const isRootPath = pathname === "/" || pathname === "";
+  const isMarketingPage = isApexHost && isRootPath && !isAdminContext;
 
   // Paths that render without requiring authentication (login page itself,
   // marketing landing, error pages, API handlers, and Next.js internals).

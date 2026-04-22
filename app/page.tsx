@@ -1,7 +1,4 @@
 import Link from "next/link";
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
-import { SESSION_COOKIE } from "@/lib/server/cookie-constants";
 
 export const dynamic = "force-dynamic";
 
@@ -71,12 +68,7 @@ const STEPS = [
   },
 ];
 
-export default async function Home() {
-  const jar = await cookies();
-  if (jar.get(SESSION_COOKIE)?.value) {
-    redirect("/dashboard");
-  }
-
+export default function Home() {
   return (
     <div className="min-h-screen bg-white text-gray-900">
       {/* Navbar */}
