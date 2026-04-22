@@ -13,45 +13,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { PDFViewer, pdf } from "@react-pdf/renderer";
 import ReferralDocument from "@/components/referrals/referral-document";
 import { fetchOrganizationDetails, type OrganizationDetails } from "@/lib/org";
 import { format } from "date-fns";
 import type { SerializedPatient } from "@/components/patients/patient-card";
-import { saveReferral } from "@/lib/fhir/referral-client";
-import { useToast } from "@/components/ui/use-toast";
-import { Sparkles } from "lucide-react";
-
-const SPECIALTIES = [
-  "Cardiology",
-  "Dermatology",
-  "Endocrinology",
-  "Gastroenterology",
-  "Neurology",
-  "Orthopedics",
-  "Psychiatry",
-  "Ophthalmology",
-  "General",
-];
-
-const FACILITIES = [
-  "General Hospital",
-  "Medical Center",
-  "Specialist Clinic",
-  "Community Hospital",
-];
 
 interface ReferralLetterButtonProps {
   sourceText: string;
   patient?: SerializedPatient | null;
-  onSaved?: () => void;
 }
 
 function formatDateLabel(value?: string | Date | null): string | null {
@@ -65,18 +35,12 @@ function formatDateLabel(value?: string | Date | null): string | null {
   return format(date, "dd MMM yyyy");
 }
 
-export default function ReferralLetterButton({ sourceText, patient, onSaved }: ReferralLetterButtonProps) {
-  const { toast } = useToast();
+export default function ReferralLetterButton({ sourceText, patient }: ReferralLetterButtonProps) {
   const [result, setResult] = useState<string | null>(null);
   const [toField, setToField] = useState<string>("");
   const [fromField, setFromField] = useState<string>("");
   const [organization, setOrganization] = useState<OrganizationDetails | null>(null);
   const [open, setOpen] = useState(false);
-  const [polishing, setPolishing] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [specialty, setSpecialty] = useState<string>("");
-  const [facility, setFacility] = useState<string>("");
-  const [reason, setReason] = useState<string>("");
 
   useEffect(() => {
     let active = true;
@@ -91,59 +55,10 @@ export default function ReferralLetterButton({ sourceText, patient, onSaved }: R
     };
   }, []);
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     setResult(sourceText);
     setFromField((current) => current || organization?.name || "");
-    setSpecialty("");
-    setFacility("");
-    setReason("");
     setOpen(true);
-  };
-
-  const handlePolishWithAI = async () => {
-    if (!result?.trim()) return;
-    setPolishing(true);
-    try {
-      const res = await fetch("/api/referral-letter", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: result }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || "Failed to polish");
-      if (typeof data.letter === "string") setResult(data.letter);
-    } catch (err: any) {
-      toast({ title: "Error", description: err?.message || "Failed to polish letter", variant: "destructive" });
-    } finally {
-      setPolishing(false);
-    }
-  };
-
-  const handleSaveAsReferral = async () => {
-    if (!patient?.id || !result?.trim()) return;
-    if (!specialty || !facility) {
-      toast({ title: "Required fields", description: "Please select specialty and facility.", variant: "destructive" });
-      return;
-    }
-    setSaving(true);
-    try {
-      await saveReferral({
-        patientId: patient.id,
-        specialty,
-        facility,
-        reason: reason.trim() || "See attached referral letter",
-        letterText: result,
-        clinicalInfo: sourceText,
-        date: new Date(),
-      });
-      toast({ title: "Referral saved", description: "Referral letter saved to patient record." });
-      onSaved?.();
-      setOpen(false);
-    } catch (err: any) {
-      toast({ title: "Error", description: err?.message || "Failed to save referral", variant: "destructive" });
-    } finally {
-      setSaving(false);
-    }
   };
 
   const formattedDate = format(new Date(), "dd MMM yyyy");
@@ -171,9 +86,6 @@ export default function ReferralLetterButton({ sourceText, patient, onSaved }: R
             setResult(null);
             setToField("");
             setFromField(organization?.name || "");
-            setSpecialty("");
-            setFacility("");
-            setReason("");
           }
         }}
       >
@@ -231,67 +143,12 @@ export default function ReferralLetterButton({ sourceText, patient, onSaved }: R
                 </div>
               </div>
             ) : null}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label>Letter content (edit as needed)</Label>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={handlePolishWithAI}
-                  disabled={!result?.trim() || polishing}
-                >
-                  <Sparkles className="h-4 w-4 mr-1" />
-                  {polishing ? "Polishing…" : "Polish with AI"}
-                </Button>
-              </div>
-              <Textarea
-                value={result ?? ""}
-                onChange={(event) => setResult(event.target.value)}
-                className="min-h-[280px]"
-                placeholder="Referral letter content"
-              />
-            </div>
-            <div className="rounded-lg border p-4 space-y-3 bg-muted/30">
-              <Label className="text-sm font-medium">Save as referral (required to save)</Label>
-              <div className="grid gap-3 sm:grid-cols-3">
-                <div className="space-y-1">
-                  <Label htmlFor="save-specialty" className="text-xs">Specialty</Label>
-                  <Select value={specialty} onValueChange={setSpecialty}>
-                    <SelectTrigger id="save-specialty">
-                      <SelectValue placeholder="Select" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {SPECIALTIES.map((s) => (
-                        <SelectItem key={s} value={s}>{s}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="save-facility" className="text-xs">Facility</Label>
-                  <Select value={facility} onValueChange={setFacility}>
-                    <SelectTrigger id="save-facility">
-                      <SelectValue placeholder="Select" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {FACILITIES.map((f) => (
-                        <SelectItem key={f} value={f}>{f}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1 sm:col-span-1">
-                  <Label htmlFor="save-reason" className="text-xs">Reason (optional)</Label>
-                  <Input
-                    id="save-reason"
-                    placeholder="e.g. Cardiology review"
-                    value={reason}
-                    onChange={(e) => setReason(e.target.value)}
-                  />
-                </div>
-              </div>
-            </div>
+            <Textarea
+              value={result ?? ""}
+              onChange={(event) => setResult(event.target.value)}
+              className="min-h-[320px]"
+              placeholder="Referral letter content"
+            />
             <div className="h-[380px] border rounded-md overflow-hidden">
               {showPreview ? (
                 <PDFViewer className="h-full w-full">
@@ -317,33 +174,23 @@ export default function ReferralLetterButton({ sourceText, patient, onSaved }: R
               )}
             </div>
           </div>
-          <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center">
+          <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:justify-end">
             <Button
               type="button"
-              variant="outline"
+              variant="secondary"
               size="sm"
-              disabled={!result?.trim() || !specialty || !facility || saving}
-              onClick={handleSaveAsReferral}
+              onClick={() => {
+                setResult(null);
+                setOpen(false);
+              }}
             >
-              {saving ? "Saving…" : "Save as referral"}
+              Close
             </Button>
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={() => {
-                  setResult(null);
-                  setOpen(false);
-                }}
-              >
-                Close
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                disabled={!result}
-                onClick={async () => {
+            <Button
+              type="button"
+              size="sm"
+              disabled={!result}
+              onClick={async () => {
                 if (!result) return;
                 const blob = await pdf(
                   <ReferralDocument
@@ -371,7 +218,6 @@ export default function ReferralLetterButton({ sourceText, patient, onSaved }: R
             >
               Download PDF
             </Button>
-            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>

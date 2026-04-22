@@ -11,7 +11,6 @@ export interface ReferralInput {
   urgency?: 'routine' | 'urgent' | 'stat' | 'asap';
   reason: string;
   clinicalInfo?: string;
-  letterText?: string;
   date?: Date | string;
 }
 
