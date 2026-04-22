@@ -51,13 +51,6 @@ export default async function RootLayout({
   const isRootPath = pathname === "/" || pathname === "";
   const isMarketingPage = isApexHost && isRootPath && !isAdminContext;
 
-  // Defensive fallback: if the edge rewrite does not run, the admin host root
-  // should still normalize to the admin portal route instead of falling
-  // through to the clinic-style /dashboard redirect.
-  if (isAdminContext && isRootPath) {
-    redirect("/admin");
-  }
-
   // On a non-apex host (e.g. demo.drhidayat.com) `/` is not the marketing
   // page — it's the app entry. Bounce into /dashboard so a shared session
   // cookie doesn't accidentally render the landing component here.
