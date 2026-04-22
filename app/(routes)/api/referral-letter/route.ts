@@ -1,18 +1,15 @@
 import { NextRequest } from "next/server";
+import { getMedplumForRequest } from "@/lib/server/medplum-auth";
 import { isRateLimited } from "@/lib/rate-limit";
 import { referralBodySchema } from "@/lib/validation";
 import { generateReferralLetter } from "@/lib/workflows/referral-letter";
-import { AUTH_DISABLED } from "@/lib/auth-config";
-import { requireAuth } from "@/lib/server/medplum-auth";
 
 export async function POST(req: NextRequest) {
   try {
-    if (!AUTH_DISABLED) {
-      try {
-        await requireAuth(req);
-      } catch {
-        return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
-      }
+    try {
+      await getMedplumForRequest(req);
+    } catch {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
     }
 
     const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";

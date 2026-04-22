@@ -12,18 +12,6 @@ import { env } from '@/lib/env';
 // Re-export so callers can import getAdminMedplum from either file.
 export { getAdminMedplum } from './medplum-admin';
 
-export interface AssignedClinic {
-  id: string;
-  name: string;
-  subdomain: string;
-}
-
-export interface UserAccessContext {
-  profile: ProfileResource;
-  isPlatformAdmin: boolean;
-  clinics: AssignedClinic[];
-}
-
 const MAX_AGE_SECONDS = Number(process.env.AUTH_SESSION_MAX_AGE_SECONDS || 60 * 60 * 24 * 30);
 const isProd = process.env.NODE_ENV === 'production';
 const COOKIE_DOMAIN = process.env.COOKIE_DOMAIN || undefined;
@@ -191,55 +179,6 @@ async function isPlatformAdmin(medplum: MedplumClient): Promise<boolean> {
   }
 }
 
-export async function getAssignedClinics(
-  medplum: MedplumClient,
-  profile: ProfileResource
-): Promise<AssignedClinic[]> {
-  if (profile.resourceType !== 'Practitioner' || !profile.id) {
-    return [];
-  }
-
-  const roles = await medplum.searchResources('PractitionerRole', {
-    practitioner: `Practitioner/${profile.id}`,
-    _count: '100',
-  });
-
-  const organizationIds = Array.from(
-    new Set(
-      (roles ?? [])
-        .map((role) => role.organization?.reference?.replace('Organization/', ''))
-        .filter((value): value is string => Boolean(value))
-    )
-  );
-
-  const organizations = await Promise.all(
-    organizationIds.map(async (id) => {
-      try {
-        return await medplum.readResource('Organization', id);
-      } catch {
-        return null;
-      }
-    })
-  );
-
-  return organizations
-    .filter((org): org is NonNullable<typeof org> => Boolean(org?.id))
-    .map((org) => ({
-      id: org.id as string,
-      name: org.name ?? 'Unnamed clinic',
-      subdomain:
-        org.identifier?.find((identifier) => identifier.system === 'clinic')?.value ?? (org.id as string),
-    }));
-}
-
-export async function getUserAccessContext(req?: NextRequest): Promise<UserAccessContext> {
-  const medplum = await getMedplumForRequest(req);
-  const profile = await getCurrentProfile(req);
-  const platformAdmin = await isPlatformAdmin(medplum);
-  const clinics = await getAssignedClinics(medplum, profile);
-  return { profile, isPlatformAdmin: platformAdmin, clinics };
-}
-
 async function resolveClinicOrganizationIds(
   medplum: MedplumClient,
   clinicId: string
@@ -328,7 +267,7 @@ export async function requireAuth(req?: NextRequest): Promise<MedplumClient> {
  * Require platform admin — throws AuthError if not authenticated,
  * ForbiddenError if authenticated but not a platform admin.
  */
-export async function requirePlatformAdmin(req?: NextRequest): Promise<MedplumClient> {
+export async function requirePlatformAdmin(req: NextRequest): Promise<MedplumClient> {
   const medplum = await getMedplumForRequest(req);
   if (!(await isPlatformAdmin(medplum))) {
     throw new ForbiddenError('Platform admin access required.');

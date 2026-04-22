@@ -1,22 +1,20 @@
 import { NextRequest } from "next/server";
+import { getMedplumForRequest } from "@/lib/server/medplum-auth";
 import { isRateLimited } from "@/lib/rate-limit";
 import { ocrBodySchema } from "@/lib/validation";
 import { recognizeIC } from "@/lib/ocr";
-import { AUTH_DISABLED } from "@/lib/auth-config";
-import { requireAuth } from "@/lib/server/medplum-auth";
 
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
   try {
-    if (!AUTH_DISABLED) {
-      try {
-        await requireAuth(req);
-      } catch {
-        return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
-      }
+    const allowDev = process.env.NODE_ENV !== 'production' && process.env.OCR_ALLOW_DEV === 'true';
+    // Require a valid Medplum session unless explicitly allowed in development
+    if (!allowDev) {
+      try { await getMedplumForRequest(req); } catch { return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 }); }
     }
 
+    // Rate limit by IP
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
     if (isRateLimited(`ocr:${ip}`, 12, 60_000)) {
       return new Response(JSON.stringify({ error: "Too Many Requests" }), { status: 429 });

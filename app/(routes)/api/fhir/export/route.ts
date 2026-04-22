@@ -1,7 +1,11 @@
 import { NextRequest } from "next/server";
+import { getConsultationFromMedplum } from "@/lib/fhir/consultation-service";
+import { getPatientFromMedplum } from "@/lib/fhir/patient-service";
+import { toFhirPatient, toFhirEncounter, toFhirCondition, toFhirMedicationRequest, toFhirServiceRequest } from "@/lib/fhir/mappers";
+import { getMedplumForRequest } from "@/lib/server/medplum-auth";
+import { getClinicIdFromRequest } from "@/lib/server/clinic";
 import { z } from "zod";
 import { writeServerAuditLog } from "@/lib/server/logging";
-import { AUTH_DISABLED } from "@/lib/auth-config";
 
 const exportBodySchema = z.object({
   consultationId: z.string().min(1),
@@ -9,17 +13,15 @@ const exportBodySchema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
-    let userId = 'system';
-
-    if (!AUTH_DISABLED) {
-      try {
-        const { getCurrentProfile } = await import("@/lib/server/medplum-auth");
-        const profile = await getCurrentProfile(req);
-        userId = profile.id ?? 'unknown';
-      } catch {
-        return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
-      }
+    // Auth: require valid Medplum session (practitioner token)
+    let medplum: Awaited<ReturnType<typeof getMedplumForRequest>>;
+    try {
+      medplum = await getMedplumForRequest(req);
+    } catch {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
     }
+    const practitionerProfile = medplum.getProfile();
+    const actorId = practitionerProfile?.id ?? 'unknown';
 
     const body = await req.json();
     const parsed = exportBodySchema.safeParse(body);
@@ -28,21 +30,15 @@ export async function POST(req: NextRequest) {
     }
     const { consultationId } = parsed.data;
 
-    const { getConsultationById, getPatientById } = await import("@/lib/models");
-    const {
-      toFhirPatient,
-      toFhirEncounter,
-      toFhirCondition,
-      toFhirMedicationRequest,
-      toFhirServiceRequest,
-    } = await import("@/lib/fhir/mappers");
+    const clinicId = await getClinicIdFromRequest(req);
 
-    const consultation = await getConsultationById(consultationId);
+    const consultation = await getConsultationFromMedplum(consultationId, clinicId ?? undefined, medplum);
     if (!consultation) return new Response(JSON.stringify({ error: 'Consultation not found' }), { status: 404 });
 
-    const patient = await getPatientById(consultation.patientId);
+    const patient = await getPatientFromMedplum(consultation.patientId, clinicId ?? undefined, medplum);
     if (!patient) return new Response(JSON.stringify({ error: 'Patient not found' }), { status: 404 });
 
+    // Create minimal FHIR resources and link
     const { reference: patientRef } = await toFhirPatient(patient);
     const { reference: encounterRef } = await toFhirEncounter(patientRef, consultation);
 
@@ -68,7 +64,7 @@ export async function POST(req: NextRequest) {
       action: 'fhir_export',
       subjectType: 'consultation',
       subjectId: consultation.id!,
-      userId,
+      userId: actorId,
       metadata: { createdRefs: created },
     });
 
@@ -78,3 +74,5 @@ export async function POST(req: NextRequest) {
     return new Response(JSON.stringify({ error: 'Unexpected error' }), { status: 500 });
   }
 }
+
+

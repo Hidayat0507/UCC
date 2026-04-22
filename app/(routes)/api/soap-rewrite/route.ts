@@ -1,10 +1,9 @@
 import { NextRequest } from "next/server";
+import { getMedplumForRequest } from "@/lib/server/medplum-auth";
 import { isRateLimited } from "@/lib/rate-limit";
 import { soapRewriteBodySchema } from "@/lib/validation";
 import { createChatCompletion, type ChatMessage } from "@/lib/server/openrouter";
 import { SOAP_REWRITE_ENABLED } from "@/lib/features";
-import { AUTH_DISABLED } from "@/lib/auth-config";
-import { requireAuth } from "@/lib/server/medplum-auth";
 
 export async function POST(req: NextRequest) {
   try {
@@ -12,12 +11,10 @@ export async function POST(req: NextRequest) {
       return new Response(JSON.stringify({ error: "Not found" }), { status: 404 });
     }
 
-    if (!AUTH_DISABLED) {
-      try {
-        await requireAuth(req);
-      } catch {
-        return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
-      }
+    try {
+      await getMedplumForRequest(req);
+    } catch {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
     }
 
     const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
@@ -48,11 +45,7 @@ export async function POST(req: NextRequest) {
     const completion = await createChatCompletion(messages, { model, temperature: 0.3, maxTokens: 1200 });
     const content = completion.choices?.[0]?.message?.content?.trim() || "";
 
-    // Log generated SOAP output to server terminal for debugging/inspection
-    try {
-      console.log("[soap-rewrite] model:", completion.model);
-      console.log("[soap-rewrite] note:\n" + (content || "<empty>"));
-    } catch {}
+    console.log("[soap-rewrite] model:", completion.model, "chars:", content.length);
 
     const finalNote = content && content.trim().length > 0 ? content : buildFallbackSoap(text);
 

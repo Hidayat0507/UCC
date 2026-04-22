@@ -1,73 +1,43 @@
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { NextRequest } from 'next/server';
-import { getUserAccessContext } from './medplum-auth';
+import { CLINIC_COOKIE } from '@/lib/server/cookie-constants';
+import {
+  deriveSubdomainContext,
+  getHostFromHeaders,
+  getHostFromNextRequest,
+} from '@/lib/server/subdomain-host';
 
-const CLINIC_COOKIE_NAME = 'medplum-clinic';
-
-export function getClinicIdFromHost(host: string | null): string | null {
-  if (!host) {
-    return null;
+/**
+ * Resolve clinic scope for server routes.
+ *
+ * Security model:
+ *  - Prefer clinic id derived from the request Host (set by the client connection /
+ *    edge proxy), not from arbitrary client headers like x-clinic-id.
+ *  - On localhost / apex hosts with no clinic subdomain, fall back to the
+ *    login/session clinic cookie (still server-set via login or medplum-session).
+ *  - Medplum access control remains the enforcement layer for data access.
+ */
+export async function getClinicIdFromRequest(req: NextRequest): Promise<string | null> {
+  const host = getHostFromNextRequest(req);
+  const fromHost = deriveSubdomainContext(host);
+  if (fromHost.type === 'clinic') {
+    return fromHost.clinicId;
   }
 
-  const hostname = host.split(':')[0];
-  if (
-    hostname === 'localhost' ||
-    /^\d{1,3}(\.\d{1,3}){3}$/.test(hostname) ||
-    hostname.endsWith('.vercel.app')
-  ) {
-    return null;
-  }
-
-  const parts = hostname.split('.');
-  if (parts.length < 3) {
-    return null;
-  }
-
-  const subdomain = parts[0];
-  if (['www', 'app', 'auth', 'admin'].includes(subdomain)) {
-    return null;
-  }
-
-  return subdomain;
-}
-
-function matchesAssignedClinic(
-  clinicId: string,
-  assignedClinics: Array<{ id: string; subdomain: string }>
-): boolean {
-  return assignedClinics.some(
-    (clinic) => clinic.id === clinicId || clinic.subdomain === clinicId
+  const cookieStore = await cookies();
+  return (
+    req.cookies.get(CLINIC_COOKIE)?.value ||
+    cookieStore.get(CLINIC_COOKIE)?.value ||
+    null
   );
 }
 
-/**
- * Resolve clinicId from header or cookie. Returns null if not provided.
- */
-export async function getClinicIdFromRequest(req: NextRequest): Promise<string | null> {
+/** Server components: clinic scope from host subdomain, else login/session cookie. */
+export async function resolveClinicIdFromServerScope(): Promise<string | undefined> {
+  const h = await headers();
+  const host = getHostFromHeaders(h);
+  const ctx = deriveSubdomainContext(host);
+  if (ctx.type === 'clinic') return ctx.clinicId;
   const cookieStore = await cookies();
-  const hostClinicId = getClinicIdFromHost(req.headers.get('host'));
-  const rawClinicId =
-    req.headers.get('x-clinic-id') ||
-    hostClinicId ||
-    cookieStore.get(CLINIC_COOKIE_NAME)?.value ||
-    null;
-  if (!rawClinicId) {
-    return null;
-  }
-
-  try {
-    const access = await getUserAccessContext(req);
-    if (!access.isPlatformAdmin && !matchesAssignedClinic(rawClinicId, access.clinics)) {
-      throw new Error('Unauthorized clinic access');
-    }
-  } catch (error: any) {
-    // If a user session exists but the clinic is not assigned, fail closed.
-    if (/Unauthorized clinic access|No access token found|Invalid or expired access token/i.test(error?.message || '')) {
-      if (/Unauthorized clinic access/i.test(error?.message || '')) {
-        throw error;
-      }
-    }
-  }
-
-  return rawClinicId;
+  return cookieStore.get(CLINIC_COOKIE)?.value ?? undefined;
 }

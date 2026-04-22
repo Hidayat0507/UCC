@@ -1,7 +1,6 @@
 import { NextRequest } from "next/server";
+import { getMedplumForRequest } from "@/lib/server/medplum-auth";
 import { isRateLimited } from "@/lib/rate-limit";
-import { AUTH_DISABLED } from "@/lib/auth-config";
-import { requireAuth } from "@/lib/server/medplum-auth";
 
 // Using Groq for Whisper (fast and free tier available)
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
@@ -18,12 +17,10 @@ if (!GROQ_API_KEY && !OPENAI_API_KEY) {
 export async function POST(req: NextRequest) {
   try {
     // Authentication
-    if (!AUTH_DISABLED) {
-      try {
-        await requireAuth(req);
-      } catch {
-        return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
-      }
+    try {
+      await getMedplumForRequest(req);
+    } catch {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
     }
 
     // Rate limiting - 20 requests per minute (transcription can take time)

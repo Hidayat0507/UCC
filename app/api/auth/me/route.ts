@@ -1,42 +1,41 @@
 /**
  * GET /api/auth/me
- * Returns current user profile from Medplum.
+ * Returns current Medplum practitioner profile.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getCurrentProfile, getProfileRole } from '@/lib/server/medplum-auth';
-import { AUTH_DISABLED } from '@/lib/auth-config';
+import {
+  getCurrentProfile,
+  getProfileRole,
+  getMedplumForRequest,
+} from '@/lib/server/medplum-auth';
 
 export async function GET(req: NextRequest) {
-  if (AUTH_DISABLED) {
-    return NextResponse.json({
-      id: 'dev',
-      resourceType: 'User',
-      name: 'Dev User',
-      email: 'dev@local',
-      role: 'user',
-      provider: 'disabled',
-    });
-  }
-
   try {
-    const profile = await getCurrentProfile(req);
+    const [profile, medplum] = await Promise.all([
+      getCurrentProfile(req),
+      getMedplumForRequest(req),
+    ]);
+    const me = await medplum.get('auth/me').catch(() => null);
 
     return NextResponse.json({
-      id: profile.id,
-      resourceType: profile.resourceType,
-      name: profile.resourceType === 'Practitioner'
-        ? (profile as any).name?.[0]?.text || 'Unknown'
-        : (profile as any).name?.[0]?.text || 'Patient',
-      email: profile.resourceType === 'Practitioner'
-        ? (profile as any).telecom?.find((t: any) => t.system === 'email')?.value
-        : null,
-      role: getProfileRole(profile),
-      provider: 'medplum',
+      authenticated: true,
+      isAdmin: me?.membership?.admin === true,
+      profile,
+      summary: {
+        id: profile.id,
+        resourceType: profile.resourceType,
+        name: (profile as any).name?.[0]?.text || 'Unknown',
+        email:
+          (profile as any).telecom?.find((t: any) => t.system === 'email')
+            ?.value ?? null,
+        role: getProfileRole(profile),
+        provider: 'medplum',
+      },
     });
   } catch (error: any) {
     return NextResponse.json(
-      { error: error.message || 'Not authenticated' },
+      { authenticated: false, error: error.message || 'Not authenticated' },
       { status: 401 }
     );
   }

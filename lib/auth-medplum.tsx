@@ -1,34 +1,19 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { MedplumClient } from '@medplum/core';
-import type { HumanName, Resource } from '@medplum/fhirtypes';
-
-const noopStorage = {
-  getString: (_key: string) => undefined,
-  setString: (_key: string, _value: string) => {},
-  getObject: (_key: string) => undefined,
-  setObject: (_key: string, _value: unknown) => {},
-  clear: () => {},
-  removeString: (_key: string) => {},
-};
+import type { Resource } from '@medplum/fhirtypes';
 
 const MEDPLUM_BASE_URL = process.env.NEXT_PUBLIC_MEDPLUM_BASE_URL || 'http://localhost:8103';
 const MEDPLUM_CLIENT_ID = process.env.NEXT_PUBLIC_MEDPLUM_CLIENT_ID || '';
-
 interface MedplumAuthContextType {
   medplum: MedplumClient;
   profile: Resource | null;
   loading: boolean;
   isAuthenticated: boolean;
-  userLabel: string | null;
   isAdmin: boolean;
   clinicId: string | null;
-  signIn: (
-    email: string,
-    password: string,
-    requestedClinicId?: string | null
-  ) => Promise<{ isAdmin: boolean; homeUrl?: string; clinicId?: string | null }>;
+  signIn: (email: string, password: string) => Promise<{ isAdmin: boolean }>;
   signOut: () => Promise<void>;
   getAccessToken: () => string | undefined;
   setClinicId: (clinicId: string | null) => Promise<void>;
@@ -36,96 +21,85 @@ interface MedplumAuthContextType {
 
 const MedplumAuthContext = createContext<MedplumAuthContextType | null>(null);
 
-function formatHumanName(name?: HumanName): string | null {
-  if (!name) return null;
-  const parts = [...(name.given ?? []), name.family].filter(Boolean);
-  return parts.length > 0 ? parts.join(' ') : null;
-}
+type AuthMeResponse = {
+  authenticated: boolean;
+  isAdmin: boolean;
+  profile: Resource | null;
+};
 
-function getProfileLabel(profile: Resource | null): string | null {
-  if (!profile) return null;
-
-  if ('name' in profile && Array.isArray((profile as any).name)) {
-    const displayName = formatHumanName((profile as any).name[0]);
-    if (displayName) return displayName;
-  }
-
-  if ('telecom' in profile && Array.isArray((profile as any).telecom)) {
-    const email = (profile as any).telecom.find((item: any) => item?.system === 'email')?.value;
-    if (email) return email;
-  }
-
-  return profile.id ?? profile.resourceType;
-}
-
-function toResourceLikeProfile(data: {
-  id?: string;
-  resourceType?: string;
-  name?: string | null;
-  email?: string | null;
-}): Resource | null {
-  if (!data.id || !data.resourceType) {
+/** Align with lib/server/subdomain-host (host-derived; no cookie forgery for subdomain). */
+function clinicIdFromBrowserHostname(): string | null {
+  if (typeof window === 'undefined') return null;
+  const host = window.location.hostname;
+  const base = process.env.NEXT_PUBLIC_BASE_DOMAIN || '';
+  if (host.startsWith('localhost') || /^\d{1,3}(\.\d{1,3}){3}/.test(host)) {
     return null;
   }
-
-  return {
-    resourceType: data.resourceType,
-    id: data.id,
-    ...(data.name
-      ? {
-          name: [{ text: data.name }],
-        }
-      : undefined),
-    ...(data.email
-      ? {
-          telecom: [{ system: 'email', value: data.email }],
-        }
-      : undefined),
-  } as Resource;
+  const parts = host.split('.');
+  if (parts.length < 3) return null;
+  const [sub, ...rest] = parts;
+  if (base && rest.join('.') !== base) return null;
+  if (sub === 'admin') return null;
+  if (['www', 'app', 'auth'].includes(sub)) return null;
+  return sub;
 }
 
 export function MedplumAuthProvider({ children }: { children: React.ReactNode }) {
   const [medplum] = useState(() => new MedplumClient({
     baseUrl: MEDPLUM_BASE_URL,
     clientId: MEDPLUM_CLIENT_ID || undefined,
-    storage: noopStorage,
     onUnauthenticated: () => {
       setProfile(null);
-      setHasSession(false);
       setIsAdmin(false);
     },
   }));
 
   const [profile, setProfile] = useState<Resource | null>(null);
-  const [hasSession, setHasSession] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [clinicId, setClinicIdState] = useState<string | null>(null);
 
-  const hydrateFromServerSession = async () => {
-    const sessionRes = await fetch('/api/auth/medplum-session', { credentials: 'include' });
+  const refreshAuthState = useCallback(async (): Promise<AuthMeResponse> => {
+    const [sessionRes, authMeRes] = await Promise.all([
+      fetch('/api/auth/medplum-session', { credentials: 'include' }),
+      fetch('/api/auth/me', { credentials: 'include' }),
+    ]);
 
-    if (!sessionRes.ok) {
-      setHasSession(false);
+    const sessionPayload = sessionRes.ok
+      ? await sessionRes.json().catch(() => ({}))
+      : {};
+
+    const accessToken = sessionPayload?.accessToken;
+    if (typeof accessToken === 'string' && accessToken) {
+      medplum.setAccessToken(accessToken);
+    }
+
+    if (typeof sessionPayload?.clinicId === 'string' || sessionPayload?.clinicId === null) {
+      setClinicIdState(sessionPayload?.clinicId ?? null);
+    }
+
+    if (!authMeRes.ok) {
       setProfile(null);
       setIsAdmin(false);
-      return;
+      return { authenticated: false, isAdmin: false, profile: null };
     }
 
-    const session = await sessionRes.json();
-    setHasSession(session.authenticated === true);
-    setIsAdmin(session.isPlatformAdmin === true);
-    setClinicIdState(session.clinicId ?? null);
+    const authMePayload = await authMeRes.json().catch(() => ({}));
+    const nextProfile =
+      authMePayload?.profile && typeof authMePayload.profile === 'object'
+        ? (authMePayload.profile as Resource)
+        : null;
+    const nextIsAdmin = authMePayload?.isAdmin === true;
 
-    const meRes = await fetch('/api/auth/me', { credentials: 'include' });
-    if (!meRes.ok) {
-      setProfile(null);
-      return;
-    }
+    setProfile(nextProfile);
+    setIsAdmin(nextIsAdmin);
 
-    const me = await meRes.json();
-    setProfile(toResourceLikeProfile(me));
-  };
+    return {
+      authenticated: nextProfile !== null,
+      isAdmin: nextIsAdmin,
+      profile: nextProfile,
+    };
+  }, [medplum]);
 
   const persistClinicId = async (nextClinicId: string | null) => {
     setClinicIdState(nextClinicId);
@@ -133,6 +107,7 @@ export function MedplumAuthProvider({ children }: { children: React.ReactNode })
       const accessToken = medplum.getAccessToken();
       await fetch('/api/auth/medplum-session', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ accessToken, clinicId: nextClinicId }),
       });
@@ -141,73 +116,113 @@ export function MedplumAuthProvider({ children }: { children: React.ReactNode })
     }
   };
 
-  // Restore session from MedplumClient internal storage on mount
+  // Periodically push MedplumClient token (incl. after silent refresh) to the
+  // httpOnly cookie so server routes stay authorized. Initial mount sync runs
+  // in the effect below *before* refreshAuthState to avoid racing /api/* calls.
   useEffect(() => {
-    let cancelled = false;
-
-    const bootstrap = async () => {
+    const syncServerCookie = async () => {
+      const token = medplum.getAccessToken();
+      if (!token) return;
       try {
-        await hydrateFromServerSession();
+        await fetch('/api/auth/medplum-session', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accessToken: token }),
+        });
       } catch {
-        if (!cancelled) {
-          setProfile(null);
-          setHasSession(false);
-          setIsAdmin(false);
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        // Non-fatal — cookie will eventually expire naturally
       }
     };
 
-    bootstrap();
+    const syncInterval = setInterval(syncServerCookie, 10 * 60 * 1000);
+    return () => clearInterval(syncInterval);
+  }, [medplum]);
+
+  // Restore session from MedplumClient internal storage on mount
+  useEffect(() => {
+    const fromHost = clinicIdFromBrowserHostname();
+    if (fromHost) {
+      setClinicIdState(fromHost);
+    } else {
+      const clinicCookie = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('medplum-clinic='))
+        ?.split('=')[1];
+      if (clinicCookie) setClinicIdState(decodeURIComponent(clinicCookie));
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      // Server API routes read the httpOnly cookie. MedplumClient may already
+      // have a valid token in localStorage before the cookie is written — sync
+      // first so the first /api/patients (etc.) from child components succeeds.
+      try {
+        const token = medplum.getAccessToken();
+        if (token) {
+          await fetch('/api/auth/medplum-session', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ accessToken: token }),
+          });
+        }
+      } catch {
+        // non-fatal
+      }
+
+      if (cancelled) return;
+
+      await refreshAuthState()
+        .catch(() => {
+          setProfile(null);
+          setIsAdmin(false);
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    })();
 
     return () => {
       cancelled = true;
     };
-  }, [medplum]);
+  }, [medplum, refreshAuthState]);
 
-  const signIn = async (
-    email: string,
-    password: string,
-    nextPath?: string | null
-  ): Promise<{ isAdmin: boolean; homeUrl?: string; clinicId?: string | null }> => {
+  const signIn = async (email: string, password: string): Promise<{ isAdmin: boolean }> => {
     try {
       const response = await fetch('/api/auth/login', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email,
-          password,
-          next: nextPath || undefined,
-        }),
+        body: JSON.stringify({ email, password }),
       });
 
       const payload = await response.json().catch(() => ({}));
-      if (!response.ok || !payload.success) {
-        throw new Error(payload.error || 'Login failed');
+      if (!response.ok) {
+        throw new Error(`${payload?.code || 'AUTH_UNKNOWN'}: ${payload?.error || 'Login failed.'}`);
       }
 
-      await hydrateFromServerSession();
+      const sessionState = await refreshAuthState();
+      if (!sessionState.authenticated) {
+        throw new Error('AUTH_CONFIG: Login succeeded but no session was created.');
+      }
 
-      return {
-        isAdmin: payload.isAdmin === true,
-        homeUrl: typeof payload.redirectUrl === 'string' ? payload.redirectUrl : undefined,
-        clinicId: typeof payload.clinicId === 'string' ? payload.clinicId : null,
-      };
+      const adminStatus = payload?.isAdmin === true || sessionState.isAdmin === true;
+
+      return { isAdmin: adminStatus };
     } catch (error: any) {
-      throw new Error(error.message || 'Login failed');
+      throw classifyAuthError(error);
     }
   };
 
   const signOut = async () => {
     try {
+      medplum.signOut();
       setProfile(null);
-      setHasSession(false);
       setIsAdmin(false);
       setClinicIdState(null);
-      await fetch('/api/auth/medplum-session', { method: 'DELETE' });
+      await fetch('/api/auth/medplum-session', { method: 'DELETE', credentials: 'include' });
     } catch (error) {
       console.error('Logout failed:', error);
     }
@@ -219,8 +234,7 @@ export function MedplumAuthProvider({ children }: { children: React.ReactNode })
     medplum,
     profile,
     loading,
-    isAuthenticated: hasSession,
-    userLabel: getProfileLabel(profile),
+    isAuthenticated: profile !== null,
     isAdmin,
     clinicId,
     signIn,
@@ -234,6 +248,68 @@ export function MedplumAuthProvider({ children }: { children: React.ReactNode })
       {children}
     </MedplumAuthContext.Provider>
   );
+}
+
+// ── Error classification ────────────────────────────────────────────────────
+
+/**
+ * Maps low-level fetch / auth errors to clear, user-facing messages.
+ * Distinguishes network/server issues from wrong credentials so the UI can
+ * show the right guidance instead of a single "Invalid email or password."
+ */
+function classifyAuthError(error: unknown): Error {
+  const msg =
+    error instanceof Error ? error.message : String(error ?? '');
+  const lower = msg.toLowerCase();
+
+  if (
+    lower.includes('failed to fetch') ||
+    lower.includes('networkerror') ||
+    lower.includes('load failed') ||
+    lower.includes('cors')
+  ) {
+    return new Error(
+      'AUTH_NETWORK: Unable to reach the authentication server. ' +
+      'Check your internet connection or contact support.'
+    );
+  }
+
+  if (
+    lower.includes('401') ||
+    lower.includes('invalid') ||
+    lower.includes('unauthorized') ||
+    lower.includes('bad credentials') ||
+    lower.includes('incorrect password') ||
+    lower.includes('auth_credentials')
+  ) {
+    return new Error('AUTH_CREDENTIALS: Incorrect email or password. Please try again.');
+  }
+
+  if (
+    lower.includes('auth_clinic_required') ||
+    lower.includes('auth_clinic_forbidden') ||
+    lower.includes('not assigned to clinic') ||
+    lower.includes('multiple clinics')
+  ) {
+    return new Error(
+      'AUTH_CLINIC: This account must sign in from the correct clinic subdomain.'
+    );
+  }
+
+  if (lower.includes('auth_forbidden')) {
+    return new Error(
+      'AUTH_FORBIDDEN: Your account does not have access to this area.'
+    );
+  }
+
+  if (lower.includes('no access token')) {
+    return new Error(
+      'AUTH_CONFIG: Login completed but no session was created. ' +
+      'This is usually a server configuration issue — please contact support.'
+    );
+  }
+
+  return new Error(`AUTH_UNKNOWN: ${msg || 'An unexpected error occurred. Please try again.'}`);
 }
 
 export function useMedplumAuth() {

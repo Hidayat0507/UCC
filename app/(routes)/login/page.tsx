@@ -2,11 +2,10 @@
 
 import { useState } from "react";
 import { useMedplumAuth } from "@/lib/auth-medplum";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PasswordInput } from "@/components/ui/password-input";
 import { useToast } from "@/components/ui/use-toast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -16,28 +15,51 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const { signIn } = useMedplumAuth();
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     try {
-      const nextUrl = searchParams.get("next");
-      const { isAdmin, homeUrl } = await signIn(email, password, nextUrl);
-      if (homeUrl) {
-        window.location.assign(homeUrl);
-        return;
-      }
+      const { isAdmin } = await signIn(email, password);
       if (isAdmin) {
-        router.replace("/admin");
+        const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN;
+        if (baseDomain && typeof window !== "undefined") {
+          const currentHost = window.location.hostname;
+          if (currentHost === `admin.${baseDomain}`) {
+            router.replace("/admin");
+          } else {
+            window.location.href = `${window.location.protocol}//admin.${baseDomain}/admin`;
+          }
+        } else {
+          router.replace("/admin");
+        }
       } else {
         router.replace("/dashboard");
       }
     } catch (error) {
+      const raw = error instanceof Error ? error.message : "";
+      let description = "Unable to sign in. Please try again.";
+
+      if (raw.startsWith("AUTH_CREDENTIALS")) {
+        description = "Incorrect email or password. Please check and try again.";
+      } else if (raw.startsWith("AUTH_NETWORK")) {
+        description =
+          "Could not reach the authentication server. Check your internet connection or try again shortly.";
+      } else if (raw.startsWith("AUTH_CLINIC")) {
+        description =
+          "This account must sign in from the correct clinic subdomain.";
+      } else if (raw.startsWith("AUTH_FORBIDDEN")) {
+        description =
+          "Your account does not have access to this area.";
+      } else if (raw.startsWith("AUTH_CONFIG")) {
+        description =
+          "Login succeeded but no session was created. This is a configuration issue — please contact support.";
+      }
+
       toast({
         title: "Sign in failed",
-        description: "Invalid email or password. Please try again.",
+        description,
         variant: "destructive",
       });
     } finally {
@@ -67,8 +89,9 @@ export default function Login() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
-              <PasswordInput
+              <Input
                 id="password"
+                type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
