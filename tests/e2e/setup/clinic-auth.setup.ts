@@ -1,7 +1,7 @@
 /**
  * Clinic authentication setup
  *
- * Logs in to klinikputeri.drhidayat.com once and persists the session cookie
+ * Logs in to klinikputeri.iatrum.com once and persists the session cookie
  * to tests/e2e/.auth/klinikputeri.json so that all clinic tests can reuse it
  * without paying the login round-trip cost on every test.
  *

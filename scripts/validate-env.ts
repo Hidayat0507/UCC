@@ -28,7 +28,7 @@ const VARS: EnvVar[] = [
   {
     key: "MEDPLUM_BASE_URL",
     required: true,
-    description: "Base URL of the self-hosted Medplum API (e.g. https://fhir.drhidayat.com)",
+    description: "Base URL of the self-hosted Medplum API (e.g. https://fhir.iatrum.com)",
     validate: (v) => v.startsWith("http"),
     validateHint: "Must start with http:// or https://",
   },
@@ -68,14 +68,14 @@ const VARS: EnvVar[] = [
   {
     key: "NEXT_PUBLIC_BASE_DOMAIN",
     required: true,
-    description: "Root domain for subdomain routing (e.g. drhidayat.com)",
+    description: "Root domain for subdomain routing (e.g. iatrum.com)",
     validate: (v) => v.includes(".") && !v.startsWith("http"),
-    validateHint: "Must be a bare domain like drhidayat.com — no protocol prefix",
+    validateHint: "Must be a bare domain like iatrum.com — no protocol prefix",
   },
   {
     key: "COOKIE_DOMAIN",
     required: false,
-    description: "Cookie domain for cross-subdomain sessions (e.g. .drhidayat.com). Defaults to host if unset.",
+    description: "Cookie domain for cross-subdomain sessions (e.g. .iatrum.com). Defaults to host if unset.",
   },
 
   // ── Optional AI / integrations ─────────────────────────────────────────

@@ -15,7 +15,7 @@ const RUN_ID = String(Date.now()).slice(-4).padStart(4, "0");
 const PATIENT_NAME = `CheckIn E2E ${RUN_ID}`;
 // Valid Malaysian NRIC format: YYMMDD-SS-NNNN
 const PATIENT_NRIC = `900101-10-${RUN_ID}`;
-const CLINIC_URL = KLINIK_PUTERI_URL || "https://klinikputeri.drhidayat.com";
+const CLINIC_URL = KLINIK_PUTERI_URL || "https://klinikputeri.iatrum.com";
 
 async function selectGender(page: Page, gender: "male" | "female"): Promise<void> {
   const trigger = page.getByRole("combobox").first();

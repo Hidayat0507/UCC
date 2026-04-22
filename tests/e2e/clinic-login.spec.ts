@@ -11,9 +11,9 @@
 import { test, expect } from "@playwright/test";
 
 const CLINIC_URL =
-  process.env.EMR_CLINIC_URL || "https://apex-group.drhidayat.com";
+  process.env.EMR_CLINIC_URL || "https://apex-group.iatrum.com";
 const CLINIC_EMAIL =
-  process.env.CLINIC_EMAIL || "apex-group-admin@drhidayat.com";
+  process.env.CLINIC_EMAIL || "apex-group-admin@iatrum.com";
 const CLINIC_PASSWORD = process.env.CLINIC_PASSWORD || "ClinicUser!2026#";
 
 // ── Login page render ────────────────────────────────────────────────────────

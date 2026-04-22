@@ -1,5 +1,5 @@
 // Base domain (used for smoke/auth tests)
-export const EMR_URL = process.env.EMR_URL || "https://drhidayat.com";
+export const EMR_URL = process.env.EMR_URL || "https://iatrum.com";
 
 // Medplum admin UI
 export const MEDPLUM_UI_URL = process.env.MEDPLUM_UI_URL || "";
@@ -11,7 +11,7 @@ export const ADMIN_PASSWORD = process.env.MEDPLUM_ADMIN_PASSWORD || "";
 // ── Clinic-specific ─────────────────────────────────────────────────────────
 
 export const KLINIK_PUTERI_URL =
-  process.env.CLINIC_URL || "https://klinikputeri.drhidayat.com";
+  process.env.CLINIC_URL || "https://klinikputeri.iatrum.com";
 
 export const KLINIK_PUTERI_EMAIL =
   process.env.KLINIK_PUTERI_EMAIL || "";
@@ -27,12 +27,12 @@ export const CLINIC_USERS = [
     label: "Klinik Puteri Admin",
   },
   {
-    email: "apex-group-admin@drhidayat.com",
+    email: "apex-group-admin@iatrum.com",
     password: process.env.CLINIC_USER_PASSWORD || "",
     label: "Apex Group Admin",
   },
   {
-    email: "beacon-group-admin@drhidayat.com",
+    email: "beacon-group-admin@iatrum.com",
     password: process.env.CLINIC_USER_PASSWORD || "",
     label: "Beacon Group Admin",
   },

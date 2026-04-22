@@ -1,7 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const CLINIC_URL =
-  process.env.CLINIC_URL || "https://klinikputeri.drhidayat.com";
+  process.env.CLINIC_URL || "https://klinikputeri.iatrum.com";
 
 export default defineConfig({
   testDir: "./e2e",
@@ -49,7 +49,7 @@ export default defineConfig({
       testMatch: /(emr-auth|credential-check)\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
-        baseURL: process.env.EMR_URL || "https://drhidayat.com",
+        baseURL: process.env.EMR_URL || "https://iatrum.com",
         headless: true,
         screenshot: "only-on-failure",
         video: "retain-on-failure",

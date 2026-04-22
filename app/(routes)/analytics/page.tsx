@@ -5,11 +5,8 @@ import { Activity, Users, Calendar, TrendingUp } from "lucide-react";
 import { getPatients, getConsultationsByPatientId } from "@/lib/models";
 import AnalyticsCharts from "@/components/analytics/analytics-charts";
 
-export const dynamic = "force-dynamic";
-
 export default async function AnalyticsPage() {
   const patients = await getPatients();
-  const renderTime = new Date();
   // Fetch consultations for all patients (simple approach; can be optimized with an aggregate collection)
   const consultations = (
     await Promise.all(patients.map((p) => getConsultationsByPatientId(p.id)))
@@ -52,7 +49,7 @@ export default async function AnalyticsPage() {
     if (!p.dateOfBirth) continue;
     const dob = new Date(p.dateOfBirth as any);
     if (isNaN(dob.getTime())) continue;
-    const age = Math.floor((renderTime.getTime() - dob.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+    const age = Math.floor((Date.now() - dob.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
     if (age < 18) buckets['0-17']++; else if (age < 40) buckets['18-39']++; else if (age < 65) buckets['40-64']++; else buckets['65+']++;
   }
   const ageData = Object.entries(buckets).map(([name, value]) => ({ name, value }));
@@ -81,7 +78,7 @@ export default async function AnalyticsPage() {
     .map(([name, value]) => ({ name, value }));
 
   // Revenue by month (last 12 months)
-  const now = renderTime;
+  const now = new Date();
   const months: { name: string; year: number; month: number }[] = Array.from({ length: 12 }).map((_, i) => {
     const d = new Date(now.getFullYear(), now.getMonth() - (11 - i), 1);
     return { name: d.toLocaleDateString('en-US', { month: 'short' }), year: d.getFullYear(), month: d.getMonth() };

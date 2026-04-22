@@ -14,11 +14,11 @@ const isLocal = process.env.PLAYWRIGHT_ENV === "local" || !process.env.EMR_CLINI
 
 const CLINIC_URL = isLocal
   ? "http://localhost:3000"
-  : process.env.EMR_CLINIC_URL || "https://klinikputeri.drhidayat.com";
+  : process.env.EMR_CLINIC_URL || "https://klinikputeri.iatrum.com";
 
 const ADMIN_URL = isLocal
   ? "http://localhost:3000"
-  : process.env.EMR_ADMIN_URL || "https://admin.drhidayat.com";
+  : process.env.EMR_ADMIN_URL || "https://admin.iatrum.com";
 
 export default defineConfig({
   testDir: "./tests/e2e",

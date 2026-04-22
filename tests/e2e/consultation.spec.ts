@@ -13,7 +13,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { KLINIK_PUTERI_URL } from "./support/env";
 
-const CLINIC_URL = KLINIK_PUTERI_URL || "https://klinikputeri.drhidayat.com";
+const CLINIC_URL = KLINIK_PUTERI_URL || "https://klinikputeri.iatrum.com";
 
 const RUN_ID = String(Date.now()).slice(-4).padStart(4, "0");
 const PATIENT_NAME = `E2E Consult Patient ${RUN_ID}`;

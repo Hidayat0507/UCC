@@ -13,7 +13,7 @@ Related audit:
 - Trust-boundary issue around middleware-set admin/clinic UI context cookies has been resolved in the repo
 - The main remaining release gap is documented end-to-end verification on staging
 - 2026-03-30 progress: clinic Playwright verification was partially invalid because clinic auth setup wrote `tests/e2e/.auth/klinikputeri.json` while the main clinic project/specs loaded `tests/e2e/.auth/clinic.json`; repo has been corrected and must be rerun before release sign-off
-- 2026-03-30 progress: default clinic verification target was also misaligned with the authenticated fixture (`apex-group.drhidayat.com` vs `klinikputeri.drhidayat.com`); repo defaults now point at `klinikputeri.drhidayat.com` for clinic E2E runs
+- 2026-03-30 progress: default clinic verification target was also misaligned with the authenticated fixture (`apex-group.iatrum.com` vs `klinikputeri.iatrum.com`); repo defaults now point at `klinikputeri.iatrum.com` for clinic E2E runs
 - 2026-03-30 progress: fresh `bun run test:e2e:clinic` rerun after spec cleanup finished at `20 passed, 12 failed`
 - 2026-03-30 progress: remaining live blockers are concentrated in patient follow-on routes and workflow consistency, not broad session failure:
   `/patients/{id}/triage` and `/patients/{id}/consultation` returned `404` in the deployed clinic target for fresh patients, and `/check-in` search did not surface a newly created patient
@@ -30,13 +30,13 @@ Related audit:
 - 2026-03-31 progress: local verification commands were rerun after the latest changes and both passed:
   `bun run lint`, `bun run build`
 - 2026-03-31 progress: referral workflow coverage was added in `tests/e2e/referrals.spec.ts` and included in the clinic Playwright project
-- 2026-03-31 progress: targeted referral-spec verification against `klinikputeri.drhidayat.com` is currently blocked by intermittent clinic login/setup instability; when login succeeds, the deployed patient profile does expose the `Referral / MC` tab and empty referral state, but the run is not yet stable enough for release sign-off
-- 2026-03-31 progress: live root cause for the clinic login instability was identified. Browser reproduction showed `/api/auth/login` succeeding, but the client auth bootstrap still triggered direct browser requests to `https://fhir.drhidayat.com/auth/me`, and those were blocked by CORS from the clinic origin. Repo mitigation is now in place: client auth restore/sign-in has been shifted to same-origin `/api/auth/me` and `/api/auth/medplum-session` instead of browser-side Medplum profile fetches. This needs deploy + rerun before sign-off.
-- 2026-03-31 progress: immediate hosted retest after push still shows the old auth behavior on `klinikputeri.drhidayat.com` (`/api/auth/login` returns `accessToken` in-body, browser still calls `https://fhir.drhidayat.com/auth/me` directly, CORS still fails). Focused rerun of `tests/e2e/setup/clinic-auth.setup.ts` still times out on `/login`, so the hosted environment should be treated as not yet updated with the auth fix.
-- 2026-03-31 progress: the auth mitigation was promoted to production successfully. Retest on `https://klinikputeri.drhidayat.com/login` now shows the same-origin auth bootstrap path working as intended: `/api/auth/login` -> `/api/auth/medplum-session` -> `/api/auth/me`, with no direct browser `fhir.drhidayat.com/auth/me` call and no CORS failure.
+- 2026-03-31 progress: targeted referral-spec verification against `klinikputeri.iatrum.com` is currently blocked by intermittent clinic login/setup instability; when login succeeds, the deployed patient profile does expose the `Referral / MC` tab and empty referral state, but the run is not yet stable enough for release sign-off
+- 2026-03-31 progress: live root cause for the clinic login instability was identified. Browser reproduction showed `/api/auth/login` succeeding, but the client auth bootstrap still triggered direct browser requests to `https://fhir.iatrum.com/auth/me`, and those were blocked by CORS from the clinic origin. Repo mitigation is now in place: client auth restore/sign-in has been shifted to same-origin `/api/auth/me` and `/api/auth/medplum-session` instead of browser-side Medplum profile fetches. This needs deploy + rerun before sign-off.
+- 2026-03-31 progress: immediate hosted retest after push still shows the old auth behavior on `klinikputeri.iatrum.com` (`/api/auth/login` returns `accessToken` in-body, browser still calls `https://fhir.iatrum.com/auth/me` directly, CORS still fails). Focused rerun of `tests/e2e/setup/clinic-auth.setup.ts` still times out on `/login`, so the hosted environment should be treated as not yet updated with the auth fix.
+- 2026-03-31 progress: the auth mitigation was promoted to production successfully. Retest on `https://klinikputeri.iatrum.com/login` now shows the same-origin auth bootstrap path working as intended: `/api/auth/login` -> `/api/auth/medplum-session` -> `/api/auth/me`, with no direct browser `fhir.iatrum.com/auth/me` call and no CORS failure.
 - 2026-03-31 progress: focused rerun of `tests/e2e/setup/clinic-auth.setup.ts` passed in `5.1s` after production promotion, so clinic auth setup is currently healthy on the live deployment.
 - 2026-03-31 progress: `bunx playwright test tests/e2e/referrals.spec.ts --project=clinic` now passes cleanly on the live clinic target (`4 passed`). Referral workflow coverage is now verified end-to-end after the auth fix reached production.
-- 2026-04-05 progress: clinic workflow specs were normalized to the real clinic host (`https://klinikputeri.drhidayat.com`) and stripped of the remaining broad/ambiguous route assumptions that were still sending some tests to the wrong clinic or to the sidebar `Triage System` link.
+- 2026-04-05 progress: clinic workflow specs were normalized to the real clinic host (`https://klinikputeri.iatrum.com`) and stripped of the remaining broad/ambiguous route assumptions that were still sending some tests to the wrong clinic or to the sidebar `Triage System` link.
 - 2026-04-05 progress: focused rerun of `check-in + triage + consultation + queue` reached `13 passed, 2 failed`.
 - 2026-04-05 progress: check-in, consultation, referral workflow, queue-page render, and queue-to-consultation navigation are now verified on the live clinic target.
 - 2026-04-05 progress: release-signoff blockers are now narrower:
@@ -44,7 +44,7 @@ Related audit:
   - post-consultation queue progression is still not proving the expected terminal state reliably in Playwright
 - 2026-04-05 progress: after isolating the `triage` and `queue` suites away from patient-registration UI setup, Vercel runtime logs confirmed the then-current production deployment returned `POST /api/triage -> 500` during the focused reruns.
 - 2026-04-05 progress: repo-side mitigation for that failure was implemented in `lib/fhir/triage-service.ts` by sending fully-specified UCUM quantity metadata for vitals observations.
-- 2026-04-05 progress: that mitigation has now been deployed to production (`https://ucc-k56f04mdx-hidayat0507s-projects.vercel.app`, aliased to `https://drhidayat.com`).
+- 2026-04-05 progress: that mitigation has now been deployed to production (`https://ucc-k56f04mdx-hidayat0507s-projects.vercel.app`, aliased to `https://iatrum.com`).
 - 2026-04-05 progress: clinic auth setup was also hardened in `tests/e2e/setup/clinic-auth.setup.ts` to create the session via same-origin `/api/auth/login` with Playwright `page.request`, removing the flaky browser-form dependency from setup.
 - 2026-04-05 progress: post-deploy focused rerun of `tests/e2e/triage.spec.ts` + `tests/e2e/queue.spec.ts` finished at `6 passed, 2 failed`. Clinic auth setup passed in `6.0s`, and queue verification can now observe a triaged patient.
 - 2026-04-05 progress: the remaining live blockers are now:
@@ -112,15 +112,15 @@ Keep that file updated whenever:
 
 Expected routing model:
 
-- landing page: `https://drhidayat.com`
-- admin: `https://admin.drhidayat.com`
-- clinics: `https://<clinic>.drhidayat.com`
+- landing page: `https://iatrum.com`
+- admin: `https://admin.iatrum.com`
+- clinics: `https://<clinic>.iatrum.com`
 
 Recommended env values:
 
 ```env
-NEXT_PUBLIC_BASE_DOMAIN=drhidayat.com
-COOKIE_DOMAIN=.drhidayat.com
+NEXT_PUBLIC_BASE_DOMAIN=iatrum.com
+COOKIE_DOMAIN=.iatrum.com
 ```
 
 Why this matters:
@@ -171,9 +171,9 @@ Typical symptom:
 
 ## Post-Deployment Verification
 
-1. Open `https://drhidayat.com`
-2. Open `https://admin.drhidayat.com/login`
-3. Open one clinic login page such as `https://klinikputeri.drhidayat.com/login`
+1. Open `https://iatrum.com`
+2. Open `https://admin.iatrum.com/login`
+3. Open one clinic login page such as `https://klinikputeri.iatrum.com/login`
 4. Verify admin login succeeds
 5. Verify one clinic login succeeds
 6. Verify `/api/health`

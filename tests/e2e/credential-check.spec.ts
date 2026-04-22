@@ -10,7 +10,7 @@ import {
 import { annotateMissingEnv, loginToMedplumUi } from "./support/auth";
 
 test.describe("Production credential and site checks", () => {
-  test("drhidayat.com landing page loads", async ({ page }, testInfo) => {
+  test("iatrum.com landing page loads", async ({ page }, testInfo) => {
     const missing = missingEnvVars({ EMR_URL });
     if (missing.length) {
       annotateMissingEnv(testInfo, missing);
@@ -25,7 +25,7 @@ test.describe("Production credential and site checks", () => {
   test("EMR staff login page is accessible", async ({ page }) => {
     // The login form lives on clinic subdomains — the root domain redirects to /landing.
     const clinicUrl =
-      process.env.EMR_CLINIC_URL || "https://apex-group.drhidayat.com";
+      process.env.EMR_CLINIC_URL || "https://apex-group.iatrum.com";
     await page.goto(`${clinicUrl}/login`, { waitUntil: "domcontentloaded" });
     await expect(page.locator("#email")).toBeVisible({ timeout: 10_000 });
     await expect(page.locator("#password")).toBeVisible();

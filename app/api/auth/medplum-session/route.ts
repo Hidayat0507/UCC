@@ -4,7 +4,7 @@ import { SESSION_COOKIE, CLINIC_COOKIE, REFRESH_COOKIE } from "@/lib/server/cook
 
 const MAX_AGE_SECONDS = 60 * 60 * 24; // 24 hours
 const isProd = process.env.NODE_ENV === "production";
-// Set cookie domain to share session across all subdomains (e.g. .drhidayat.com)
+// Set cookie domain to share session across all subdomains (e.g. .iatrum.com)
 const COOKIE_DOMAIN = process.env.COOKIE_DOMAIN || undefined;
 
 /**

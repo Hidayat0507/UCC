@@ -1,7 +1,7 @@
 # UCC Live Workflow Test
 
 Date tested: 2026-04-14
-Environment tested: `https://klinikputeri.drhidayat.com`
+Environment tested: `https://klinikputeri.iatrum.com`
 Source of access details: `MEDPLUM_SELF_HOSTED_DETAILS.md` and `DEPLOYMENT.md`
 Comparison target: `YEZZA_DEMO_ACCOUNT_REPORT.md`
 
@@ -23,7 +23,7 @@ Modules exercised live on production:
 
 Clinic host used:
 
-- `https://klinikputeri.drhidayat.com`
+- `https://klinikputeri.iatrum.com`
 
 Credential source used:
 
@@ -104,18 +104,18 @@ Layout difference vs Yezza:
 
 Route:
 
-- `https://klinikputeri.drhidayat.com/login`
+- `https://klinikputeri.iatrum.com/login`
 
 Observed result:
 
 - login succeeded
-- post-login landing page was `https://klinikputeri.drhidayat.com/dashboard`
+- post-login landing page was `https://klinikputeri.iatrum.com/dashboard`
 
 ### 2. Registration
 
 Route used:
 
-- `https://klinikputeri.drhidayat.com/patients/new`
+- `https://klinikputeri.iatrum.com/patients/new`
 
 Visible registration structure:
 
@@ -172,8 +172,8 @@ Comparison note vs Yezza:
 
 Routes used:
 
-- `https://klinikputeri.drhidayat.com/appointments`
-- `https://klinikputeri.drhidayat.com/appointments/new`
+- `https://klinikputeri.iatrum.com/appointments`
+- `https://klinikputeri.iatrum.com/appointments/new`
 
 Visible appointment layout:
 
@@ -243,7 +243,7 @@ Comparison note vs Yezza:
 
 Route used:
 
-- `https://klinikputeri.drhidayat.com/patients/50a2d5e0-331d-4bd0-8e71-d765062a4edd/triage`
+- `https://klinikputeri.iatrum.com/patients/50a2d5e0-331d-4bd0-8e71-d765062a4edd/triage`
 
 Visible triage structure:
 
@@ -301,7 +301,7 @@ Comparison note vs Yezza:
 
 Route used:
 
-- `https://klinikputeri.drhidayat.com/dashboard`
+- `https://klinikputeri.iatrum.com/dashboard`
 
 Verified dashboard queue row after triage:
 
@@ -335,7 +335,7 @@ Comparison note vs Yezza:
 
 Route used:
 
-- `https://klinikputeri.drhidayat.com/patients/50a2d5e0-331d-4bd0-8e71-d765062a4edd/consultation`
+- `https://klinikputeri.iatrum.com/patients/50a2d5e0-331d-4bd0-8e71-d765062a4edd/consultation`
 
 Observed carry-through from triage:
 
@@ -389,7 +389,7 @@ Result:
 
 Route used:
 
-- `https://klinikputeri.drhidayat.com/patients/50a2d5e0-331d-4bd0-8e71-d765062a4edd`
+- `https://klinikputeri.iatrum.com/patients/50a2d5e0-331d-4bd0-8e71-d765062a4edd`
 
 Verified persisted state:
 
@@ -414,7 +414,7 @@ Result:
 
 Route used:
 
-- `https://klinikputeri.drhidayat.com/orders`
+- `https://klinikputeri.iatrum.com/orders`
 
 Observed result:
 
