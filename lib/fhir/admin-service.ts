@@ -3,7 +3,7 @@
  * Uses Medplum client credentials to access all organisations.
  */
 import type { MedplumClient } from "@medplum/core";
-import type { Organization } from "@medplum/fhirtypes";
+import type { Organization, Practitioner } from "@medplum/fhirtypes";
 import { getAdminMedplum } from "@/lib/server/medplum-admin";
 
 function getIdFromReference(reference?: string): string | undefined {
@@ -25,35 +25,131 @@ export interface ClinicSummary {
 const CLINIC_IDENTIFIER_SYSTEM = "clinic";
 const ORG_LOGO_EXTENSION_URL = "https://ucc.emr/organization-logo-url";
 
+function mapOrganizationToSummary(org: Organization): ClinicSummary {
+  const subdomain =
+    org.identifier?.find((id) => id.system === CLINIC_IDENTIFIER_SYSTEM)
+      ?.value ?? org.id ?? "";
+  const phone = org.telecom?.find((t) => t.system === "phone")?.value;
+  const address = org.address?.[0]?.text;
+  const logoExt = org.extension?.find((e) => e.url === ORG_LOGO_EXTENSION_URL);
+  const logoUrl =
+    (logoExt as any)?.valueUrl ?? (logoExt as any)?.valueString ?? undefined;
+
+  return {
+    id: org.id ?? "",
+    name: org.name ?? "Unnamed clinic",
+    subdomain,
+    phone,
+    address,
+    logoUrl,
+  };
+}
+
 export async function getOrganizationsFromMedplum(): Promise<ClinicSummary[]> {
   const medplum = await getAdminMedplum();
   const bundle = await medplum.searchResources("Organization", { _count: "100" });
+  return (bundle ?? []).map(mapOrganizationToSummary);
+}
 
-  return (bundle ?? []).map((org) => {
-    const subdomain =
-      org.identifier?.find((id) => id.system === CLINIC_IDENTIFIER_SYSTEM)
-        ?.value ?? org.id ?? "";
-    const phone = org.telecom?.find((t) => t.system === "phone")?.value;
-    const address = org.address?.[0]?.text;
-    const logoExt = org.extension?.find((e) => e.url === ORG_LOGO_EXTENSION_URL);
-    const logoUrl =
-      (logoExt as any)?.valueUrl ?? (logoExt as any)?.valueString ?? undefined;
+export async function getOrganizationFromMedplum(
+  id: string
+): Promise<ClinicSummary | null> {
+  const medplum = await getAdminMedplum();
+  try {
+    const org = await medplum.readResource("Organization", id);
+    return mapOrganizationToSummary(org);
+  } catch {
+    return null;
+  }
+}
 
-    return {
-      id: org.id ?? "",
-      name: org.name ?? "Unnamed clinic",
-      subdomain,
-      phone,
-      address,
-      logoUrl,
-    };
-  });
+export async function updateOrganizationDetailsInMedplum(
+  id: string,
+  input: OrganizationInput
+): Promise<ClinicSummary> {
+  const medplum = await getAdminMedplum();
+  const existing = await medplum.readResource("Organization", id);
+
+  const identifiers =
+    existing.identifier?.filter(
+      (ident) => ident.system === CLINIC_IDENTIFIER_SYSTEM
+    ) ?? [];
+  const otherExtensions =
+    existing.extension?.filter((e) => e.url !== ORG_LOGO_EXTENSION_URL) ?? [];
+
+  const updated: Organization = {
+    ...existing,
+    resourceType: "Organization",
+    name: input.name,
+    identifier: identifiers.length > 0 ? identifiers : existing.identifier,
+    telecom: input.phone
+      ? [{ system: "phone" as const, value: input.phone }]
+      : undefined,
+    address: input.address ? [{ text: input.address }] : undefined,
+    extension: input.logoUrl
+      ? [
+          ...otherExtensions,
+          { url: ORG_LOGO_EXTENSION_URL, valueUrl: input.logoUrl },
+        ]
+      : otherExtensions.length > 0
+        ? otherExtensions
+        : undefined,
+  };
+
+  const saved = await medplum.updateResource(updated);
+  return mapOrganizationToSummary(saved);
+}
+
+/**
+ * Delete an Organization. Refuses if the clinic still has assigned users
+ * (PractitionerRole) or child organisations, to avoid orphaning data.
+ */
+export async function deleteOrganizationFromMedplum(
+  organizationId: string
+): Promise<void> {
+  const medplum = await getAdminMedplum();
+
+  const [childOrganizations, practitionerRoles] = await Promise.all([
+    medplum.searchResources("Organization", {
+      partof: `Organization/${organizationId}`,
+      _count: "5",
+    }),
+    medplum.searchResources("PractitionerRole", {
+      organization: `Organization/${organizationId}`,
+      _count: "5",
+    }),
+  ]);
+
+  if ((childOrganizations?.length ?? 0) > 0) {
+    throw new Error("Cannot delete a clinic that still has branches.");
+  }
+
+  if ((practitionerRoles?.length ?? 0) > 0) {
+    throw new Error(
+      "Cannot delete a clinic that still has assigned users. Remove user assignments first."
+    );
+  }
+
+  await medplum.deleteResource("Organization", organizationId);
 }
 
 export interface PractitionerSummary {
   id: string;
   name: string;
   email?: string;
+  organizations?: { id: string; name: string }[];
+}
+
+export interface PractitionerDetail extends PractitionerSummary {
+  firstName?: string;
+  lastName?: string;
+  organizationIds: string[];
+}
+
+export interface UpdatePractitionerInput {
+  firstName: string;
+  lastName: string;
+  organizationIds: string[];
 }
 
 export interface OrganizationInput {
@@ -87,22 +183,204 @@ export async function saveOrganizationDetailsToMedplum(
   await medplum.createResource(org);
 }
 
+function practitionerDisplayName(p: Practitioner): string {
+  return (
+    p.name?.[0]?.text ||
+    [p.name?.[0]?.given?.join(" "), p.name?.[0]?.family]
+      .filter(Boolean)
+      .join(" ") ||
+    "Unknown"
+  );
+}
+
 export async function getPractitionersFromMedplum(): Promise<PractitionerSummary[]> {
   const medplum = await getAdminMedplum();
-  const practitioners = await medplum.searchResources("Practitioner", {
-    _count: "200",
-  });
+  const [practitioners, roles, organizations] = await Promise.all([
+    medplum.searchResources("Practitioner", { _count: "200" }),
+    medplum.searchResources("PractitionerRole", { _count: "500" }),
+    medplum.searchResources("Organization", { _count: "200" }),
+  ]);
+
+  const orgById = new Map<string, { id: string; name: string }>();
+  for (const org of organizations ?? []) {
+    if (!org.id) continue;
+    orgById.set(org.id, { id: org.id, name: org.name ?? "Unnamed clinic" });
+  }
+
+  const orgIdsByPractitioner = new Map<string, Set<string>>();
+  for (const role of roles ?? []) {
+    const practitionerId = getIdFromReference(role.practitioner?.reference);
+    const orgId = getIdFromReference(role.organization?.reference);
+    if (!practitionerId || !orgId) continue;
+    const set = orgIdsByPractitioner.get(practitionerId) ?? new Set<string>();
+    set.add(orgId);
+    orgIdsByPractitioner.set(practitionerId, set);
+  }
 
   return (practitioners ?? []).map((p) => {
-    const name =
-      p.name?.[0]?.text ??
-      [p.name?.[0]?.given?.join(" "), p.name?.[0]?.family]
-        .filter(Boolean)
-        .join(" ") ??
-      "Unknown";
     const email = p.telecom?.find((t) => t.system === "email")?.value;
-    return { id: p.id ?? "", name, email };
+    const orgIds = p.id ? Array.from(orgIdsByPractitioner.get(p.id) ?? []) : [];
+    const orgs = orgIds
+      .map((id) => orgById.get(id))
+      .filter((v): v is { id: string; name: string } => Boolean(v));
+    return {
+      id: p.id ?? "",
+      name: practitionerDisplayName(p),
+      email,
+      organizations: orgs,
+    };
   });
+}
+
+export async function getPractitionerFromMedplum(
+  id: string
+): Promise<PractitionerDetail | null> {
+  const medplum = await getAdminMedplum();
+  let practitioner: Practitioner;
+  try {
+    practitioner = await medplum.readResource("Practitioner", id);
+  } catch {
+    return null;
+  }
+
+  const roles = await medplum.searchResources("PractitionerRole", {
+    practitioner: `Practitioner/${id}`,
+    _count: "100",
+  });
+
+  const organizationIds = Array.from(
+    new Set(
+      (roles ?? [])
+        .map((role) => getIdFromReference(role.organization?.reference))
+        .filter((v): v is string => Boolean(v))
+    )
+  );
+
+  const organizations: { id: string; name: string }[] = [];
+  for (const orgId of organizationIds) {
+    try {
+      const org = await medplum.readResource("Organization", orgId);
+      organizations.push({ id: orgId, name: org.name ?? "Unnamed clinic" });
+    } catch {
+      // ignore missing orgs
+    }
+  }
+
+  const email = practitioner.telecom?.find((t) => t.system === "email")?.value;
+  const firstName = practitioner.name?.[0]?.given?.join(" ");
+  const lastName = practitioner.name?.[0]?.family;
+
+  return {
+    id: practitioner.id ?? "",
+    name: practitionerDisplayName(practitioner),
+    firstName,
+    lastName,
+    email,
+    organizations,
+    organizationIds,
+  };
+}
+
+export async function updatePractitionerInMedplum(
+  id: string,
+  input: UpdatePractitionerInput
+): Promise<PractitionerDetail> {
+  const medplum = await getAdminMedplum();
+  const existing = await medplum.readResource("Practitioner", id);
+
+  const updated: Practitioner = {
+    ...existing,
+    resourceType: "Practitioner",
+    name: [
+      {
+        given: input.firstName ? [input.firstName] : existing.name?.[0]?.given,
+        family: input.lastName || existing.name?.[0]?.family,
+      },
+    ],
+  };
+
+  await medplum.updateResource(updated);
+
+  // Sync PractitionerRole assignments to match input.organizationIds.
+  const currentRoles = await medplum.searchResources("PractitionerRole", {
+    practitioner: `Practitioner/${id}`,
+    _count: "100",
+  });
+
+  const currentOrgIds = new Set<string>();
+  const rolesByOrgId = new Map<string, string>();
+  for (const role of currentRoles ?? []) {
+    const orgId = getIdFromReference(role.organization?.reference);
+    if (orgId && role.id) {
+      currentOrgIds.add(orgId);
+      rolesByOrgId.set(orgId, role.id);
+    }
+  }
+
+  const targetOrgIds = new Set(input.organizationIds);
+
+  for (const orgId of Array.from(currentOrgIds)) {
+    if (!targetOrgIds.has(orgId)) {
+      const roleId = rolesByOrgId.get(orgId);
+      if (roleId) {
+        await medplum.deleteResource("PractitionerRole", roleId);
+      }
+    }
+  }
+
+  for (const orgId of Array.from(targetOrgIds)) {
+    if (!currentOrgIds.has(orgId)) {
+      await medplum.createResource({
+        resourceType: "PractitionerRole",
+        active: true,
+        practitioner: { reference: `Practitioner/${id}` },
+        organization: { reference: `Organization/${orgId}` },
+      });
+    }
+  }
+
+  const detail = await getPractitionerFromMedplum(id);
+  if (!detail) {
+    throw new Error("Practitioner not found after update");
+  }
+  return detail;
+}
+
+/**
+ * Delete a Practitioner and clean up their PractitionerRoles and
+ * ProjectMembership entries so the Medplum project doesn't keep dangling refs.
+ */
+export async function deletePractitionerFromMedplum(
+  practitionerId: string
+): Promise<void> {
+  const medplum = await getAdminMedplum();
+
+  const [roles, memberships] = await Promise.all([
+    medplum.searchResources("PractitionerRole", {
+      practitioner: `Practitioner/${practitionerId}`,
+      _count: "100",
+    }),
+    medplum.searchResources("ProjectMembership", { _count: "500" }),
+  ]);
+
+  const matchingMemberships = (memberships ?? []).filter(
+    (membership) =>
+      membership.profile?.reference === `Practitioner/${practitionerId}`
+  );
+
+  for (const role of roles ?? []) {
+    if (role.id) {
+      await medplum.deleteResource("PractitionerRole", role.id);
+    }
+  }
+
+  for (const membership of matchingMemberships) {
+    if (membership.id) {
+      await medplum.deleteResource("ProjectMembership", membership.id);
+    }
+  }
+
+  await medplum.deleteResource("Practitioner", practitionerId);
 }
 
 export interface InvitePractitionerInput {

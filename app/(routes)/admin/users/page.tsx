@@ -1,9 +1,15 @@
+import Link from "next/link";
 import { getPractitionersFromMedplum } from "@/lib/fhir/admin-service";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Users, UserPlus } from "lucide-react";
-import Link from "next/link";
+import { ChevronRight, Users, UserPlus } from "lucide-react";
 
 export default async function UsersPage() {
   const practitioners = await getPractitionersFromMedplum().catch(() => []);
@@ -29,7 +35,8 @@ export default async function UsersPage() {
         <CardHeader>
           <CardTitle>Practitioners ({practitioners.length})</CardTitle>
           <CardDescription>
-            These are registered Medplum Practitioner resources.
+            These are registered Medplum Practitioner resources. Click a row to
+            edit profile or clinic assignments.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -44,20 +51,41 @@ export default async function UsersPage() {
           ) : (
             <div className="divide-y">
               {practitioners.map((p) => (
-                <div key={p.id} className="flex items-center justify-between py-3">
-                  <div className="flex items-center gap-3">
-                    <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center font-semibold text-primary text-sm">
-                      {p.name.charAt(0).toUpperCase()}
-                    </div>
-                    <div>
-                      <p className="font-medium text-sm">{p.name}</p>
-                      {p.email && (
-                        <p className="text-xs text-muted-foreground">{p.email}</p>
-                      )}
-                    </div>
+                <Link
+                  key={p.id}
+                  href={`/admin/users/${p.id}`}
+                  className="flex items-center gap-3 py-3 hover:bg-muted/40 rounded-md px-2 -mx-2 transition-colors"
+                >
+                  <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center font-semibold text-primary text-sm shrink-0">
+                    {p.name.charAt(0).toUpperCase()}
                   </div>
-                  <Badge variant="secondary">Practitioner</Badge>
-                </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm truncate">{p.name}</p>
+                    {p.email && (
+                      <p className="text-xs text-muted-foreground truncate">
+                        {p.email}
+                      </p>
+                    )}
+                  </div>
+                  <div className="hidden sm:flex flex-wrap gap-1 justify-end max-w-xs">
+                    {p.organizations && p.organizations.length > 0 ? (
+                      p.organizations.map((org) => (
+                        <Badge
+                          key={org.id}
+                          variant="secondary"
+                          className="text-xs"
+                        >
+                          {org.name}
+                        </Badge>
+                      ))
+                    ) : (
+                      <Badge variant="outline" className="text-xs">
+                        No clinic
+                      </Badge>
+                    )}
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                </Link>
               ))}
             </div>
           )}
