@@ -80,11 +80,7 @@ export default async function RootLayout({
                   />
                 )}
                 <main className="flex-1 overflow-y-auto">
-                  {isAdminContext ? (
-                    children
-                  ) : (
-                    <div className="container p-8">{children}</div>
-                  )}
+                  {isAdminContext ? children : <div className="container p-8">{children}</div>}
                 </main>
               </div>
             </div>

@@ -25,7 +25,7 @@ export const SOAP_REWRITE_ENABLED = parseBooleanFlag(
 
 export const TRANSCRIBE_ENABLED = parseBooleanFlag(
   process.env.NEXT_PUBLIC_FEATURE_TRANSCRIBE,
-  true
+  false
 );
 
 export function getFeatureFlags() {
@@ -34,4 +34,3 @@ export function getFeatureFlags() {
     transcribe: TRANSCRIBE_ENABLED,
   } as const;
 }
-

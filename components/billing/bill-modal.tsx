@@ -27,11 +27,14 @@ interface BillModalProps {
   data: { patient: Patient | null; consultation: Consultation | null } | null;
 }
 
+const DEFAULT_CONSULTATION_FEE = 50;
+
 export default function BillModal({ isOpen, onClose, isLoading, data }: BillModalProps) {
   const { patient, consultation } = data || {};
   const [organization, setOrganization] = useState<OrganizationDetails | null>(null);
   const [orgLoaded, setOrgLoaded] = useState(false);
   const [orgLoading, setOrgLoading] = useState(false);
+  const [savingInvoice, setSavingInvoice] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -84,21 +87,55 @@ export default function BillModal({ isOpen, onClose, isLoading, data }: BillModa
     URL.revokeObjectURL(url);
   };
 
+  const handleSaveInvoice = async () => {
+    if (!patient || !consultation?.id) return;
+    setSavingInvoice(true);
+    try {
+      const response = await fetch('/api/billing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          consultationId: consultation.id,
+          patientId: patient.id,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error || 'Failed to save invoice');
+      }
+    } finally {
+      setSavingInvoice(false);
+    }
+  };
+
   const buildBillData = (patient: Patient, consultation: Consultation) => {
+    const prescriptions = (consultation.prescriptions || []).map((p) => ({
+      name: p.medication?.name || 'Medication',
+      dosage: [p.medication?.strength, p.frequency, p.duration].filter(Boolean).join(' · '),
+      price: p.price ?? 0,
+    }));
+    const procedures = (consultation.procedures || []).map((proc) => ({
+      name: proc.name,
+      description: proc.notes || '',
+      price: proc.price ?? 0,
+    }));
+    const hasBillableItems =
+      prescriptions.some((item) => item.price > 0) || procedures.some((item) => item.price > 0);
+
     return {
       id: consultation.id || `${patient.id}-${new Date().getTime()}`,
       patientName: patient.fullName,
       date: formatDisplayDate(consultation.date || new Date()),
-      prescriptions: (consultation.prescriptions || []).map((p) => ({
-        name: p.medication?.name || 'Medication',
-        dosage: [p.medication?.strength, p.frequency, p.duration].filter(Boolean).join(' · '),
-        price: p.price ?? 0,
-      })),
-      procedures: (consultation.procedures || []).map((proc) => ({
-        name: proc.name,
-        description: proc.notes || '',
-        price: proc.price ?? 0,
-      })),
+      prescriptions,
+      procedures: hasBillableItems
+        ? procedures
+        : [
+            {
+              name: 'Consultation Fee',
+              description: 'Default consultation charge',
+              price: DEFAULT_CONSULTATION_FEE,
+            },
+          ],
     };
   };
 
@@ -149,8 +186,17 @@ export default function BillModal({ isOpen, onClose, isLoading, data }: BillModa
             <Button variant="outline" onClick={onClose}>Close</Button>
             {patient && consultation && (
               <Button
+                variant="secondary"
+                onClick={handleSaveInvoice}
+                disabled={isLoading || savingInvoice}
+              >
+                {savingInvoice ? 'Saving…' : 'Save Invoice'}
+              </Button>
+            )}
+            {patient && consultation && (
+              <Button
                 onClick={handleDownloadPdf}
-                disabled={isLoading || (orgLoading && !orgLoaded)}
+                disabled={isLoading || (orgLoading && !orgLoaded) || savingInvoice}
               >
                 <Download className="h-4 w-4 mr-2" /> Download PDF
               </Button>

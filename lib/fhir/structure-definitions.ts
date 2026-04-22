@@ -5,6 +5,7 @@
 
 export const TRIAGE_EXTENSION_URL = 'https://ucc.emr/triage';
 export const STORAGE_PATH_EXTENSION_URL = 'https://ucc.emr/storage-path';
+export const INVENTORY_EXTENSION_URL = 'https://ucc.emr/inventory';
 
 export type ExtensionDefinition = {
   url: string;
@@ -31,6 +32,21 @@ export const STRUCTURE_DEFINITIONS: Record<string, ExtensionDefinition> = {
     example: {
       url: STORAGE_PATH_EXTENSION_URL,
       valueString: 'patients/123/documents/abc.pdf',
+    },
+  },
+  [INVENTORY_EXTENSION_URL]: {
+    url: INVENTORY_EXTENSION_URL,
+    purpose: 'Carries clinic inventory metadata for Medication resources such as stock, threshold, unit price, unit label, and strengths.',
+    example: {
+      url: INVENTORY_EXTENSION_URL,
+      extension: [
+        { url: 'category', valueString: 'antibiotic' },
+        { url: 'stock', valueInteger: 42 },
+        { url: 'minimumStock', valueInteger: 10 },
+        { url: 'unit', valueString: 'units' },
+        { url: 'unitPrice', valueDecimal: 12.5 },
+        { url: 'strength', valueString: '500mg' },
+      ],
     },
   },
 };

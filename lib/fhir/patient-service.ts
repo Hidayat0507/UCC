@@ -113,6 +113,7 @@ function addManagingOrganization<T extends { [key: string]: any }>(resource: T, 
 }
 
 
+
 /**
  * Convert FHIR Patient to app PatientData format
  */

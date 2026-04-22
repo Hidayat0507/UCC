@@ -5,16 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Image as ImageIcon, Clock, CheckCircle, AlertCircle, FileText, Settings } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { isModuleEnabled } from "@/lib/modules";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export default function PACSPage() {
-  const [moduleEnabled, setModuleEnabled] = useState(true);
-
-  useEffect(() => {
-    setModuleEnabled(isModuleEnabled('pacs'));
-  }, []);
+  const [moduleEnabled] = useState(() => isModuleEnabled('pacs'));
 
   if (!moduleEnabled) {
     return (

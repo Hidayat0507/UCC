@@ -22,7 +22,7 @@ export const MODULES: Record<ModuleId, Omit<Module, 'enabled'>> = {
     name: 'Triage',
     description: 'Patient triage and priority queue management',
     icon: 'AlertTriangle',
-    route: '/triage',
+    // route removed - triage is now integrated into Dashboard
     category: 'clinical',
   },
   poct: {

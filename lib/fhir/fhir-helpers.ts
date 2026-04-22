@@ -7,6 +7,7 @@
 
 import { MedplumClient } from '@medplum/core';
 import { validateFhirResource, logValidation } from './validation';
+import { applyMyCoreProfile } from './mycore';
 import { createProvenanceForResource } from './provenance-service';
 
 /**
@@ -23,8 +24,10 @@ export async function validateAndCreateWithProvenance<T extends { resourceType: 
   practitionerId?: string,
   organizationId?: string
 ): Promise<T & { id: string }> {
+  const profiledResource = applyMyCoreProfile(resource as any) as T;
+
   // Validate first
-  const validation = validateFhirResource(resource);
+  const validation = validateFhirResource(profiledResource);
   logValidation(resource.resourceType, validation);
   
   if (!validation.valid) {
@@ -32,7 +35,7 @@ export async function validateAndCreateWithProvenance<T extends { resourceType: 
   }
 
   // Create resource
-  const created = await medplum.createResource(resource as any) as T & { id: string };
+  const created = await medplum.createResource(profiledResource as any) as T & { id: string };
   
   if (!created.id) {
     throw new Error(`Failed to create ${resource.resourceType} (missing id)`);
@@ -65,14 +68,15 @@ export async function validateAndCreate<T extends { resourceType: string }>(
   medplum: MedplumClient,
   resource: T
 ): Promise<T & { id: string }> {
-  const validation = validateFhirResource(resource);
+  const profiledResource = applyMyCoreProfile(resource as any) as T;
+  const validation = validateFhirResource(profiledResource);
   logValidation(resource.resourceType, validation);
   
   if (!validation.valid) {
     throw new Error(`Invalid ${resource.resourceType}: ${validation.errors.join(', ')}`);
   }
 
-  const created = await medplum.createResource(resource as any) as T & { id: string };
+  const created = await medplum.createResource(profiledResource as any) as T & { id: string };
   
   if (!created.id) {
     throw new Error(`Failed to create ${resource.resourceType} (missing id)`);

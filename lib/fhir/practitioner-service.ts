@@ -7,6 +7,7 @@
 import { MedplumClient } from '@medplum/core';
 import { getAdminMedplum } from '@/lib/server/medplum-admin';
 import type { Practitioner } from '@medplum/fhirtypes';
+import { applyMyCoreProfile, MY_CORE_IDENTIFIERS } from './mycore';
 
 const getMedplumClient = getAdminMedplum;
 
@@ -16,39 +17,51 @@ const getMedplumClient = getAdminMedplum;
 export async function getOrCreatePractitioner(
     userId: string,
     name: string,
-    qualification?: string
+    qualification?: string,
+    mmcNumber?: string,
 ): Promise<string> {
     const medplum = await getMedplumClient();
 
-    // Search for existing practitioner by user ID
     let practitioner = await medplum.searchOne('Practitioner', {
         identifier: `user|${userId}`,
     });
 
     if (!practitioner) {
-        // Create new practitioner
-        practitioner = await medplum.createResource<Practitioner>({
+        const identifiers: Practitioner['identifier'] = [
+            {
+                system: 'user',
+                value: userId,
+                use: 'official',
+            },
+        ];
+        if (mmcNumber) {
+            identifiers.push({
+                system: MY_CORE_IDENTIFIERS.MMC_NO,
+                value: mmcNumber,
+                use: 'official',
+                type: {
+                    coding: [{ system: 'http://terminology.hl7.org/CodeSystem/v2-0203', code: 'MD', display: 'Medical License Number' }],
+                    text: 'MMC Registration Number',
+                },
+            });
+        }
+
+        practitioner = await medplum.createResource<Practitioner>(applyMyCoreProfile({
             resourceType: 'Practitioner',
             active: true,
-            identifier: [
-                {
-                    system: 'user',
-                    value: userId,
-                    use: 'official'
-                }
-            ],
+            identifier: identifiers,
             name: [
                 {
                     text: name,
-                    use: 'official'
-                }
+                    use: 'official',
+                },
             ],
             qualification: qualification ? [{
                 code: {
-                    text: qualification
-                }
+                    text: qualification,
+                },
             }] : undefined,
-        });
+        }));
 
         console.log(`✅ Created Practitioner: ${practitioner.id}`);
     }

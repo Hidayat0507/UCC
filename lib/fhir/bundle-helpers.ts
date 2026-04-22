@@ -7,6 +7,7 @@
 import { MedplumClient } from '@medplum/core';
 import type { Bundle, BundleEntry } from '@medplum/fhirtypes';
 import { validateFhirResource } from './validation';
+import { applyMyCoreProfile } from './mycore';
 
 /**
  * Create multiple resources in a single Bundle transaction
@@ -21,8 +22,10 @@ export async function createResourcesInBundle<T extends { resourceType: string }
   medplum: MedplumClient,
   resources: T[]
 ): Promise<(T & { id: string })[]> {
+  const profiledResources = resources.map((resource) => applyMyCoreProfile(resource as any) as T);
+
   // Validate all resources first
-  for (const resource of resources) {
+  for (const resource of profiledResources) {
     const validation = validateFhirResource(resource);
     if (!validation.valid) {
       throw new Error(`Invalid ${resource.resourceType}: ${validation.errors.join(', ')}`);
@@ -30,7 +33,7 @@ export async function createResourcesInBundle<T extends { resourceType: string }
   }
 
   // Create Bundle entries
-  const entries: BundleEntry[] = resources.map(resource => ({
+  const entries: BundleEntry[] = profiledResources.map(resource => ({
     request: {
       method: 'POST',
       url: resource.resourceType,

@@ -27,6 +27,9 @@ export type ModuleDefinition = {
 
 const modulesDirectory = path.join(process.cwd(), "modules");
 
+const MAX_RETRIES = 2;
+const RETRY_DELAY_MS = 150;
+
 export async function getInstalledModuleIds(): Promise<string[]> {
   if (!existsSync(modulesDirectory)) {
     return [];
@@ -77,16 +80,24 @@ export async function loadModulePage(
     return null;
   }
 
-  try {
-    const pageModule = await pageConfig.load();
-    return pageModule.default;
-  } catch (error) {
-    if (isNotFoundError(error)) {
-      return null;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const pageModule = await pageConfig.load();
+      return pageModule.default;
+    } catch (error) {
+      if (isNotFoundError(error) && attempt === MAX_RETRIES) {
+        return null;
+      }
+      if (!isNotFoundError(error) && !isWebpackChunkError(error)) {
+        throw error;
+      }
+      if (attempt < MAX_RETRIES) {
+        await new Promise((r) => setTimeout(r, RETRY_DELAY_MS * (attempt + 1)));
+      }
     }
-
-    throw error;
   }
+
+  return null;
 }
 
 export async function listActiveModules(): Promise<ModuleDefinition[]> {
@@ -106,4 +117,17 @@ function isNotFoundError(error: unknown) {
 
   const message = String("message" in error ? (error as { message?: unknown }).message : "");
   return message.includes("Cannot find module");
+}
+
+function isWebpackChunkError(error: unknown) {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const message = String("message" in error ? (error as { message?: unknown }).message : "");
+  return (
+    message.includes("Cannot read properties of undefined") ||
+    message.includes("Loading chunk") ||
+    message.includes("ChunkLoadError")
+  );
 }

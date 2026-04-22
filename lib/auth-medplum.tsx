@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { MedplumClient } from '@medplum/core';
 import type { Resource } from '@medplum/fhirtypes';
 

@@ -1,6 +1,7 @@
 import { MedplumClient } from "@medplum/core";
 import { db } from "@/lib/firebase";
 import { collection, doc, setDoc } from "firebase/firestore";
+import { applyMyCoreProfile } from "./mycore";
 
 export type FhirResource = {
   resourceType: string;
@@ -69,11 +70,11 @@ export async function saveFhirResource<T extends FhirResource>(
   // MEDPLUM ONLY - No Firebase fallback
   const nowIso = new Date().toISOString();
 
-  const toSave: FhirResource = {
+  const toSave: FhirResource = applyMyCoreProfile({
     ...resource,
     id: preferredId ?? resource.id,
     meta: { ...(resource.meta || {}), lastUpdated: nowIso },
-  };
+  } as any);
 
   // Save to Medplum as FHIR store
   const client = await getMedplumClient();

@@ -97,21 +97,16 @@ const PatientCombobox = forwardRef<HTMLButtonElement, PatientComboboxProps>(func
 ) {
   const [open, setOpen] = useState(false);
   const selected = useMemo(() => options.find((option) => option.id === value), [options, value]);
-
-  useEffect(() => {
-    if (disabled) {
-      setOpen(false);
-    }
-  }, [disabled]);
+  const isOpen = !disabled && open;
 
   return (
-    <Popover open={open} onOpenChange={(nextOpen) => !disabled && setOpen(nextOpen)}>
+    <Popover open={isOpen} onOpenChange={(nextOpen) => setOpen(disabled ? false : nextOpen)}>
       <PopoverTrigger asChild>
         <Button
           ref={ref}
           variant="outline"
           role="combobox"
-          aria-expanded={open}
+          aria-expanded={isOpen}
           disabled={disabled}
           className="w-full justify-between"
         >

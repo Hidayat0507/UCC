@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -96,7 +96,10 @@ export default function NewPatientForm({ initialFullName = "", initialNric = "" 
     return `${fullYear}-${formattedMonth}-${formattedDay}`;
   };
 
-  const nric = form.watch('nric');
+  const nric = useWatch({
+    control: form.control,
+    name: 'nric',
+  });
 
   React.useEffect(() => {
     if (nric && nric.length >= 6) {
@@ -359,5 +362,4 @@ export default function NewPatientForm({ initialFullName = "", initialNric = "" 
     </div>
   );
 }
-
 

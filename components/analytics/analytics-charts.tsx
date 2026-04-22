@@ -26,20 +26,20 @@ interface AnalyticsChartsProps {
   revenueMonthly?: Point[];
 }
 
+function CustomTooltip({ active, payload, label }: any) {
+  if (!active || !payload || !payload.length) return null;
+  const item = payload[0];
+  return (
+    <div className="rounded-md border bg-white px-2.5 py-1.5 shadow-sm">
+      <div className="text-xs font-medium text-gray-500">{label}</div>
+      <div className="text-sm font-semibold text-gray-900">{item.value}</div>
+    </div>
+  );
+}
+
 export default function AnalyticsCharts({ genderData, ageData, weeklyVisits, diagnosisTop, revenueMonthly = [] }: AnalyticsChartsProps) {
   const gridColor = "#e5e7eb"; // neutral-200
   const axisTick = { fontSize: 12, fill: "#6b7280" }; // neutral-500
-
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (!active || !payload || !payload.length) return null;
-    const item = payload[0];
-    return (
-      <div className="rounded-md border bg-white px-2.5 py-1.5 shadow-sm">
-        <div className="text-xs font-medium text-gray-500">{label}</div>
-        <div className="text-sm font-semibold text-gray-900">{item.value}</div>
-      </div>
-    );
-  };
 
   return (
     <div className="grid gap-6 md:grid-cols-2">
@@ -129,5 +129,4 @@ export default function AnalyticsCharts({ genderData, ageData, weeklyVisits, dia
     </div>
   );
 }
-
 

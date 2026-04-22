@@ -28,6 +28,10 @@ export interface Medication {
   updatedAt?: Date;
 }
 
+export function getBuiltInMedicationList(): Medication[] {
+  return [];
+}
+
 const MEDICATIONS = 'medications';
 
 // Helper function to convert Firestore data to our types

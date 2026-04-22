@@ -16,6 +16,10 @@ export interface DiagnosisCode {
   text: string;
 }
 
+export interface DiagnosisSearchResult extends DiagnosisCode {
+  key: string;
+}
+
 /**
  * Common diagnoses seen in primary care clinics in Malaysia
  */
@@ -35,6 +39,11 @@ export const COMMON_DIAGNOSES: Record<string, DiagnosisCode> = {
     icd10: { code: 'J45.9', display: 'Asthma, unspecified' },
     snomed: { code: '195967001', display: 'Asthma' },
     text: 'Asthma'
+  },
+  'ALLERGIC_RHINITIS': {
+    icd10: { code: 'J30.9', display: 'Allergic rhinitis, unspecified' },
+    snomed: { code: '61582004', display: 'Allergic rhinitis' },
+    text: 'Allergic Rhinitis'
   },
   'PNEUMONIA': {
     icd10: { code: 'J18.9', display: 'Pneumonia, unspecified organism' },
@@ -207,7 +216,37 @@ export function getAllDiagnoses(): DiagnosisCode[] {
   return Object.values(COMMON_DIAGNOSES);
 }
 
+export function searchDiagnoses(query: string, limit = 20): DiagnosisSearchResult[] {
+  const searchText = query.toLowerCase().trim();
+  const entries = Object.entries(COMMON_DIAGNOSES);
 
+  if (!searchText) {
+    return entries.slice(0, limit).map(([key, diagnosis]) => ({ key, ...diagnosis }));
+  }
+
+  const scored = entries
+    .map(([key, diagnosis]) => {
+      const text = diagnosis.text.toLowerCase();
+      const icd = diagnosis.icd10?.code.toLowerCase() ?? '';
+      const snomed = diagnosis.snomed?.code.toLowerCase() ?? '';
+
+      let score = 0;
+      if (text === searchText) score += 100;
+      if (text.startsWith(searchText)) score += 75;
+      if (text.includes(searchText)) score += 50;
+      if (key.toLowerCase().includes(searchText.replace(/\s+/g, '_'))) score += 25;
+      if (icd.startsWith(searchText)) score += 40;
+      if (snomed.startsWith(searchText)) score += 20;
+
+      return score > 0 ? { key, diagnosis, score } : null;
+    })
+    .filter((entry): entry is { key: string; diagnosis: DiagnosisCode; score: number } => Boolean(entry))
+    .sort((a, b) => b.score - a.score || a.diagnosis.text.localeCompare(b.diagnosis.text))
+    .slice(0, limit)
+    .map(({ key, diagnosis }) => ({ key, ...diagnosis }));
+
+  return scored;
+}
 
 
 
