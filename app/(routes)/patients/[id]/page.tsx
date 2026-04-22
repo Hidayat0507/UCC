@@ -8,6 +8,8 @@ import { Calendar, FileText, AlertCircle, User, Phone, Mail, Heart, Users, Clipb
 import Link from "next/link";
 import { getPatientFromMedplum } from "@/lib/fhir/patient-service";
 import { getPatientConsultationsFromMedplum } from "@/lib/fhir/consultation-service";
+import { getPatientAppointmentsFromMedplum } from "@/lib/fhir/appointment-service";
+import { getAdminMedplum } from "@/lib/server/medplum-admin";
 import { formatDisplayDate, calculateAge, safeToISOString } from "@/lib/utils";
 import ReferralMCSection from "./referral-mc-section";
 import { Suspense } from 'react';
@@ -33,12 +35,14 @@ interface PatientProfilePageProps {
 
 export default async function PatientProfilePage({ params }: PatientProfilePageProps) {
   const { id } = await params;
+  const medplum = await getAdminMedplum();
 
   // Fetch data in parallel from Medplum FHIR (source of truth)
-  const [patientData, consultationsData, triageData] = await Promise.all([
+  const [patientData, consultationsData, triageData, appointmentsData] = await Promise.all([
     getPatientFromMedplum(id), // 🎯 Read from Medplum FHIR
     getPatientConsultationsFromMedplum(id), // 🎯 Read from Medplum FHIR
     getTriageForPatient(id),
+    getPatientAppointmentsFromMedplum(medplum, id),
   ]);
 
   if (!patientData) {
@@ -51,6 +55,20 @@ export default async function PatientProfilePage({ params }: PatientProfilePageP
     medications: [],
   };
   const vitals = triageData.triage?.vitalSigns;
+
+  const upcomingAppointment = appointmentsData
+    .filter((appointment) => {
+      const scheduledAt = appointment.scheduledAt instanceof Date ? appointment.scheduledAt : new Date(appointment.scheduledAt);
+      return (
+        !Number.isNaN(scheduledAt.getTime()) &&
+        ["booked", "arrived", "pending", "proposed"].includes(appointment.status)
+      );
+    })
+    .sort((a, b) => {
+      const aTime = new Date(a.scheduledAt).getTime();
+      const bTime = new Date(b.scheduledAt).getTime();
+      return aTime - bTime;
+    })[0];
 
   // Serialize patient data
   const patient: SerializedPatient = {
@@ -67,7 +85,7 @@ export default async function PatientProfilePage({ params }: PatientProfilePageP
     queueStatus: triageData.queueStatus ?? null,
     dateOfBirth: safeToISOString(patientData.dateOfBirth),
     lastVisit: safeToISOString((patientData as any).lastVisit),
-    upcomingAppointment: safeToISOString((patientData as any).upcomingAppointment),
+    upcomingAppointment: safeToISOString(upcomingAppointment?.scheduledAt) ?? safeToISOString((patientData as any).upcomingAppointment),
     // Add other potential date/timestamp fields here if they exist on Patient model
     createdAt: safeToISOString((patientData as any).createdAt),
     updatedAt: safeToISOString((patientData as any).updatedAt),

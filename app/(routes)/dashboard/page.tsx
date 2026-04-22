@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Clock, RefreshCw, Users, CalendarDays, Activity } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import type { Patient } from "@/lib/models";
 import QueueTable from "@/components/queue-table";
 import Link from "next/link";
@@ -13,14 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHeader, TableRow, TableHead } from "@/components/ui/table";
 import { toast } from "@/components/ui/use-toast";
 import { addPatientToQueue, removePatientFromQueue } from "@/lib/actions";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { RegisterPatientDialog } from "@/components/dashboard/register-patient-dialog";
 
 interface Appointment {
   id: string;
@@ -31,7 +23,6 @@ interface Appointment {
 }
 
 export default function Dashboard() {
-  const router = useRouter();
   const [queue, setQueue] = useState<Patient[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -220,43 +211,7 @@ export default function Dashboard() {
         </TabsContent>
       </Tabs>
 
-      <Dialog open={registerDialogOpen} onOpenChange={setRegisterDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Register Patient</DialogTitle>
-            <DialogDescription>
-              Choose how you want to start registration, just like front-desk flow.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <Button
-              className="w-full justify-start"
-              variant="outline"
-              onClick={() => {
-                setRegisterDialogOpen(false);
-                router.push("/patients/new");
-              }}
-            >
-              Add new patient
-            </Button>
-            <Button
-              className="w-full justify-start"
-              variant="outline"
-              onClick={() => {
-                setRegisterDialogOpen(false);
-                router.push("/check-in");
-              }}
-            >
-              Search existing patient
-            </Button>
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setRegisterDialogOpen(false)}>
-              Cancel
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <RegisterPatientDialog open={registerDialogOpen} onOpenChange={setRegisterDialogOpen} />
     </div>
   );
 }

@@ -4,7 +4,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getClinicIdFromRequest } from '@/lib/server/clinic';
+import { requireClinicAuth } from '@/lib/server/medplum-auth';
+import { handleRouteError } from '@/lib/server/route-helpers';
 import {
   savePatientToMedplum,
   getPatientFromMedplum,
@@ -18,47 +19,26 @@ import {
  */
 export async function POST(request: NextRequest) {
   try {
+    const { medplum, clinicId } = await requireClinicAuth(request);
     const patientData = await request.json();
-    let clinicId = await getClinicIdFromRequest(request);
 
-    // For development/localhost, use default clinic ID if not provided
-    if (!clinicId && process.env.NODE_ENV !== 'production') {
-      clinicId = process.env.NEXT_PUBLIC_DEFAULT_CLINIC_ID || 'default';
-      console.warn('⚠️  No clinicId found, using default for development:', clinicId);
-    }
-
-    const identifierValue = patientData.identifierValue ?? patientData.nric;
     // Validate required fields
-    if (!patientData.fullName || !identifierValue || !patientData.dateOfBirth || !patientData.gender) {
+    if (!patientData.fullName || !patientData.nric || !patientData.dateOfBirth || !patientData.gender) {
       return NextResponse.json(
-        { error: 'Missing required fields: fullName, identifierValue, dateOfBirth, gender' },
+        { error: 'Missing required fields: fullName, nric, dateOfBirth, gender' },
         { status: 400 }
       );
     }
 
-    if (!clinicId) {
-      return NextResponse.json({ 
-        success: false,
-        error: 'Missing clinicId. Please set NEXT_PUBLIC_DEFAULT_CLINIC_ID for development or access via clinic subdomain.' 
-      }, { status: 400 });
-    }
-
-    const patientId = await savePatientToMedplum(patientData, clinicId);
+    const patientId = await savePatientToMedplum(patientData, clinicId ?? undefined, medplum);
 
     return NextResponse.json({
       success: true,
       patientId,
       message: 'Patient saved to FHIR successfully',
     });
-  } catch (error: any) {
-    console.error('❌ Failed to save patient:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: error.message || 'Failed to save patient',
-      },
-      { status: 500 }
-    );
+  } catch (error) {
+    return handleRouteError(error, 'POST /api/patients');
   }
 }
 
@@ -71,32 +51,15 @@ export async function POST(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   try {
+    const { medplum, clinicId } = await requireClinicAuth(request);
     const { searchParams } = new URL(request.url);
     const patientId = searchParams.get('id');
     const searchQuery = searchParams.get('search');
     const limit = searchParams.get('limit');
-    let clinicId = await getClinicIdFromRequest(request);
-
-    // For development/localhost, use default clinic ID if not provided
-    if (!clinicId && process.env.NODE_ENV !== 'production') {
-      clinicId = process.env.NEXT_PUBLIC_DEFAULT_CLINIC_ID || 'default';
-      console.warn('⚠️  No clinicId found, using default for development:', clinicId);
-    }
-
-    if (!clinicId) {
-      console.error('❌ Missing clinicId in request:', {
-        headers: Object.fromEntries(request.headers.entries()),
-        url: request.url,
-      });
-      return NextResponse.json({ 
-        success: false,
-        error: 'Missing clinicId. Please ensure you are accessing the application via a clinic subdomain or set NEXT_PUBLIC_DEFAULT_CLINIC_ID for development.' 
-      }, { status: 400 });
-    }
 
     // Get specific patient
     if (patientId) {
-      const patient = await getPatientFromMedplum(patientId, clinicId);
+      const patient = await getPatientFromMedplum(patientId, clinicId, medplum);
       if (!patient) {
         return NextResponse.json({ error: 'Patient not found' }, { status: 404 });
       }
@@ -105,7 +68,7 @@ export async function GET(request: NextRequest) {
 
     // Search patients
     if (searchQuery) {
-      const patients = await searchPatientsInMedplum(searchQuery, clinicId);
+      const patients = await searchPatientsInMedplum(searchQuery, clinicId, medplum);
       return NextResponse.json({
         success: true,
         count: patients.length,
@@ -115,21 +78,14 @@ export async function GET(request: NextRequest) {
 
     // Get all patients
     const limitNum = limit ? parseInt(limit) : 100;
-    const patients = await getAllPatientsFromMedplum(limitNum, clinicId);
+    const patients = await getAllPatientsFromMedplum(limitNum, clinicId, medplum);
     return NextResponse.json({
       success: true,
       count: patients.length,
       patients,
     });
-  } catch (error: any) {
-    console.error('❌ Failed to get patients:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: error.message || 'Failed to get patients',
-      },
-      { status: 500 }
-    );
+  } catch (error) {
+    return handleRouteError(error, 'GET /api/patients');
   }
 }
 
@@ -138,44 +94,23 @@ export async function GET(request: NextRequest) {
  */
 export async function PATCH(request: NextRequest) {
   try {
+    const { medplum, clinicId } = await requireClinicAuth(request);
     const { patientId, ...updates } = await request.json();
-    let clinicId = await getClinicIdFromRequest(request);
-
-    // For development/localhost, use default clinic ID if not provided
-    if (!clinicId && process.env.NODE_ENV !== 'production') {
-      clinicId = process.env.NEXT_PUBLIC_DEFAULT_CLINIC_ID || 'default';
-      console.warn('⚠️  No clinicId found, using default for development:', clinicId);
-    }
 
     if (!patientId) {
       return NextResponse.json({ error: 'Missing patientId' }, { status: 400 });
     }
 
-    if (!clinicId) {
-      return NextResponse.json({ 
-        success: false,
-        error: 'Missing clinicId. Please set NEXT_PUBLIC_DEFAULT_CLINIC_ID for development or access via clinic subdomain.' 
-      }, { status: 400 });
-    }
-
-    await updatePatientInMedplum(patientId, updates, clinicId);
+    await updatePatientInMedplum(patientId, updates, clinicId, medplum);
 
     return NextResponse.json({
       success: true,
       message: 'Patient updated successfully',
     });
-  } catch (error: any) {
-    console.error('❌ Failed to update patient:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: error.message || 'Failed to update patient',
-      },
-      { status: 500 }
-    );
+  } catch (error) {
+    return handleRouteError(error, 'PATCH /api/patients');
   }
 }
-
 
 
 

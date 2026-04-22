@@ -19,11 +19,21 @@ export type SerializedPatient = Omit<Patient,
   'lastVisit' | 
   'upcomingAppointment' | 
   'queueAddedAt' | 
-  'updatedAt' 
+  'updatedAt' |
+  'email' |
+  'postalCode' |
+  'address' |
+  'emergencyContact' |
+  'medicalHistory'
 > & { 
+  email?: string;
+  postalCode?: string;
+  address?: string;
+  emergencyContact?: { name: string; relationship: string; phone: string };
+  medicalHistory?: { allergies: string[]; conditions: string[]; medications: string[] };
   dateOfBirth?: string | null | undefined;
-  createdAt?: string | null | undefined; // Assuming createdAt might be passed/needed
-  lastVisit?: string | null | undefined; // Assuming lastVisit might be passed/needed
+  createdAt?: string | null | undefined;
+  lastVisit?: string | null | undefined;
   upcomingAppointment?: string | null | undefined;
   queueAddedAt?: string | null | undefined;
   updatedAt?: string | null | undefined;

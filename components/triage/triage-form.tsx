@@ -3,8 +3,10 @@
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -12,13 +14,14 @@ import {
   AlertCircle, 
   Activity, 
   Heart, 
+  Siren,
   Wind, 
   Thermometer, 
   Droplets,
   Scale,
   Ruler
 } from "lucide-react";
-import { TriageLevel, TRIAGE_LEVELS, VitalSigns } from "@/lib/types";
+import { TriageLevel, VitalSigns } from "@/lib/types";
 import { Patient } from "@/lib/models";
 import { useRouter } from "next/navigation";
 import { toast } from "@/components/ui/use-toast";
@@ -41,35 +44,45 @@ const RED_FLAG_OPTIONS = [
   "Fever with confusion",
 ];
 
-const TRIAGE_LEVEL_COLORS = {
-  1: "bg-red-500 hover:bg-red-600 border-red-600",
-  2: "bg-orange-500 hover:bg-orange-600 border-orange-600",
-  3: "bg-yellow-500 hover:bg-yellow-600 border-yellow-600",
-  4: "bg-green-500 hover:bg-green-600 border-green-600",
-  5: "bg-blue-500 hover:bg-blue-600 border-blue-600",
-};
+const PAYMENT_METHOD_OPTIONS = [
+  { value: "self_pay", label: "Self-pay" },
+  { value: "intracare_sdn_bhd", label: "Intracare Sdn Bhd" },
+];
 
 export default function TriageForm({ patient }: TriageFormProps) {
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
 
   // Form state
-  const [triageLevel, setTriageLevel] = useState<TriageLevel>(3);
-  const [chiefComplaint, setChiefComplaint] = useState("");
-  const [triageNotes, setTriageNotes] = useState("");
-  const [selectedRedFlags, setSelectedRedFlags] = useState<string[]>([]);
+  const [triageLevel, setTriageLevel] = useState<TriageLevel>(patient.triage?.triageLevel ?? 3);
+  const [isUrgent, setIsUrgent] = useState((patient.triage?.triageLevel ?? 3) <= 2);
+  const [chiefComplaint, setChiefComplaint] = useState(patient.triage?.chiefComplaint ?? "");
+  const [triageNotes, setTriageNotes] = useState(patient.triage?.triageNotes ?? "");
+  const [selectedRedFlags, setSelectedRedFlags] = useState<string[]>(patient.triage?.redFlags ?? []);
+  const [visitIntent, setVisitIntent] = useState(patient.visitIntent ?? "consultation");
+  const [billingPerson, setBillingPerson] = useState<"self" | "dependent">(
+    patient.billingPerson === "dependent" ? "dependent" : "self"
+  );
+  const [paymentMethod, setPaymentMethod] = useState(
+    patient.paymentMethod ??
+      (patient.payerType === "panel" ? "intracare_sdn_bhd" : "self_pay")
+  );
+  const [assignedClinician, setAssignedClinician] = useState(patient.assignedClinician ?? "");
+  const [dependentName, setDependentName] = useState(patient.dependentName ?? "");
+  const [dependentRelationship, setDependentRelationship] = useState(patient.dependentRelationship ?? "");
+  const [dependentPhone, setDependentPhone] = useState(patient.dependentPhone ?? "");
   
   // Vital signs state
   const [vitalSigns, setVitalSigns] = useState<VitalSigns>({
-    bloodPressureSystolic: undefined,
-    bloodPressureDiastolic: undefined,
-    heartRate: undefined,
-    respiratoryRate: undefined,
-    temperature: undefined,
-    oxygenSaturation: undefined,
-    painScore: undefined,
-    weight: undefined,
-    height: undefined,
+    bloodPressureSystolic: patient.triage?.vitalSigns?.bloodPressureSystolic,
+    bloodPressureDiastolic: patient.triage?.vitalSigns?.bloodPressureDiastolic,
+    heartRate: patient.triage?.vitalSigns?.heartRate,
+    respiratoryRate: patient.triage?.vitalSigns?.respiratoryRate,
+    temperature: patient.triage?.vitalSigns?.temperature,
+    oxygenSaturation: patient.triage?.vitalSigns?.oxygenSaturation,
+    painScore: patient.triage?.vitalSigns?.painScore,
+    weight: patient.triage?.vitalSigns?.weight,
+    height: patient.triage?.vitalSigns?.height,
   });
 
   const handleVitalSignChange = (key: keyof VitalSigns, value: string) => {
@@ -83,6 +96,11 @@ export default function TriageForm({ patient }: TriageFormProps) {
         ? prev.filter(f => f !== flag)
         : [...prev, flag]
     );
+  };
+
+  const handleUrgencyChange = (checked: boolean) => {
+    setIsUrgent(checked);
+    setTriageLevel(checked ? 2 : 4);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -110,6 +128,20 @@ export default function TriageForm({ patient }: TriageFormProps) {
           triageLevel,
           chiefComplaint,
           vitalSigns,
+          visitIntent,
+          payerType:
+            billingPerson === "dependent"
+              ? "dependent"
+              : paymentMethod === "self_pay"
+                ? "self_pay"
+                : "panel",
+          paymentMethod,
+          billingPerson,
+          assignedClinician: assignedClinician.trim() || undefined,
+          dependentName: billingPerson === "dependent" ? dependentName.trim() || undefined : undefined,
+          dependentRelationship:
+            billingPerson === "dependent" ? dependentRelationship.trim() || undefined : undefined,
+          dependentPhone: billingPerson === "dependent" ? dependentPhone.trim() || undefined : undefined,
           triageNotes,
           redFlags: selectedRedFlags,
         }),
@@ -138,8 +170,6 @@ export default function TriageForm({ patient }: TriageFormProps) {
     }
   };
 
-  const selectedTriageInfo = TRIAGE_LEVELS[triageLevel];
-
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       {/* Patient Info Header */}
@@ -163,35 +193,38 @@ export default function TriageForm({ patient }: TriageFormProps) {
         </CardContent>
       </Card>
 
-      {/* Triage Level Selection */}
       <Card>
         <CardHeader>
-          <CardTitle>Triage Level</CardTitle>
-          <CardDescription>Select the urgency level based on patient condition</CardDescription>
+          <CardTitle>Visit Priority</CardTitle>
+          <CardDescription>Use a simple urgent marker, similar to Yezza&apos;s visit information step.</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-            {([1, 2, 3, 4, 5] as TriageLevel[]).map((level) => {
-              const info = TRIAGE_LEVELS[level];
-              const isSelected = triageLevel === level;
-              
-              return (
-                <button
-                  key={level}
-                  type="button"
-                  onClick={() => setTriageLevel(level)}
-                  className={cn(
-                    "p-4 rounded-lg border-2 text-white transition-all",
-                    TRIAGE_LEVEL_COLORS[level],
-                    isSelected ? "ring-4 ring-offset-2 ring-primary" : "opacity-70"
-                  )}
-                >
-                  <div className="text-3xl font-bold mb-1">{level}</div>
-                  <div className="text-sm font-semibold">{info.label}</div>
-                  <div className="text-xs mt-1 opacity-90">{info.description}</div>
-                </button>
-              );
-            })}
+          <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+            <div className="flex items-start gap-3">
+              <Checkbox
+                id="mark-urgent"
+                checked={isUrgent}
+                onCheckedChange={(checked) => handleUrgencyChange(Boolean(checked))}
+                className="mt-1"
+              />
+              <div className="space-y-2">
+                <Label htmlFor="mark-urgent" className="flex cursor-pointer items-center gap-2 text-base font-medium text-slate-950">
+                  <Siren className={cn("h-4 w-4", isUrgent ? "text-rose-600" : "text-slate-400")} />
+                  Mark this visit as urgent
+                </Label>
+                <p className="text-sm text-muted-foreground">
+                  Indicates this visit needs immediate attention in the queue.
+                </p>
+                <div className="flex items-center gap-2">
+                  <Badge variant={isUrgent ? "destructive" : "secondary"}>
+                    {isUrgent ? "Urgent" : "Standard"}
+                  </Badge>
+                  <span className="text-xs text-muted-foreground">
+                    Stored internally as triage level {triageLevel} for queue ordering.
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
           
           {selectedRedFlags.length > 0 && triageLevel >= 3 && (
@@ -219,6 +252,146 @@ export default function TriageForm({ patient }: TriageFormProps) {
             rows={3}
             required
           />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Visit Information</CardTitle>
+          <CardDescription>Capture the visit context on the same FHIR encounter before consultation.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-6 lg:grid-cols-2">
+          <div className="space-y-4 rounded-xl border border-slate-200 p-4">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-slate-700">Visit details</Label>
+              <div className="space-y-3">
+                <div>
+                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Visit purpose</p>
+                  <div className="flex gap-2">
+                    {[
+                      { value: "consultation", label: "Consultation" },
+                      { value: "otc", label: "OTC" },
+                      { value: "follow_up", label: "Follow-up" },
+                    ].map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => setVisitIntent(option.value)}
+                        className={cn(
+                          "rounded-full border px-4 py-2 text-sm transition",
+                          visitIntent === option.value
+                            ? "border-slate-900 bg-slate-900 text-white"
+                            : "border-slate-200 bg-white text-slate-700"
+                        )}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="assigned-clinician">Doctor (Optional)</Label>
+                  <Input
+                    id="assigned-clinician"
+                    value={assignedClinician}
+                    onChange={(e) => setAssignedClinician(e.target.value)}
+                    placeholder="Select doctor or enter doctor name"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="visit-notes">Visit notes</Label>
+                  <Textarea
+                    id="visit-notes"
+                    value={triageNotes}
+                    onChange={(e) => setTriageNotes(e.target.value)}
+                    placeholder="E.g. Shortness of breath"
+                    rows={4}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-4 rounded-xl border border-slate-200 p-4">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-slate-700">Billing details</Label>
+              <div className="space-y-3">
+                <div>
+                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Who is this person?</p>
+                  <div className="flex gap-2">
+                    {[
+                      { value: "self", label: "Self" },
+                      { value: "dependent", label: "Dependent" },
+                    ].map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => setBillingPerson(option.value as "self" | "dependent")}
+                        className={cn(
+                          "rounded-full border px-4 py-2 text-sm transition",
+                          billingPerson === option.value
+                            ? "border-slate-900 bg-slate-900 text-white"
+                            : "border-slate-200 bg-white text-slate-700"
+                        )}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Payment method</Label>
+                  <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select payment method" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PAYMENT_METHOD_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {billingPerson === "dependent" ? (
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="dependent-name">Dependent name</Label>
+                      <Input
+                        id="dependent-name"
+                        value={dependentName}
+                        onChange={(e) => setDependentName(e.target.value)}
+                        placeholder="Dependent name"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="dependent-phone">Phone</Label>
+                      <Input
+                        id="dependent-phone"
+                        value={dependentPhone}
+                        onChange={(e) => setDependentPhone(e.target.value)}
+                        placeholder="Phone number"
+                      />
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <Label htmlFor="dependent-relationship">Relationship</Label>
+                      <Input
+                        id="dependent-relationship"
+                        value={dependentRelationship}
+                        onChange={(e) => setDependentRelationship(e.target.value)}
+                        placeholder="E.g. spouse, child"
+                      />
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -395,8 +568,8 @@ export default function TriageForm({ patient }: TriageFormProps) {
         </CardContent>
       </Card>
 
-      {/* Submit */}
-      <div className="flex justify-end gap-3">
+      {/* Submit — sticky footer so it's always reachable without scrolling */}
+      <div className="sticky bottom-0 z-10 bg-background border-t py-4 -mx-8 px-8 flex justify-end gap-3">
         <Button
           type="button"
           variant="outline"
@@ -412,9 +585,6 @@ export default function TriageForm({ patient }: TriageFormProps) {
     </form>
   );
 }
-
-
-
 
 
 

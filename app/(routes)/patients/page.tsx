@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Plus, Search, Clock, CheckCircle2, UserRound } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { getAllPatients, type Patient } from "@/lib/fhir/patient-client";
 import {
   Table,
@@ -14,13 +14,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { MoreHorizontal } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -30,6 +23,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
+import { useMedplumAuth } from "@/lib/auth-medplum";
 
 export default function PatientsPage() {
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -43,52 +37,55 @@ export default function PatientsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
-
-  const loadPatients = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await getAllPatients(200);
-      setPatients(data as any);
-
-      const now = new Date();
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-      const weekStart = new Date(now.setDate(now.getDate() - now.getDay()));
-
-      setStats({
-        total: data.length,
-        new: data.filter((p) => {
-          const createdAt = p.createdAt ? new Date(p.createdAt) : null;
-          return createdAt && createdAt >= monthStart;
-        }).length,
-        followUps: data.filter((p) => {
-          const lastVisit = (p as any).lastVisit ? new Date((p as any).lastVisit) : null;
-          return lastVisit && lastVisit >= weekStart;
-        }).length,
-        inQueue: data.filter((p) => ['arrived', 'waiting', 'in_consultation'].includes((p as any).queueStatus)).length
-      });
-    } catch (err: any) {
-      const errorMessage = err?.message || 'Failed to load patient data from FHIR';
-      if (errorMessage.includes('clinicId') || errorMessage.includes('Missing clinicId')) {
-        setError('Clinic ID not found. Please ensure you are accessing the application via a clinic subdomain.');
-      } else if (errorMessage.includes('credentials') || errorMessage.includes('Unauthorized')) {
-        setError('Authentication failed. Please check your Medplum configuration.');
-      } else {
-        setError(`Failed to load patient data: ${errorMessage}`);
-      }
-      toast({
-        title: 'Error Loading Patients',
-        description: errorMessage,
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
-    }
-  }, [toast]);
+  const { loading: authLoading } = useMedplumAuth();
 
   useEffect(() => {
+    if (authLoading) {
+      return;
+    }
+
+    async function loadPatients() {
+      setLoading(true);
+      setError(null);
+      try {
+        // 🎯 LOAD FROM MEDPLUM (FHIR) - Source of Truth
+        const data = await getAllPatients(200);
+        console.log(`✅ Loaded ${data.length} patients from Medplum FHIR`);
+        
+        setPatients(data as any);
+        
+        const now = new Date();
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        const weekStart = new Date(now.setDate(now.getDate() - now.getDay()));
+        
+        setStats({
+          total: data.length,
+          new: data.filter((p) => {
+            const createdAt = p.createdAt ? new Date(p.createdAt) : null;
+            return createdAt && createdAt >= monthStart;
+          }).length,
+          followUps: data.filter((p) => {
+            const lastVisit = (p as any).lastVisit ? new Date((p as any).lastVisit) : null;
+            return lastVisit && lastVisit >= weekStart;
+          }).length,
+          inQueue: data.filter((p) => ['arrived', 'waiting', 'in_consultation'].includes((p as any).queueStatus)).length
+        });
+      } catch (err) {
+        console.error('Error loading patients from Medplum:', err);
+        const message =
+          err instanceof Error ? err.message : 'Failed to load patient data from FHIR.';
+        setError(
+          message.includes('Authentication required')
+            ? `${message} If you are signed in, try refreshing the page.`
+            : message
+        );
+      } finally {
+        setLoading(false);
+      }
+    }
+
     loadPatients();
-  }, [loadPatients]);
+  }, [authLoading]);
 
   const handleAddToQueue = async (patient: Patient) => {
     try {
@@ -105,38 +102,13 @@ export default function PatientsPage() {
         title: "Checked in",
         description: `${patient.fullName} has been marked as arrived.`,
       });
-      await loadPatients();
+      // Refresh the page to update the queue status
+      window.location.reload();
     } catch (error) {
       console.error('Error checking in:', error);
       toast({
         title: "Error",
         description: "Failed to check patient in. Please try again.",
-        variant: "destructive"
-      });
-    }
-  };
-
-  const handleRemoveFromQueue = async (patient: Patient) => {
-    try {
-      const res = await fetch('/api/queue', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ patientId: patient.id }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Failed to remove from queue');
-      }
-      toast({
-        title: "Removed from Queue",
-        description: `${patient.fullName} has been removed from the queue.`,
-      });
-      await loadPatients();
-    } catch (error) {
-      console.error('Error removing from queue:', error);
-      toast({
-        title: "Error",
-        description: "Failed to remove patient from queue. Please try again.",
         variant: "destructive"
       });
     }
@@ -286,43 +258,13 @@ export default function PatientsPage() {
                           )}
                         </TableCell>
                         <TableCell className="text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" className="h-8 w-8 p-0">
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem asChild>
-                                <Link href={`/patients/${patient.id}`}>
-                                  View Details
-                                </Link>
-                              </DropdownMenuItem>
-                              {(!(patient as any).triage?.isTriaged || !(patient as any).queueStatus) && (
-                                <DropdownMenuItem asChild>
-                                  <Link href={`/patients/${patient.id}/triage`}>
-                                    Perform Triage
-                                  </Link>
-                                </DropdownMenuItem>
-                              )}
-                              {(patient as any).queueStatus === 'waiting' ? (
-                                <DropdownMenuItem onClick={() => handleRemoveFromQueue(patient)}>
-                                  Remove from Queue
-                                </DropdownMenuItem>
-                              ) : (
-                                <>
-                                  <DropdownMenuItem onClick={() => handleAddToQueue(patient)}>
-                                    Check In
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem asChild>
-                                    <Link href={`/patients/${patient.id}/triage`}>
-                                      Go to Triage
-                                    </Link>
-                                  </DropdownMenuItem>
-                                </>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                          <Button
+                            size="sm"
+                            onClick={() => handleAddToQueue(patient)}
+                            disabled={['arrived', 'waiting', 'in_consultation'].includes((patient as any).queueStatus)}
+                          >
+                            Check in
+                          </Button>
                         </TableCell>
                       </TableRow>
                     ))

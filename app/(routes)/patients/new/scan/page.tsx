@@ -204,7 +204,19 @@ function ScanICPageInner() {
           </div>
 
           <div className="flex justify-end">
-            <Link href={{ pathname: '/patients/new', query: { fullName, nric } }}>
+            <Link
+              href={{
+                pathname: "/patients/new",
+                query: {
+                  fullName,
+                  nric,
+                  ...(searchParams.get("visitIntent") === "otc" ||
+                  searchParams.get("visitIntent") === "consultation"
+                    ? { visitIntent: searchParams.get("visitIntent")! }
+                    : {}),
+                },
+              }}
+            >
               <Button>Continue to registration</Button>
             </Link>
           </div>

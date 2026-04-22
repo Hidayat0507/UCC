@@ -5,9 +5,7 @@
 
 export interface PatientInput {
   fullName: string;
-  identifierType?: "nric" | "non_malaysian_ic" | "passport";
-  identifierValue?: string;
-  nric?: string;
+  nric: string;
   dateOfBirth: Date | string;
   gender: 'male' | 'female' | 'other';
   email?: string;
@@ -32,53 +30,62 @@ export interface Patient extends PatientInput {
   updatedAt: Date;
 }
 
+async function readJson(response: Response): Promise<Record<string, unknown>> {
+  try {
+    return (await response.json()) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+}
+
+function mapPatientRows(patients: unknown[]): Patient[] {
+  return patients.map((p: any) => ({
+    ...p,
+    dateOfBirth: new Date(p.dateOfBirth),
+    createdAt: new Date(p.createdAt),
+    updatedAt: new Date(p.updatedAt),
+  }));
+}
+
 /**
  * Save a patient to Medplum (replaces createPatient from Firebase)
  */
 export async function savePatient(patient: PatientInput, clinicId?: string): Promise<string> {
   const response = await fetch('/api/patients', {
     method: 'POST',
-    headers: { 
+    credentials: 'include',
+    headers: {
       'Content-Type': 'application/json',
       ...(clinicId ? { 'X-Clinic-Id': clinicId } : {}),
     },
     body: JSON.stringify(patient),
   });
 
-  const data = await response.json();
+  const data = await readJson(response);
 
   if (!response.ok || !data.success) {
-    throw new Error(data.error || 'Failed to save patient');
+    throw new Error(typeof data.error === 'string' ? data.error : 'Failed to save patient');
   }
 
-  return data.patientId;
+  return data.patientId as string;
 }
 
 /**
  * Get a patient by ID from Medplum
  */
 export async function getPatient(patientId: string, clinicId?: string): Promise<Patient | null> {
-  // Get clinicId from cookie if not provided
-  const finalClinicId = clinicId || getClinicIdFromCookie();
-  
   const response = await fetch(`/api/patients?id=${patientId}`, {
-    headers: finalClinicId ? { 'X-Clinic-Id': finalClinicId } : undefined,
+    credentials: 'include',
+    headers: clinicId ? { 'X-Clinic-Id': clinicId } : undefined,
   });
-  const data = await response.json();
+  const data = await readJson(response);
 
   if (!response.ok) {
     if (response.status === 404) return null;
-    const errorMessage = data.error || 'Failed to get patient';
-    console.error('Failed to get patient:', {
-      status: response.status,
-      error: errorMessage,
-      patientId,
-      clinicId: finalClinicId,
-    });
-    throw new Error(errorMessage);
+    throw new Error(typeof data.error === 'string' ? data.error : 'Failed to get patient');
   }
 
-  const patient = data.patient;
+  const patient = data.patient as any;
   return {
     ...patient,
     dateOfBirth: new Date(patient.dateOfBirth),
@@ -88,99 +95,70 @@ export async function getPatient(patientId: string, clinicId?: string): Promise<
 }
 
 /**
- * Get clinic ID from cookie (set by proxy middleware)
- */
-function getClinicIdFromCookie(): string | null {
-  if (typeof document === 'undefined') return null;
-  const cookies = document.cookie.split(';');
-  const clinicCookie = cookies.find(c => c.trim().startsWith('medplum-clinic='));
-  return clinicCookie ? clinicCookie.split('=')[1] : null;
-}
-
-/**
  * Get all patients from Medplum
  */
 export async function getAllPatients(limit = 100, clinicId?: string): Promise<Patient[]> {
-  // Get clinicId from cookie if not provided
-  const finalClinicId = clinicId || getClinicIdFromCookie();
-  
   const response = await fetch(`/api/patients?limit=${limit}`, {
-    headers: finalClinicId ? { 'X-Clinic-Id': finalClinicId } : undefined,
+    credentials: 'include',
+    headers: clinicId ? { 'X-Clinic-Id': clinicId } : undefined,
   });
-  const data = await response.json();
+  const data = await readJson(response);
 
   if (!response.ok || !data.success) {
-    const errorMessage = data.error || 'Failed to get patients';
-    console.error('Failed to get patients:', {
-      status: response.status,
-      error: errorMessage,
-      clinicId: finalClinicId,
-    });
-    throw new Error(errorMessage);
+    const msg =
+      typeof data.error === 'string'
+        ? data.error
+        : `Failed to get patients (${response.status})`;
+    throw new Error(msg);
   }
 
-  return data.patients.map((p: any) => ({
-    ...p,
-    dateOfBirth: new Date(p.dateOfBirth),
-    createdAt: new Date(p.createdAt),
-    updatedAt: new Date(p.updatedAt),
-  }));
+  const rows = Array.isArray(data.patients) ? data.patients : [];
+  return mapPatientRows(rows);
 }
 
 /**
  * Search patients by name or NRIC
  */
 export async function searchPatients(query: string, clinicId?: string): Promise<Patient[]> {
-  // Get clinicId from cookie if not provided
-  const finalClinicId = clinicId || getClinicIdFromCookie();
-  
   const response = await fetch(`/api/patients?search=${encodeURIComponent(query)}`, {
-    headers: finalClinicId ? { 'X-Clinic-Id': finalClinicId } : undefined,
+    credentials: 'include',
+    headers: clinicId ? { 'X-Clinic-Id': clinicId } : undefined,
   });
-  const data = await response.json();
+  const data = await readJson(response);
 
   if (!response.ok || !data.success) {
-    const errorMessage = data.error || 'Failed to search patients';
-    console.error('Failed to search patients:', {
-      status: response.status,
-      error: errorMessage,
-      query,
-      clinicId: finalClinicId,
-    });
-    throw new Error(errorMessage);
+    const msg =
+      typeof data.error === 'string'
+        ? data.error
+        : `Failed to search patients (${response.status})`;
+    throw new Error(msg);
   }
 
-  return data.patients.map((p: any) => ({
-    ...p,
-    dateOfBirth: new Date(p.dateOfBirth),
-    createdAt: new Date(p.createdAt),
-    updatedAt: new Date(p.updatedAt),
-  }));
+  const rows = Array.isArray(data.patients) ? data.patients : [];
+  return mapPatientRows(rows);
 }
 
 /**
  * Update a patient
  */
-export async function updatePatient(patientId: string, updates: Partial<PatientInput>, clinicId?: string): Promise<void> {
+export async function updatePatient(
+  patientId: string,
+  updates: Partial<PatientInput>,
+  clinicId?: string
+): Promise<void> {
   const response = await fetch('/api/patients', {
     method: 'PATCH',
-    headers: { 
+    credentials: 'include',
+    headers: {
       'Content-Type': 'application/json',
       ...(clinicId ? { 'X-Clinic-Id': clinicId } : {}),
     },
     body: JSON.stringify({ patientId, ...updates }),
   });
 
-  const data = await response.json();
+  const data = await readJson(response);
 
   if (!response.ok || !data.success) {
-    throw new Error(data.error || 'Failed to update patient');
+    throw new Error(typeof data.error === 'string' ? data.error : 'Failed to update patient');
   }
 }
-
-
-
-
-
-
-
