@@ -11,18 +11,20 @@ export function proxy(req: NextRequest) {
 
   // ── Admin subdomain ─────────────────────────────────────────
   if (context.type === "admin") {
+    const url = req.nextUrl.clone();
+
     const shouldRewrite =
-      !pathname.startsWith("/admin") &&
       !pathname.startsWith("/login") &&
+      !pathname.startsWith("/logout") &&
       !pathname.startsWith("/api/") &&
       !pathname.startsWith("/_next");
 
-    const url = req.nextUrl.clone();
     if (shouldRewrite) {
       url.pathname = pathname === "/" ? "/admin" : "/admin" + pathname;
     }
 
-    const requestHeaders = withPathname(req, pathname);
+    const servingPath = shouldRewrite ? url.pathname : pathname;
+    const requestHeaders = withPathname(req, servingPath);
     return shouldRewrite
       ? NextResponse.rewrite(url, { request: { headers: requestHeaders } })
       : NextResponse.next({ request: { headers: requestHeaders } });

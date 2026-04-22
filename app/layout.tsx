@@ -54,7 +54,7 @@ export default async function RootLayout({
   // On a non-apex host (e.g. demo.drhidayat.com) `/` is not the marketing
   // page — it's the app entry. Bounce into /dashboard so a shared session
   // cookie doesn't accidentally render the landing component here.
-  if (!isApexHost && isRootPath) {
+  if (!isApexHost && isRootPath && !isAdminContext) {
     redirect("/dashboard");
   }
 
