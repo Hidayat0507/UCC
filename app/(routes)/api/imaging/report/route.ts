@@ -9,6 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createImagingReport } from '@/lib/fhir/imaging-service';
+import { getAdminMedplum } from '@/lib/server/medplum-admin';
 
 export const runtime = 'nodejs';
 
@@ -24,6 +25,7 @@ interface CreateImagingReportRequest {
 export async function POST(request: NextRequest) {
   try {
     const body: CreateImagingReportRequest = await request.json();
+    const medplum = await getAdminMedplum();
 
     // Validate API key
     const expectedApiKey = process.env.PACS_API_KEY;
@@ -55,7 +57,8 @@ export async function POST(request: NextRequest) {
       body.findings,
       body.impression,
       body.status || 'final',
-      body.radiologist
+      body.radiologist,
+      medplum
     );
 
     return NextResponse.json({
@@ -90,7 +93,6 @@ curl -X POST http://localhost:3000/api/imaging/report \
     "radiologist": "Dr. Jane Smith, MD"
   }'
 */
-
 
 
 

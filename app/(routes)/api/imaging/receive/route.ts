@@ -9,6 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { receiveImagingStudy, type ImagingStudyData } from '@/lib/fhir/imaging-service';
+import { getAdminMedplum } from '@/lib/server/medplum-admin';
 
 export const runtime = 'nodejs';
 
@@ -54,9 +55,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Process the imaging study
+    const medplum = await getAdminMedplum();
     const studyId = await receiveImagingStudy(
       body.serviceRequestId,
-      body.study
+      body.study,
+      medplum
     );
 
     return NextResponse.json({

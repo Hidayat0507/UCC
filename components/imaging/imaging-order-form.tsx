@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { IMAGING_PROCEDURES, type ImagingProcedureCode } from '@/lib/fhir/imaging-service';
+import { IMAGING_PROCEDURES, type ImagingProcedureCode } from '@/lib/fhir/imaging-constants';
 import { toast } from 'sonner';
 
 interface ImagingOrderFormProps {

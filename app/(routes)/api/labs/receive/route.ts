@@ -9,6 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { receiveLabResults, type LabResult } from '@/lib/fhir/lab-service';
+import { getAdminMedplum } from '@/lib/server/medplum-admin';
 
 export const runtime = 'nodejs';
 
@@ -58,10 +59,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Process the lab results
+    const medplum = await getAdminMedplum();
     const reportId = await receiveLabResults(
       body.serviceRequestId,
       body.results,
-      body.conclusion
+      body.conclusion,
+      medplum
     );
 
     return NextResponse.json({

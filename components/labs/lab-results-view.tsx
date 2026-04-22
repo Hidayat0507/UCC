@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { AlertCircle, CheckCircle2, TrendingDown, TrendingUp } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import type { LabReportSummary } from '@/lib/fhir/lab-service';
+import type { LabReportSummary } from '@/lib/fhir/lab-constants';
 
 interface LabResultsViewProps {
   patientId: string;

@@ -6,11 +6,13 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createLabOrder, type LabOrderRequest } from '@/lib/fhir/lab-service';
+import { getMedplumForRequest } from '@/lib/server/medplum-auth';
 
 export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {
   try {
+    const medplum = await getMedplumForRequest(request);
     const body: LabOrderRequest = await request.json();
 
     // Validate required fields
@@ -29,7 +31,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create the lab order
-    const serviceRequestId = await createLabOrder(body);
+    const serviceRequestId = await createLabOrder(body, medplum);
 
     return NextResponse.json({
       success: true,

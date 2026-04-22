@@ -1,13 +1,11 @@
 /**
- * Imaging Service - PACS (Picture Archiving and Communication System) Integration
- * 
- * Handles imaging orders and results using FHIR resources:
- * - ServiceRequest: Imaging orders
- * - ImagingStudy: DICOM study information
- * - DiagnosticReport: Imaging report/interpretation
+ * Imaging Service - PACS Integration
+ * Server-only. Do NOT import in Client Components.
+ * Use lib/fhir/imaging-constants.ts for static constants and types.
  */
 
 import { MedplumClient } from '@medplum/core';
+import { getAdminMedplum } from '@/lib/server/medplum-admin';
 import type {
   ServiceRequest,
   ImagingStudy,
@@ -16,11 +14,22 @@ import type {
 } from '@medplum/fhirtypes';
 import { createProvenanceForResource } from './provenance-service';
 import { validateAndCreate } from './fhir-helpers';
-import { applyMyCoreProfile } from './mycore';
+import {
+  IMAGING_PROCEDURES,
+  type ImagingProcedureCode,
+  type ImagingReportSummary,
+  type ImagingStudyData,
+  type DICOMSeries,
+} from './imaging-constants';
 
-/**
- * Imaging modality codes (DICOM)
- */
+export {
+  IMAGING_PROCEDURES,
+  type ImagingProcedureCode,
+  type ImagingReportSummary,
+  type ImagingStudyData,
+  type DICOMSeries,
+};
+
 export const IMAGING_MODALITIES = {
   CR: { code: 'CR', display: 'Computed Radiography', system: 'http://dicom.nema.org/resources/ontology/DCM' },
   CT: { code: 'CT', display: 'Computed Tomography', system: 'http://dicom.nema.org/resources/ontology/DCM' },
@@ -33,47 +42,11 @@ export const IMAGING_MODALITIES = {
   XA: { code: 'XA', display: 'X-Ray Angiography', system: 'http://dicom.nema.org/resources/ontology/DCM' },
 } as const;
 
-/**
- * Common imaging procedures with LOINC codes
- */
-export const IMAGING_PROCEDURES = {
-  // X-Ray
-  CHEST_XRAY: { code: '36643-5', display: 'Chest X-ray', modality: 'DX', system: 'http://loinc.org' },
-  CHEST_XRAY_2V: { code: '30746-2', display: 'Chest X-ray 2 views', modality: 'DX', system: 'http://loinc.org' },
-  ABDOMEN_XRAY: { code: '36558-5', display: 'Abdomen X-ray', modality: 'DX', system: 'http://loinc.org' },
-  SPINE_LUMBAR_XRAY: { code: '36567-6', display: 'Lumbar Spine X-ray', modality: 'DX', system: 'http://loinc.org' },
-  KNEE_XRAY: { code: '37362-1', display: 'Knee X-ray', modality: 'DX', system: 'http://loinc.org' },
-  
-  // CT Scan
-  HEAD_CT: { code: '30799-1', display: 'Head CT without contrast', modality: 'CT', system: 'http://loinc.org' },
-  HEAD_CT_CONTRAST: { code: '24727-0', display: 'Head CT with contrast', modality: 'CT', system: 'http://loinc.org' },
-  CHEST_CT: { code: '30800-7', display: 'Chest CT without contrast', modality: 'CT', system: 'http://loinc.org' },
-  ABDOMEN_CT: { code: '30807-2', display: 'Abdomen CT without contrast', modality: 'CT', system: 'http://loinc.org' },
-  CTPA: { code: '42273-8', display: 'CT Pulmonary Angiography', modality: 'CT', system: 'http://loinc.org' },
-  
-  // MRI
-  BRAIN_MRI: { code: '24556-3', display: 'Brain MRI', modality: 'MR', system: 'http://loinc.org' },
-  SPINE_MRI: { code: '24604-1', display: 'Spine MRI', modality: 'MR', system: 'http://loinc.org' },
-  KNEE_MRI: { code: '24610-8', display: 'Knee MRI', modality: 'MR', system: 'http://loinc.org' },
-  
-  // Ultrasound
-  ABDOMEN_US: { code: '24626-4', display: 'Abdomen Ultrasound', modality: 'US', system: 'http://loinc.org' },
-  PELVIS_US: { code: '24638-9', display: 'Pelvis Ultrasound', modality: 'US', system: 'http://loinc.org' },
-  OBSTETRIC_US: { code: '11525-3', display: 'Obstetric Ultrasound', modality: 'US', system: 'http://loinc.org' },
-  THYROID_US: { code: '24651-2', display: 'Thyroid Ultrasound', modality: 'US', system: 'http://loinc.org' },
-  ECHO: { code: '18752-6', display: 'Echocardiography', modality: 'US', system: 'http://loinc.org' },
-  
-  // Mammography
-  MAMMOGRAM: { code: '37027-2', display: 'Mammography', modality: 'MG', system: 'http://loinc.org' },
-  MAMMOGRAM_BILATERAL: { code: '24604-1', display: 'Bilateral Mammography', modality: 'MG', system: 'http://loinc.org' },
-} as const;
-
-export type ImagingProcedureCode = keyof typeof IMAGING_PROCEDURES;
 export type ModalityCode = keyof typeof IMAGING_MODALITIES;
 
 export interface ImagingOrderRequest {
-  patientId: string; // FHIR Patient ID
-  encounterId?: string; // FHIR Encounter ID
+  patientId: string;
+  encounterId?: string;
   procedures: ImagingProcedureCode[];
   priority?: 'routine' | 'urgent' | 'asap' | 'stat';
   clinicalIndication?: string;
@@ -81,87 +54,11 @@ export interface ImagingOrderRequest {
   orderedBy?: string;
 }
 
-export interface DICOMSeries {
-  uid: string; // Series Instance UID
-  number: number;
-  modality: string;
-  description?: string;
-  numberOfInstances: number;
-  bodySite?: string;
-  started?: Date;
-  endpoint?: string; // WADO-RS endpoint to view images
-}
-
-export interface ImagingStudyData {
-  studyUid: string; // Study Instance UID
-  accessionNumber?: string;
-  modality: string;
-  description?: string;
-  numberOfSeries: number;
-  numberOfInstances: number;
-  started?: Date;
-  series: DICOMSeries[];
-  pacsUrl?: string; // URL to view in PACS viewer
-}
-
-export interface ImagingReportSummary {
-  id: string;
-  patientId: string;
-  patientName?: string;
-  encounterId?: string;
-  procedure: string;
-  modality: string;
-  status: 'registered' | 'available' | 'cancelled';
-  orderedAt: Date;
-  performedAt?: Date;
-  study?: ImagingStudyData;
-  report?: {
-    id: string;
-    status: 'partial' | 'preliminary' | 'final' | 'amended' | 'corrected' | 'cancelled';
-    findings?: string;
-    impression?: string;
-    radiologist?: string;
-    issuedAt?: Date;
-  };
-}
-
-let medplumClient: MedplumClient | undefined;
-let medplumInitPromise: Promise<MedplumClient> | undefined;
-
-/**
- * Get authenticated Medplum client (singleton)
- */
-async function getMedplumClient(): Promise<MedplumClient> {
-  if (medplumClient) return medplumClient;
-  if (medplumInitPromise) return medplumInitPromise;
-
-  const baseUrl = process.env.MEDPLUM_BASE_URL || process.env.NEXT_PUBLIC_MEDPLUM_BASE_URL || 'http://localhost:8103';
-  const clientId = process.env.MEDPLUM_CLIENT_ID;
-  const clientSecret = process.env.MEDPLUM_CLIENT_SECRET;
-
-  if (!clientId || !clientSecret) {
-    throw new Error('Medplum credentials not configured');
-  }
-
-  medplumInitPromise = (async () => {
-    const medplum = new MedplumClient({
-      baseUrl,
-      clientId,
-      clientSecret,
-    });
-    await medplum.startClientLogin(clientId, clientSecret);
-    medplumClient = medplum;
-    return medplum;
-  })();
-
-  return medplumInitPromise;
-}
-
 /**
  * Create an imaging order (ServiceRequest)
  */
-export async function createImagingOrder(order: ImagingOrderRequest): Promise<string> {
-  const medplum = await getMedplumClient();
+export async function createImagingOrder(order: ImagingOrderRequest, medplum: MedplumClient): Promise<string> {
+  const client = medplum;
   
   console.log(`🏥 Creating imaging order for patient ${order.patientId}`);
 
@@ -171,7 +68,7 @@ export async function createImagingOrder(order: ImagingOrderRequest): Promise<st
     const procedure = IMAGING_PROCEDURES[procedureCode];
     const modality = IMAGING_MODALITIES[procedure.modality as ModalityCode];
     
-    const serviceRequest = await validateAndCreate<ServiceRequest>(medplum, {
+    const serviceRequest = await validateAndCreate<ServiceRequest>(client, {
       resourceType: 'ServiceRequest',
       status: 'active',
       intent: 'order',
@@ -219,6 +116,7 @@ export async function createImagingOrder(order: ImagingOrderRequest): Promise<st
     if (serviceRequest.id) {
       try {
         await createProvenanceForResource(
+          client,
           'ServiceRequest',
           serviceRequest.id,
           order.orderedBy?.startsWith('Practitioner/') ? order.orderedBy.split('/')[1] : undefined,
@@ -240,21 +138,22 @@ export async function createImagingOrder(order: ImagingOrderRequest): Promise<st
  */
 export async function receiveImagingStudy(
   serviceRequestId: string,
-  studyData: ImagingStudyData
+  studyData: ImagingStudyData,
+  medplum: MedplumClient
 ): Promise<string> {
-  const medplum = await getMedplumClient();
+  const client = medplum;
   
   console.log(`📸 Receiving imaging study ${studyData.studyUid} for ServiceRequest ${serviceRequestId}`);
 
   // Get the original service request
-  const serviceRequest = await medplum.readResource('ServiceRequest', serviceRequestId);
+  const serviceRequest = await client.readResource('ServiceRequest', serviceRequestId);
   
   if (!serviceRequest.subject?.reference) {
     throw new Error('ServiceRequest has no patient reference');
   }
 
   // Create ImagingStudy resource
-  const imagingStudy = await validateAndCreate<ImagingStudy>(medplum, {
+  const imagingStudy = await validateAndCreate<ImagingStudy>(client, {
     resourceType: 'ImagingStudy',
     status: 'available',
     subject: {
@@ -305,6 +204,7 @@ export async function receiveImagingStudy(
   if (imagingStudy.id) {
     try {
       await createProvenanceForResource(
+        client,
         'ImagingStudy',
         imagingStudy.id,
         undefined, // Could extract from serviceRequest.requester if needed
@@ -318,12 +218,10 @@ export async function receiveImagingStudy(
   }
 
   // Update ServiceRequest status
-  await medplum.updateResource(
-    applyMyCoreProfile({
-      ...serviceRequest,
-      status: 'completed',
-    })
-  );
+  await client.updateResource({
+    ...serviceRequest,
+    status: 'completed',
+  });
 
   return imagingStudy.id!;
 }
@@ -336,17 +234,18 @@ export async function createImagingReport(
   findings: string,
   impression: string,
   status: 'preliminary' | 'final' = 'final',
-  radiologist?: string
+  radiologist?: string,
+  medplum?: MedplumClient
 ): Promise<string> {
-  const medplum = await getMedplumClient();
+  const client = medplum ?? (await getAdminMedplum());
   
   console.log(`📝 Creating imaging report for study ${imagingStudyId}`);
 
   // Get the imaging study
-  const imagingStudy = await medplum.readResource('ImagingStudy', imagingStudyId);
+  const imagingStudy = await client.readResource('ImagingStudy', imagingStudyId);
 
   // Create DiagnosticReport
-  const report = await validateAndCreate<DiagnosticReport>(medplum, {
+  const report = await validateAndCreate<DiagnosticReport>(client, {
     resourceType: 'DiagnosticReport',
     status,
     category: [{
@@ -384,6 +283,7 @@ export async function createImagingReport(
   if (report.id) {
     try {
       await createProvenanceForResource(
+        client,
         'DiagnosticReport',
         report.id,
         radiologist ? undefined : undefined, // Could parse radiologist ID if provided
@@ -402,10 +302,10 @@ export async function createImagingReport(
 /**
  * Get all imaging orders for a patient
  */
-export async function getPatientImagingOrders(patientId: string): Promise<ServiceRequest[]> {
-  const medplum = await getMedplumClient();
+export async function getPatientImagingOrders(patientId: string, medplum: MedplumClient): Promise<ServiceRequest[]> {
+  const client = medplum;
   
-  const orders = await medplum.searchResources('ServiceRequest', {
+  const orders = await client.searchResources('ServiceRequest', {
     subject: `Patient/${patientId}`,
     category: '363679005', // SNOMED CT code for Imaging
     _sort: '-authored',
@@ -417,10 +317,10 @@ export async function getPatientImagingOrders(patientId: string): Promise<Servic
 /**
  * Get all imaging studies for a patient
  */
-export async function getPatientImagingStudies(patientId: string): Promise<ImagingReportSummary[]> {
-  const medplum = await getMedplumClient();
+export async function getPatientImagingStudies(patientId: string, medplum: MedplumClient): Promise<ImagingReportSummary[]> {
+  const client = medplum;
   
-  const studies = await medplum.searchResources('ImagingStudy', {
+  const studies = await client.searchResources('ImagingStudy', {
     subject: `Patient/${patientId}`,
     _sort: '-started',
   });
@@ -429,7 +329,7 @@ export async function getPatientImagingStudies(patientId: string): Promise<Imagi
 
   for (const study of studies) {
     // Get associated diagnostic report if exists
-    const reports = await medplum.searchResources('DiagnosticReport', {
+    const reports = await client.searchResources('DiagnosticReport', {
       'imaging-study': `ImagingStudy/${study.id}`,
     });
 
@@ -481,10 +381,10 @@ export async function getPatientImagingStudies(patientId: string): Promise<Imagi
 /**
  * Get imaging studies for an encounter
  */
-export async function getEncounterImagingStudies(encounterId: string): Promise<ImagingReportSummary[]> {
-  const medplum = await getMedplumClient();
+export async function getEncounterImagingStudies(encounterId: string, medplum: MedplumClient): Promise<ImagingReportSummary[]> {
+  const client = medplum;
   
-  const studies = await medplum.searchResources('ImagingStudy', {
+  const studies = await client.searchResources('ImagingStudy', {
     encounter: `Encounter/${encounterId}`,
     _sort: '-started',
   });
@@ -492,7 +392,7 @@ export async function getEncounterImagingStudies(encounterId: string): Promise<I
   const summaries: ImagingReportSummary[] = [];
 
   for (const study of studies) {
-    const reports = await medplum.searchResources('DiagnosticReport', {
+    const reports = await client.searchResources('DiagnosticReport', {
       'imaging-study': `ImagingStudy/${study.id}`,
     });
 
@@ -544,13 +444,13 @@ export async function getEncounterImagingStudies(encounterId: string): Promise<I
 /**
  * Get a specific imaging study
  */
-export async function getImagingStudy(studyId: string): Promise<ImagingReportSummary | null> {
+export async function getImagingStudy(studyId: string, medplum: MedplumClient): Promise<ImagingReportSummary | null> {
   try {
-    const medplum = await getMedplumClient();
+    const client = medplum;
     
-    const study = await medplum.readResource('ImagingStudy', studyId);
+    const study = await client.readResource('ImagingStudy', studyId);
     
-    const reports = await medplum.searchResources('DiagnosticReport', {
+    const reports = await client.searchResources('DiagnosticReport', {
       'imaging-study': `ImagingStudy/${studyId}`,
     });
 
@@ -599,8 +499,6 @@ export async function getImagingStudy(studyId: string): Promise<ImagingReportSum
     return null;
   }
 }
-
-
 
 
 

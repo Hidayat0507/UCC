@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ExternalLink, FileImage } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
-import type { ImagingReportSummary } from '@/lib/fhir/imaging-service';
+import type { ImagingReportSummary } from '@/lib/fhir/imaging-constants';
 
 interface ImagingResultsViewProps {
   patientId: string;
