@@ -159,6 +159,26 @@ export interface OrganizationInput {
   logoUrl?: string;
 }
 
+function scrubDeletedPractitionerTelecom(
+  telecom: Practitioner["telecom"] | undefined,
+  practitionerId: string
+): Practitioner["telecom"] | undefined {
+  if (!telecom?.length) {
+    return telecom;
+  }
+
+  return telecom.map((entry) => {
+    if (entry.system !== "email") {
+      return entry;
+    }
+
+    return {
+      ...entry,
+      value: `deleted+${practitionerId}@invalid.local`,
+    };
+  });
+}
+
 export async function saveOrganizationDetailsToMedplum(
   input: OrganizationInput,
   subdomain: string
@@ -196,7 +216,7 @@ function practitionerDisplayName(p: Practitioner): string {
 export async function getPractitionersFromMedplum(): Promise<PractitionerSummary[]> {
   const medplum = await getAdminMedplum();
   const [practitioners, roles, organizations] = await Promise.all([
-    medplum.searchResources("Practitioner", { _count: "200" }),
+    medplum.searchResources("Practitioner", { active: "true", _count: "200" }),
     medplum.searchResources("PractitionerRole", { _count: "500" }),
     medplum.searchResources("Organization", { _count: "200" }),
   ]);
@@ -354,6 +374,14 @@ export async function deletePractitionerFromMedplum(
   practitionerId: string
 ): Promise<void> {
   const medplum = await getAdminMedplum();
+  let practitioner: Practitioner;
+
+  try {
+    practitioner = await medplum.readResource("Practitioner", practitionerId);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(`Failed to load Practitioner before delete: ${message}`);
+  }
 
   const [roles, memberships] = await Promise.all([
     medplum.searchResources("PractitionerRole", {
@@ -403,12 +431,34 @@ export async function deletePractitionerFromMedplum(
     await medplum.deleteResource("Practitioner", practitionerId);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error(
-      "[deletePractitioner] failed to delete Practitioner",
+    console.warn(
+      "[deletePractitioner] hard delete failed, archiving Practitioner instead",
       practitionerId,
       message
     );
-    throw new Error(`Failed to delete Practitioner: ${message}`);
+
+    try {
+      await medplum.updateResource<Practitioner>({
+        ...practitioner,
+        resourceType: "Practitioner",
+        active: false,
+        telecom: scrubDeletedPractitionerTelecom(
+          practitioner.telecom,
+          practitionerId
+        ),
+      });
+    } catch (archiveErr) {
+      const archiveMessage =
+        archiveErr instanceof Error ? archiveErr.message : String(archiveErr);
+      console.error(
+        "[deletePractitioner] failed to archive Practitioner after delete rejection",
+        practitionerId,
+        archiveMessage
+      );
+      throw new Error(
+        `Failed to delete Practitioner: ${message}. Archive fallback also failed: ${archiveMessage}`
+      );
+    }
   }
 
   // Best-effort User cleanup (ignore auth errors — User is a super-admin resource).

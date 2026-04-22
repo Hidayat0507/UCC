@@ -1,0 +1,6 @@
+[    1187ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://admin.drhidayat.com/dashboard:0
+[    2050ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://admin.drhidayat.com/favicon.ico:0
+[    2350ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://admin.drhidayat.com/favicon.ico:0
+[  665095ms] [VERBOSE] [DOM] Input elements should have autocomplete attributes (suggested: "current-password"): (More info: https://goo.gl/9p2vKq) %o @ https://admin.drhidayat.com/login:0
+[  665785ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://admin.drhidayat.com/api/auth/medplum-session:0
+[  665819ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://admin.drhidayat.com/api/auth/me:0
