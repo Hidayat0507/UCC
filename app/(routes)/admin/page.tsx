@@ -82,7 +82,7 @@ export default async function AdminOverviewPage() {
                     <p className="text-xs text-muted-foreground">{clinic.subdomain}.{process.env.NEXT_PUBLIC_BASE_DOMAIN || "yourdomain.com"}</p>
                   </div>
                   <Button variant="outline" size="sm" asChild>
-                    <Link href={`/admin/clinics`}>Manage</Link>
+                    <Link href={`/admin/clinics/${clinic.id}`}>Manage</Link>
                   </Button>
                 </div>
               ))}
