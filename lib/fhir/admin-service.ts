@@ -368,19 +368,59 @@ export async function deletePractitionerFromMedplum(
       membership.profile?.reference === `Practitioner/${practitionerId}`
   );
 
+  // Collect User refs so we can also drop the login identity. Without this
+  // the User remains and causes "email already exists" on re-invite.
+  const userRefs = new Set<string>();
+  for (const m of matchingMemberships) {
+    if (m.user?.reference) userRefs.add(m.user.reference);
+  }
+
   for (const role of roles ?? []) {
     if (role.id) {
-      await medplum.deleteResource("PractitionerRole", role.id);
+      try {
+        await medplum.deleteResource("PractitionerRole", role.id);
+      } catch (err) {
+        console.warn("[deletePractitioner] failed to delete role", role.id, err);
+      }
     }
   }
 
   for (const membership of matchingMemberships) {
     if (membership.id) {
-      await medplum.deleteResource("ProjectMembership", membership.id);
+      try {
+        await medplum.deleteResource("ProjectMembership", membership.id);
+      } catch (err) {
+        console.warn(
+          "[deletePractitioner] failed to delete membership",
+          membership.id,
+          err
+        );
+      }
     }
   }
 
-  await medplum.deleteResource("Practitioner", practitionerId);
+  try {
+    await medplum.deleteResource("Practitioner", practitionerId);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(
+      "[deletePractitioner] failed to delete Practitioner",
+      practitionerId,
+      message
+    );
+    throw new Error(`Failed to delete Practitioner: ${message}`);
+  }
+
+  // Best-effort User cleanup (ignore auth errors — User is a super-admin resource).
+  for (const ref of Array.from(userRefs)) {
+    const [resourceType, id] = ref.split("/");
+    if (resourceType !== "User" || !id) continue;
+    try {
+      await medplum.deleteResource("User", id);
+    } catch (err) {
+      console.warn("[deletePractitioner] could not delete User", id, err);
+    }
+  }
 }
 
 export interface InvitePractitionerInput {

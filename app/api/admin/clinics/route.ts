@@ -1,7 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
-import { saveOrganizationDetailsToMedplum } from "@/lib/fhir/admin-service";
+import {
+  getOrganizationsFromMedplum,
+  saveOrganizationDetailsToMedplum,
+} from "@/lib/fhir/admin-service";
 import { requirePlatformAdmin } from "@/lib/server/medplum-auth";
 import { handleRouteError } from "@/lib/server/route-helpers";
+
+/**
+ * GET /api/admin/clinics
+ * List all clinic Organisations in Medplum.
+ */
+export async function GET(req: NextRequest) {
+  try {
+    await requirePlatformAdmin(req);
+    const clinics = await getOrganizationsFromMedplum();
+    return NextResponse.json({ clinics });
+  } catch (error) {
+    return handleRouteError(error, "GET /api/admin/clinics");
+  }
+}
 
 /**
  * POST /api/admin/clinics
