@@ -55,38 +55,44 @@ export default async function RootLayout({
     }
   }
 
+  // Marketing landing page — no clinic subdomain, no admin, root path
+  const isMarketingPage = !isAdminContext && !clinicId && (pathname === "/" || pathname === "");
+
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="min-h-screen bg-background font-sans antialiased">
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="light"
-          enableSystem={false}
-          themes={["light", "dark", "warm"]}
-          disableTransitionOnChange
-        >
-          <MedplumAuthProvider>
-        <div className="flex h-screen flex-col">
-          <div className="flex flex-1 min-h-0">
-                {/* Only show clinic sidebar on non-admin subdomains */}
-                {!isAdminContext && (
-                  <Sidebar
-                    modules={modules.map((module) => ({
-                      id: module.id,
-                      label: module.label,
-                      routePath: module.routePath,
-                      icon: module.icon,
-                    }))}
-                  />
-                )}
-                <main className="flex-1 overflow-y-auto">
-                  {isAdminContext ? children : <div className="container p-8">{children}</div>}
-                </main>
+        {isMarketingPage ? (
+          children
+        ) : (
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="light"
+            enableSystem={false}
+            themes={["light", "dark", "warm"]}
+            disableTransitionOnChange
+          >
+            <MedplumAuthProvider>
+              <div className="flex h-screen flex-col">
+                <div className="flex flex-1 min-h-0">
+                  {!isAdminContext && (
+                    <Sidebar
+                      modules={modules.map((module) => ({
+                        id: module.id,
+                        label: module.label,
+                        routePath: module.routePath,
+                        icon: module.icon,
+                      }))}
+                    />
+                  )}
+                  <main className="flex-1 overflow-y-auto">
+                    {isAdminContext ? children : <div className="container p-8">{children}</div>}
+                  </main>
+                </div>
               </div>
-            </div>
-            <Toaster />
-          </MedplumAuthProvider>
-        </ThemeProvider>
+              <Toaster />
+            </MedplumAuthProvider>
+          </ThemeProvider>
+        )}
       </body>
     </html>
   );
