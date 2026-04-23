@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Calendar, FileText, AlertCircle, User, Phone, Mail, Heart, Users, ClipboardList } from "lucide-react";
+import { Calendar, FileText, AlertCircle, User, Phone, Mail, Heart, Users, ClipboardList, Pencil } from "lucide-react";
 import Link from "next/link";
 import { getPatientFromMedplum } from "@/lib/fhir/patient-service";
 import { getPatientConsultationsFromMedplum } from "@/lib/fhir/consultation-service";
@@ -120,13 +120,16 @@ export default async function PatientProfilePage({ params }: PatientProfilePageP
               </Link>
             </Button>
           )}
-          {/* Add back New Consultation Button */}
+          <Button asChild variant="outline">
+            <Link href={`/patients/${id}/edit`}>
+              <Pencil className="mr-2 h-4 w-4" /> Edit Patient
+            </Link>
+          </Button>
           <Button asChild>
             <Link href={`/patients/${id}/consultation`}>
               <FileText className="mr-2 h-4 w-4" /> New Consultation
             </Link>
           </Button>
-          {/* Add other actions like Edit Patient if needed */}
         </div>
       </div>
 

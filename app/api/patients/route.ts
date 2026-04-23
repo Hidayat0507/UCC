@@ -12,6 +12,7 @@ import {
   getAllPatientsFromMedplum,
   searchPatientsInMedplum,
   updatePatientInMedplum,
+  archivePatientInMedplum,
 } from '@/lib/fhir/patient-service';
 
 /**
@@ -109,6 +110,20 @@ export async function PATCH(request: NextRequest) {
     });
   } catch (error) {
     return handleRouteError(error, 'PATCH /api/patients');
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const { medplum, clinicId } = await requireClinicAuth(request);
+    const patientId = new URL(request.url).searchParams.get('patientId');
+    if (!patientId) {
+      return NextResponse.json({ error: 'Missing patientId' }, { status: 400 });
+    }
+    await archivePatientInMedplum(patientId, clinicId, medplum);
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    return handleRouteError(error, 'DELETE /api/patients');
   }
 }
 

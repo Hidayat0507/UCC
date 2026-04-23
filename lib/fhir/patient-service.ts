@@ -722,3 +722,13 @@ export async function updatePatientInMedplum(
   await client.updateResource(updatedPatient);
   console.log(`✅ Updated FHIR Patient: ${patientId}`);
 }
+
+export async function archivePatientInMedplum(
+  patientId: string,
+  clinicId: string | undefined,
+  medplum: MedplumClient
+): Promise<void> {
+  const existingPatient = await medplum.readResource('Patient', patientId);
+  if (clinicId) assertMatchesClinic(existingPatient, clinicId, `Patient/${patientId}`);
+  await medplum.updateResource({ ...existingPatient, active: false });
+}

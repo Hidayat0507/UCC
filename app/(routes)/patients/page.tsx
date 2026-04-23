@@ -50,9 +50,10 @@ export default function PatientsPage() {
       try {
         // 🎯 LOAD FROM MEDPLUM (FHIR) - Source of Truth
         const data = await getAllPatients(200);
-        console.log(`✅ Loaded ${data.length} patients from Medplum FHIR`);
-        
-        setPatients(data as any);
+        const active = data.filter((p) => (p as any).active !== false);
+        console.log(`✅ Loaded ${active.length} active patients from Medplum FHIR`);
+
+        setPatients(active as any);
         
         const now = new Date();
         const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
