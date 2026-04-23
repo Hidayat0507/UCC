@@ -31,6 +31,7 @@ import type {
   ClinicSummary,
   PractitionerDetail,
 } from "@/lib/fhir/admin-service";
+import { useAdminPath } from "@/hooks/use-admin-path";
 
 interface Props {
   user: PractitionerDetail;
@@ -40,6 +41,7 @@ interface Props {
 export default function UserEditForm({ user, clinics }: Props) {
   const router = useRouter();
   const { toast } = useToast();
+  const adminPath = useAdminPath();
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [form, setForm] = useState({
@@ -118,7 +120,7 @@ export default function UserEditForm({ user, clinics }: Props) {
         title: "User deleted",
         description: `${user.name} has been removed.`,
       });
-      router.replace("/admin/users");
+      router.replace(adminPath("/users"));
     } catch (err: any) {
       toast({
         title: "Cannot delete",
@@ -134,7 +136,7 @@ export default function UserEditForm({ user, clinics }: Props) {
     <div className="max-w-2xl space-y-6">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="sm" asChild>
-          <Link href="/admin/users">
+          <Link href={adminPath("/users")}>
             <ArrowLeft className="h-4 w-4" />
           </Link>
         </Button>
@@ -220,7 +222,7 @@ export default function UserEditForm({ user, clinics }: Props) {
                 {saving ? "Saving..." : "Save Changes"}
               </Button>
               <Button type="button" variant="outline" asChild>
-                <Link href="/admin/users">Cancel</Link>
+                <Link href={adminPath("/users")}>Cancel</Link>
               </Button>
             </div>
           </form>

@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { headers } from "next/headers";
+import { adminPathForHost } from "@/lib/admin-routes";
 import {
   Card,
   CardContent,
@@ -9,8 +11,11 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ExternalLink, Server, Shield, Wrench } from "lucide-react";
+import { getHostFromHeaders } from "@/lib/server/subdomain-host";
 
-export default function AdminSettingsPage() {
+export default async function AdminSettingsPage() {
+  const host = getHostFromHeaders(await headers());
+  const adminPath = (path: string) => adminPathForHost(path, host);
   const medplumUi =
     process.env.NEXT_PUBLIC_MEDPLUM_UI_URL || "https://medplum.drhidayat.com";
   const medplumApi =
@@ -90,7 +95,7 @@ export default function AdminSettingsPage() {
         </CardHeader>
         <CardContent>
           <Button variant="outline" size="sm" asChild>
-            <Link href="/admin/create-medplum-client">
+            <Link href={adminPath("/create-medplum-client")}>
               Create Medplum client credentials
             </Link>
           </Button>

@@ -1,11 +1,16 @@
 import { listActiveModules } from "@/lib/module-registry";
 import { getOrganizationsFromMedplum } from "@/lib/fhir/admin-service";
+import { adminPathForHost } from "@/lib/admin-routes";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Building2, Users, Activity } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { headers } from "next/headers";
+import { getHostFromHeaders } from "@/lib/server/subdomain-host";
 
 export default async function AdminOverviewPage() {
+  const host = getHostFromHeaders(await headers());
+  const adminPath = (path: string) => adminPathForHost(path, host);
   const [modules, clinics] = await Promise.all([
     listActiveModules().catch(() => []),
     getOrganizationsFromMedplum().catch(() => []),
@@ -62,14 +67,14 @@ export default async function AdminOverviewPage() {
             <CardDescription>All registered clinics on this platform</CardDescription>
           </div>
           <Button asChild size="sm">
-            <Link href="/admin/clinics/new">Add Clinic</Link>
+            <Link href={adminPath("/clinics/new")}>Add Clinic</Link>
           </Button>
         </CardHeader>
         <CardContent>
           {clinics.length === 0 ? (
             <p className="text-sm text-muted-foreground py-4 text-center">
               No clinics found.{" "}
-              <Link href="/admin/clinics/new" className="underline">
+              <Link href={adminPath("/clinics/new")} className="underline">
                 Create the first one.
               </Link>
             </p>
@@ -82,7 +87,7 @@ export default async function AdminOverviewPage() {
                     <p className="text-xs text-muted-foreground">{clinic.subdomain}.{process.env.NEXT_PUBLIC_BASE_DOMAIN || "yourdomain.com"}</p>
                   </div>
                   <Button variant="outline" size="sm" asChild>
-                    <Link href={`/admin/clinics/${clinic.id}`}>Manage</Link>
+                    <Link href={adminPath(`/clinics/${clinic.id}`)}>Manage</Link>
                   </Button>
                 </div>
               ))}

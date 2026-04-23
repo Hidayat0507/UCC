@@ -1,11 +1,16 @@
 import { getOrganizationsFromMedplum } from "@/lib/fhir/admin-service";
+import { adminPathForHost } from "@/lib/admin-routes";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Building2, ExternalLink, Plus } from "lucide-react";
 import Link from "next/link";
+import { headers } from "next/headers";
+import { getHostFromHeaders } from "@/lib/server/subdomain-host";
 
 export default async function ClinicsPage() {
+  const host = getHostFromHeaders(await headers());
+  const adminPath = (path: string) => adminPathForHost(path, host);
   const clinics = await getOrganizationsFromMedplum().catch(() => []);
   const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN || "yourdomain.com";
 
@@ -19,7 +24,7 @@ export default async function ClinicsPage() {
           </p>
         </div>
         <Button asChild>
-          <Link href="/admin/clinics/new">
+          <Link href={adminPath("/clinics/new")}>
             <Plus className="h-4 w-4 mr-2" />
             Add Clinic
           </Link>
@@ -35,7 +40,7 @@ export default async function ClinicsPage() {
               Get started by creating your first clinic.
             </p>
             <Button asChild>
-              <Link href="/admin/clinics/new">Create First Clinic</Link>
+              <Link href={adminPath("/clinics/new")}>Create First Clinic</Link>
             </Button>
           </CardContent>
         </Card>
@@ -76,7 +81,7 @@ export default async function ClinicsPage() {
               </CardContent>
               <div className="px-6 pb-4 flex gap-2">
                 <Button variant="outline" size="sm" className="flex-1" asChild>
-                  <Link href={`/admin/clinics/${clinic.id}`}>Edit</Link>
+                  <Link href={adminPath(`/clinics/${clinic.id}`)}>Edit</Link>
                 </Button>
                 <Button variant="ghost" size="sm" asChild>
                   <a

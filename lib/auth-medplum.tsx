@@ -13,7 +13,11 @@ interface MedplumAuthContextType {
   isAuthenticated: boolean;
   isAdmin: boolean;
   clinicId: string | null;
-  signIn: (email: string, password: string) => Promise<{ isAdmin: boolean }>;
+  signIn: (
+    email: string,
+    password: string,
+    next?: string
+  ) => Promise<{ isAdmin: boolean; redirectUrl: string; clinicId: string | null }>;
   signOut: () => Promise<void>;
   getAccessToken: () => string | undefined;
   setClinicId: (clinicId: string | null) => Promise<void>;
@@ -149,13 +153,17 @@ export function MedplumAuthProvider({ children }: { children: React.ReactNode })
     };
   }, [medplum]);
 
-  const signIn = async (email: string, password: string): Promise<{ isAdmin: boolean }> => {
+  const signIn = async (
+    email: string,
+    password: string,
+    next?: string
+  ): Promise<{ isAdmin: boolean; redirectUrl: string; clinicId: string | null }> => {
     try {
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, next }),
       });
 
       const payload = await response.json().catch(() => ({}));
@@ -169,8 +177,14 @@ export function MedplumAuthProvider({ children }: { children: React.ReactNode })
       }
 
       const adminStatus = payload?.isAdmin === true || sessionState.isAdmin === true;
+      const redirectUrl =
+        typeof payload?.redirectUrl === 'string' && payload.redirectUrl.startsWith('/')
+          ? payload.redirectUrl
+          : adminStatus
+            ? '/admin'
+            : '/dashboard';
 
-      return { isAdmin: adminStatus };
+      return { isAdmin: adminStatus, redirectUrl, clinicId: payload?.clinicId ?? null };
     } catch (error: any) {
       throw classifyAuthError(error);
     }

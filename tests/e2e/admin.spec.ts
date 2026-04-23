@@ -40,7 +40,7 @@ test.describe("Admin portal", () => {
   test("overview page loads with expected headings and cards", async ({
     page,
   }) => {
-    await page.goto("/admin", { waitUntil: "domcontentloaded" });
+    await page.goto("/", { waitUntil: "domcontentloaded" });
 
     // Core heading
     await expect(
@@ -69,7 +69,7 @@ test.describe("Admin portal", () => {
   test("clinic list is displayed and has at least one entry", async ({
     page,
   }) => {
-    await page.goto("/admin", { waitUntil: "domcontentloaded" });
+    await page.goto("/", { waitUntil: "domcontentloaded" });
 
     const clinicCount = await page.getByRole("link", { name: "Manage" }).count();
     if (clinicCount === 0) {
@@ -82,30 +82,30 @@ test.describe("Admin portal", () => {
     expect(clinicCount).toBeGreaterThan(0);
   });
 
-  test("can navigate to /admin/clinics", async ({ page }) => {
-    await page.goto("/admin/clinics", { waitUntil: "domcontentloaded" });
+  test("can navigate to /clinics", async ({ page }) => {
+    await page.goto("/clinics", { waitUntil: "domcontentloaded" });
     // Should not 404
     const status = await page
       .request
-      .get("/admin/clinics")
+      .get("/clinics")
       .then((r) => r.status());
     expect(status).toBeLessThan(400);
     await page.screenshot({ path: "test-results/admin-clinics.png" });
   });
 
-  test("can navigate to /admin/users", async ({ page }) => {
-    await page.goto("/admin/users", { waitUntil: "domcontentloaded" });
+  test("can navigate to /users", async ({ page }) => {
+    await page.goto("/users", { waitUntil: "domcontentloaded" });
     const status = await page.request
-      .get("/admin/users")
+      .get("/users")
       .then((r) => r.status());
     expect(status).toBeLessThan(400);
     await page.screenshot({ path: "test-results/admin-users.png" });
   });
 
-  test("Add Clinic button links to /admin/clinics/new", async ({ page }) => {
-    await page.goto("/admin", { waitUntil: "domcontentloaded" });
+  test("Add Clinic button links to /clinics/new", async ({ page }) => {
+    await page.goto("/", { waitUntil: "domcontentloaded" });
     const addBtn = page.getByRole("link", { name: /add clinic/i });
     await expect(addBtn).toBeVisible();
-    await expect(addBtn).toHaveAttribute("href", "/admin/clinics/new");
+    await expect(addBtn).toHaveAttribute("href", "/clinics/new");
   });
 });

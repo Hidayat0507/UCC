@@ -12,6 +12,7 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/use-toast";
+import { useAdminPath } from "@/hooks/use-admin-path";
 
 type ClinicOption = {
   id: string;
@@ -23,6 +24,7 @@ type ClinicOption = {
 export default function InviteUserPage() {
   const router = useRouter();
   const { toast } = useToast();
+  const adminPath = useAdminPath();
   const [loading, setLoading] = useState(false);
   const [clinics, setClinics] = useState<ClinicOption[]>([]);
   const [loadingClinics, setLoadingClinics] = useState(true);
@@ -120,7 +122,7 @@ export default function InviteUserPage() {
           ? `${form.firstName} ${form.lastName} has been invited.`
           : `${form.firstName} ${form.lastName} can now sign in.`,
       });
-      router.replace("/admin/users");
+      router.replace(adminPath("/users"));
     } catch (err: any) {
       toast({
         title: "Invite failed",
@@ -136,7 +138,7 @@ export default function InviteUserPage() {
     <div className="max-w-2xl space-y-6">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="sm" asChild>
-          <Link href="/admin/users">
+          <Link href={adminPath("/users")}>
             <ArrowLeft className="h-4 w-4" />
           </Link>
         </Button>
@@ -249,7 +251,7 @@ export default function InviteUserPage() {
                 {loading ? "Saving..." : form.sendEmail ? "Send Invite" : "Create User"}
               </Button>
               <Button type="button" variant="outline" asChild>
-                <Link href="/admin/users">Cancel</Link>
+                <Link href={adminPath("/users")}>Cancel</Link>
               </Button>
             </div>
           </form>

@@ -60,14 +60,26 @@ export async function POST(req: NextRequest) {
 
 /**
  * DELETE /api/auth/medplum-session
- * Clear session cookies
+ * Clear session cookies. Must mirror the domain/path used on set, otherwise
+ * domain-scoped cookies (e.g. `.drhidayat.com`) are NOT removed by the browser
+ * and the session effectively survives logout.
  */
 export async function DELETE() {
   try {
     const cookieStore = await cookies();
-    cookieStore.delete(SESSION_COOKIE);
-    cookieStore.delete(REFRESH_COOKIE);
-    cookieStore.delete(CLINIC_COOKIE);
+    const expire = (name: string, httpOnly: boolean) => {
+      cookieStore.set(name, "", {
+        httpOnly,
+        secure: isProd,
+        sameSite: "lax",
+        path: "/",
+        maxAge: 0,
+        domain: COOKIE_DOMAIN,
+      });
+    };
+    expire(SESSION_COOKIE, true);
+    expire(REFRESH_COOKIE, true);
+    expire(CLINIC_COOKIE, false);
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error("Error deleting Medplum session:", error);

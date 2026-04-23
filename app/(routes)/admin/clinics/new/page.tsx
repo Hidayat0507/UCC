@@ -9,10 +9,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useToast } from "@/components/ui/use-toast";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
+import { useAdminPath } from "@/hooks/use-admin-path";
 
 export default function NewClinicPage() {
   const router = useRouter();
   const { toast } = useToast();
+  const adminPath = useAdminPath();
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
     name: "",
@@ -49,7 +51,7 @@ export default function NewClinicPage() {
         throw new Error(err.error || "Failed to create clinic");
       }
       toast({ title: "Clinic created!", description: `${form.name} is now live.` });
-      router.replace("/admin/clinics");
+      router.replace(adminPath("/clinics"));
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     } finally {
@@ -63,7 +65,7 @@ export default function NewClinicPage() {
     <div className="max-w-2xl space-y-6">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="sm" asChild>
-          <Link href="/admin/clinics">
+          <Link href={adminPath("/clinics")}>
             <ArrowLeft className="h-4 w-4" />
           </Link>
         </Button>
@@ -141,7 +143,7 @@ export default function NewClinicPage() {
                 {loading ? "Creating..." : "Create Clinic"}
               </Button>
               <Button type="button" variant="outline" asChild>
-                <Link href="/admin/clinics">Cancel</Link>
+                <Link href={adminPath("/clinics")}>Cancel</Link>
               </Button>
             </div>
           </form>

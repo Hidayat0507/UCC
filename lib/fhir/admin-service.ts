@@ -159,6 +159,26 @@ export interface OrganizationInput {
   logoUrl?: string;
 }
 
+function scrubDeletedPractitionerTelecom(
+  telecom: Practitioner["telecom"] | undefined,
+  practitionerId: string
+): Practitioner["telecom"] | undefined {
+  if (!telecom?.length) {
+    return telecom;
+  }
+
+  return telecom.map((entry) => {
+    if (entry.system !== "email") {
+      return entry;
+    }
+
+    return {
+      ...entry,
+      value: `deleted+${practitionerId}@invalid.local`,
+    };
+  });
+}
+
 export async function saveOrganizationDetailsToMedplum(
   input: OrganizationInput,
   subdomain: string
@@ -196,7 +216,7 @@ function practitionerDisplayName(p: Practitioner): string {
 export async function getPractitionersFromMedplum(): Promise<PractitionerSummary[]> {
   const medplum = await getAdminMedplum();
   const [practitioners, roles, organizations] = await Promise.all([
-    medplum.searchResources("Practitioner", { _count: "200" }),
+    medplum.searchResources("Practitioner", { active: "true", _count: "200" }),
     medplum.searchResources("PractitionerRole", { _count: "500" }),
     medplum.searchResources("Organization", { _count: "200" }),
   ]);
@@ -354,6 +374,14 @@ export async function deletePractitionerFromMedplum(
   practitionerId: string
 ): Promise<void> {
   const medplum = await getAdminMedplum();
+  let practitioner: Practitioner;
+
+  try {
+    practitioner = await medplum.readResource("Practitioner", practitionerId);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(`Failed to load Practitioner before delete: ${message}`);
+  }
 
   const [roles, memberships] = await Promise.all([
     medplum.searchResources("PractitionerRole", {
@@ -368,19 +396,81 @@ export async function deletePractitionerFromMedplum(
       membership.profile?.reference === `Practitioner/${practitionerId}`
   );
 
+  // Collect User refs so we can also drop the login identity. Without this
+  // the User remains and causes "email already exists" on re-invite.
+  const userRefs = new Set<string>();
+  for (const m of matchingMemberships) {
+    if (m.user?.reference) userRefs.add(m.user.reference);
+  }
+
   for (const role of roles ?? []) {
     if (role.id) {
-      await medplum.deleteResource("PractitionerRole", role.id);
+      try {
+        await medplum.deleteResource("PractitionerRole", role.id);
+      } catch (err) {
+        console.warn("[deletePractitioner] failed to delete role", role.id, err);
+      }
     }
   }
 
   for (const membership of matchingMemberships) {
     if (membership.id) {
-      await medplum.deleteResource("ProjectMembership", membership.id);
+      try {
+        await medplum.deleteResource("ProjectMembership", membership.id);
+      } catch (err) {
+        console.warn(
+          "[deletePractitioner] failed to delete membership",
+          membership.id,
+          err
+        );
+      }
     }
   }
 
-  await medplum.deleteResource("Practitioner", practitionerId);
+  try {
+    await medplum.deleteResource("Practitioner", practitionerId);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn(
+      "[deletePractitioner] hard delete failed, archiving Practitioner instead",
+      practitionerId,
+      message
+    );
+
+    try {
+      await medplum.updateResource<Practitioner>({
+        ...practitioner,
+        resourceType: "Practitioner",
+        active: false,
+        telecom: scrubDeletedPractitionerTelecom(
+          practitioner.telecom,
+          practitionerId
+        ),
+      });
+    } catch (archiveErr) {
+      const archiveMessage =
+        archiveErr instanceof Error ? archiveErr.message : String(archiveErr);
+      console.error(
+        "[deletePractitioner] failed to archive Practitioner after delete rejection",
+        practitionerId,
+        archiveMessage
+      );
+      throw new Error(
+        `Failed to delete Practitioner: ${message}. Archive fallback also failed: ${archiveMessage}`
+      );
+    }
+  }
+
+  // Best-effort User cleanup (ignore auth errors — User is a super-admin resource).
+  for (const ref of Array.from(userRefs)) {
+    const [resourceType, id] = ref.split("/");
+    if (resourceType !== "User" || !id) continue;
+    try {
+      await medplum.deleteResource("User", id);
+    } catch (err) {
+      console.warn("[deletePractitioner] could not delete User", id, err);
+    }
+  }
 }
 
 export interface InvitePractitionerInput {

@@ -2,12 +2,38 @@
 
 import { useState } from "react";
 import { useMedplumAuth } from "@/lib/auth-medplum";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+
+function resolveAdminOrigin(): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const { origin, protocol, hostname, port } = window.location;
+  if (hostname === "localhost" || /^\d{1,3}(\.\d{1,3}){3}$/.test(hostname)) {
+    return null;
+  }
+
+  const parts = hostname.split(".");
+  const targetHost =
+    parts.length >= 3
+      ? ["admin", ...parts.slice(1)].join(".")
+      : process.env.NEXT_PUBLIC_BASE_DOMAIN
+        ? `admin.${process.env.NEXT_PUBLIC_BASE_DOMAIN}`
+        : null;
+
+  if (!targetHost || targetHost === hostname) {
+    return origin;
+  }
+
+  const suffix = port ? `:${port}` : "";
+  return `${protocol}//${targetHost}${suffix}`;
+}
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -15,28 +41,34 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const { signIn } = useMedplumAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     try {
-      const { isAdmin } = await signIn(email, password);
-      if (isAdmin) {
-        const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN;
-        if (baseDomain && typeof window !== "undefined") {
-          const currentHost = window.location.hostname;
-          if (currentHost === `admin.${baseDomain}`) {
-            router.replace("/admin");
-          } else {
-            window.location.href = `${window.location.protocol}//admin.${baseDomain}/admin`;
+      const next = searchParams.get("next");
+      const requestedNext = next && next.startsWith("/") ? next : undefined;
+      const { isAdmin, redirectUrl, clinicId } = await signIn(email, password, requestedNext);
+
+      if (typeof window !== "undefined") {
+        if (isAdmin) {
+          const adminOrigin = resolveAdminOrigin();
+          if (adminOrigin && adminOrigin !== window.location.origin) {
+            window.location.href = `${adminOrigin}${redirectUrl}`;
+            return;
           }
-        } else {
-          router.replace("/admin");
+        } else if (clinicId) {
+          const base = process.env.NEXT_PUBLIC_BASE_DOMAIN;
+          if (base && !window.location.hostname.startsWith(`${clinicId}.`)) {
+            window.location.href = `${window.location.protocol}//${clinicId}.${base}${redirectUrl}`;
+            return;
+          }
         }
-      } else {
-        router.replace("/dashboard");
       }
+
+      router.replace(redirectUrl);
     } catch (error) {
       const raw = error instanceof Error ? error.message : "";
       let description = "Unable to sign in. Please try again.";
@@ -81,6 +113,7 @@ export default function Login() {
               <Input
                 id="email"
                 type="email"
+                autoComplete="email"
                 placeholder="doctor@clinic.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -92,6 +125,7 @@ export default function Login() {
               <Input
                 id="password"
                 type="password"
+                autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required

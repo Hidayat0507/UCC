@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "./theme-toggle";
 import { useMedplumAuth } from "@/lib/auth-medplum";
+import { useAdminPath } from "@/hooks/use-admin-path";
 import {
   Building2,
   LayoutDashboard,
@@ -18,18 +19,19 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 
-const navigation = [
-  { name: "Overview", href: "/admin", icon: LayoutDashboard, exact: true },
-  { name: "Clinics", href: "/admin/clinics", icon: Building2 },
-  { name: "Users", href: "/admin/users", icon: Users },
-  { name: "Settings", href: "/admin/settings", icon: Settings },
-];
-
 export default function AdminSidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { profile, signOut } = useMedplumAuth();
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const adminPath = useAdminPath();
+
+  const navigation = [
+    { name: "Overview", href: adminPath("/"), icon: LayoutDashboard, exact: true },
+    { name: "Clinics", href: adminPath("/clinics"), icon: Building2 },
+    { name: "Users", href: adminPath("/users"), icon: Users },
+    { name: "Settings", href: adminPath("/settings"), icon: Settings },
+  ];
 
   if (pathname?.startsWith("/login")) return null;
 
@@ -44,11 +46,11 @@ export default function AdminSidebar() {
         {/* Header */}
         <div className="flex h-14 items-center border-b px-4 justify-between">
           {!isCollapsed && (
-            <Link href="/admin" className="flex items-center space-x-2">
+            <Link href={adminPath("/")} className="flex items-center space-x-2">
               <Activity className="h-6 w-6 text-primary" />
               <div>
-                <p className="text-sm font-bold leading-none">UCC Admin</p>
-                <p className="text-xs text-muted-foreground">Portal</p>
+                <p className="text-sm font-bold leading-none">Iatrum</p>
+                <p className="text-xs text-muted-foreground">Admin Portal</p>
               </div>
             </Link>
           )}

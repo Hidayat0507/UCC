@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getPractitionersFromMedplum } from "@/lib/fhir/admin-service";
+import { adminPathForHost } from "@/lib/admin-routes";
 import {
   Card,
   CardContent,
@@ -10,8 +11,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ChevronRight, Users, UserPlus } from "lucide-react";
+import { headers } from "next/headers";
+import { getHostFromHeaders } from "@/lib/server/subdomain-host";
 
 export default async function UsersPage() {
+  const host = getHostFromHeaders(await headers());
+  const adminPath = (path: string) => adminPathForHost(path, host);
   const practitioners = await getPractitionersFromMedplum().catch(() => []);
 
   return (
@@ -24,7 +29,7 @@ export default async function UsersPage() {
           </p>
         </div>
         <Button asChild>
-          <Link href="/admin/users/invite">
+          <Link href={adminPath("/users/invite")}>
             <UserPlus className="h-4 w-4 mr-2" />
             Invite User
           </Link>
@@ -53,7 +58,7 @@ export default async function UsersPage() {
               {practitioners.map((p) => (
                 <Link
                   key={p.id}
-                  href={`/admin/users/${p.id}`}
+                  href={adminPath(`/users/${p.id}`)}
                   className="flex items-center gap-3 py-3 hover:bg-muted/40 rounded-md px-2 -mx-2 transition-colors"
                 >
                   <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center font-semibold text-primary text-sm shrink-0">

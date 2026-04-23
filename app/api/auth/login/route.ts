@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import crypto from 'node:crypto';
 import { MedplumClient, type ProfileResource } from '@medplum/core';
 import { CLINIC_COOKIE, REFRESH_COOKIE, SESSION_COOKIE } from '@/lib/server/cookie-constants';
+import { adminPathForHost } from '@/lib/admin-routes';
 import {
   deriveSubdomainContext,
   getHostFromHeaders,
@@ -222,7 +223,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const hostContext = deriveSubdomainContext(getHostFromHeaders(req.headers));
+    const host = getHostFromHeaders(req.headers);
+    const hostContext = deriveSubdomainContext(host);
     const { codeVerifier, codeChallenge } = createPkcePair();
     const code = await startEmailPasswordLogin(
       String(email).trim().toLowerCase(),
@@ -259,8 +261,10 @@ export async function POST(req: NextRequest) {
           403
         );
       }
-      redirectUrl =
-        typeof next === 'string' && next.startsWith('/admin') ? next : '/admin';
+      redirectUrl = adminPathForHost(
+        typeof next === 'string' ? next : '/',
+        host
+      );
     } else if (hostContext.type === 'clinic') {
       const matchedClinic = assignedClinics.find(
         (clinic) =>

@@ -28,10 +28,12 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/components/ui/use-toast";
 import type { ClinicSummary } from "@/lib/fhir/admin-service";
+import { useAdminPath } from "@/hooks/use-admin-path";
 
 export default function ClinicEditForm({ clinic }: { clinic: ClinicSummary }) {
   const router = useRouter();
   const { toast } = useToast();
+  const adminPath = useAdminPath();
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [form, setForm] = useState({
@@ -93,7 +95,7 @@ export default function ClinicEditForm({ clinic }: { clinic: ClinicSummary }) {
         title: "Clinic deleted",
         description: `${clinic.name} has been removed.`,
       });
-      router.replace("/admin/clinics");
+      router.replace(adminPath("/clinics"));
     } catch (err: any) {
       toast({
         title: "Cannot delete",
@@ -113,7 +115,7 @@ export default function ClinicEditForm({ clinic }: { clinic: ClinicSummary }) {
     <div className="max-w-2xl space-y-6">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="sm" asChild>
-          <Link href="/admin/clinics">
+          <Link href={adminPath("/clinics")}>
             <ArrowLeft className="h-4 w-4" />
           </Link>
         </Button>
@@ -186,7 +188,7 @@ export default function ClinicEditForm({ clinic }: { clinic: ClinicSummary }) {
                 {saving ? "Saving..." : "Save Changes"}
               </Button>
               <Button type="button" variant="outline" asChild>
-                <Link href="/admin/clinics">Cancel</Link>
+                <Link href={adminPath("/clinics")}>Cancel</Link>
               </Button>
             </div>
           </form>
