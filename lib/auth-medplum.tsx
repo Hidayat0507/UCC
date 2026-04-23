@@ -17,7 +17,7 @@ interface MedplumAuthContextType {
     email: string,
     password: string,
     next?: string
-  ) => Promise<{ isAdmin: boolean; redirectUrl: string }>;
+  ) => Promise<{ isAdmin: boolean; redirectUrl: string; clinicId: string | null }>;
   signOut: () => Promise<void>;
   getAccessToken: () => string | undefined;
   setClinicId: (clinicId: string | null) => Promise<void>;
@@ -157,7 +157,7 @@ export function MedplumAuthProvider({ children }: { children: React.ReactNode })
     email: string,
     password: string,
     next?: string
-  ): Promise<{ isAdmin: boolean; redirectUrl: string }> => {
+  ): Promise<{ isAdmin: boolean; redirectUrl: string; clinicId: string | null }> => {
     try {
       const response = await fetch('/api/auth/login', {
         method: 'POST',
@@ -184,7 +184,7 @@ export function MedplumAuthProvider({ children }: { children: React.ReactNode })
             ? '/admin'
             : '/dashboard';
 
-      return { isAdmin: adminStatus, redirectUrl };
+      return { isAdmin: adminStatus, redirectUrl, clinicId: payload?.clinicId ?? null };
     } catch (error: any) {
       throw classifyAuthError(error);
     }

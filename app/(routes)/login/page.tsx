@@ -50,13 +50,21 @@ export default function Login() {
     try {
       const next = searchParams.get("next");
       const requestedNext = next && next.startsWith("/") ? next : undefined;
-      const { isAdmin, redirectUrl } = await signIn(email, password, requestedNext);
+      const { isAdmin, redirectUrl, clinicId } = await signIn(email, password, requestedNext);
 
-      if (isAdmin && typeof window !== "undefined") {
-        const adminOrigin = resolveAdminOrigin();
-        if (adminOrigin && adminOrigin !== window.location.origin) {
-          window.location.href = `${adminOrigin}${redirectUrl}`;
-          return;
+      if (typeof window !== "undefined") {
+        if (isAdmin) {
+          const adminOrigin = resolveAdminOrigin();
+          if (adminOrigin && adminOrigin !== window.location.origin) {
+            window.location.href = `${adminOrigin}${redirectUrl}`;
+            return;
+          }
+        } else if (clinicId) {
+          const base = process.env.NEXT_PUBLIC_BASE_DOMAIN;
+          if (base && !window.location.hostname.startsWith(`${clinicId}.`)) {
+            window.location.href = `${window.location.protocol}//${clinicId}.${base}${redirectUrl}`;
+            return;
+          }
         }
       }
 
