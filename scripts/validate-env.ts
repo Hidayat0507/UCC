@@ -94,6 +94,11 @@ const GREEN = "\x1b[32m";
 const BOLD = "\x1b[1m";
 const RESET = "\x1b[0m";
 
+if (process.env.SKIP_ENV_VALIDATION === "1") {
+  console.log(`${YELLOW}${BOLD}Skipping environment validation (SKIP_ENV_VALIDATION=1).${RESET}\n`);
+  process.exit(0);
+}
+
 let hasErrors = false;
 let hasWarnings = false;
 

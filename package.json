@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev --webpack",
     "build": "bun run scripts/validate-env.ts && next build --webpack",
+    "build:ci": "SKIP_ENV_VALIDATION=1 next build --webpack",
     "start": "next start",
     "lint": "tsc --noEmit -p tsconfig.lint.json",
     "validate-env": "bun run scripts/validate-env.ts",
