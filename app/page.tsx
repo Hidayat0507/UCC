@@ -250,19 +250,23 @@ export default function Home() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-gray-100 bg-white px-6 py-10">
-        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 text-sm text-gray-400 md:flex-row">
-          <span className="font-semibold" style={{ color: "#1c1e4b" }}>
-            IatrumOS
-          </span>
-          <span>© {new Date().getFullYear()} Iatrum. All rights reserved.</span>
-          <div className="flex gap-6">
-            <a href="mailto:hello@iatrum.com" className="hover:text-gray-600">
-              hello@iatrum.com
-            </a>
+        <footer className="border-t border-gray-100 bg-white px-6 py-10">
+          <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 text-sm text-gray-400 md:flex-row">
+            <span className="font-semibold" style={{ color: "#1c1e4b" }}>
+              IatrumOS
+            </span>
+            <span>© {new Date().getFullYear()} Iatrum. All rights reserved.</span>
+            <div className="flex gap-6">
+              <a href="mailto:hello@iatrum.com" className="hover:text-gray-600">
+                hello@iatrum.com
+              </a>
+            </div>
           </div>
-        </div>
-      </footer>
+          {/* Compliance - Companies Act 2016 Section 30(2)(b) */}
+          <div className="mx-auto mt-6 max-w-7xl border-t border-gray-100 pt-6 text-center text-xs text-gray-400">
+            IATRUM SDN. BHD. (Registration No. 202601015400 (1677497-X))
+          </div>
+        </footer>
     </div>
   );
 }
