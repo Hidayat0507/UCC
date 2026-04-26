@@ -71,14 +71,32 @@ export async function getOrganizationsFromMedplum(): Promise<ClinicSummary[]> {
   const medplum = await getAdminMedplum();
   const all = await medplum.searchResources("Organization", { _count: "200" });
 
+  const hasExplicitParent = (all ?? []).some(
+    (org) =>
+      !org.partOf &&
+      !org.identifier?.some((id) => id.system === CLINIC_IDENTIFIER_SYSTEM)
+  );
+
+  // When there is no explicit parent org, the single standalone clinic (no partOf)
+  // auto-acts as the parent and must be excluded from the branches list.
+  const autoParentId = !hasExplicitParent
+    ? (all ?? []).find(
+        (org) =>
+          !org.partOf &&
+          org.identifier?.some((id) => id.system === CLINIC_IDENTIFIER_SYSTEM)
+      )?.id
+    : undefined;
+
   const nameById = new Map<string, string>();
   for (const org of all ?? []) {
     if (org.id) nameById.set(org.id, org.name ?? "Unnamed organisation");
   }
 
   return (all ?? [])
-    .filter((org) =>
-      org.identifier?.some((id) => id.system === CLINIC_IDENTIFIER_SYSTEM)
+    .filter(
+      (org) =>
+        org.identifier?.some((id) => id.system === CLINIC_IDENTIFIER_SYSTEM) &&
+        org.id !== autoParentId
     )
     .map((org) => {
       const parentId = getIdFromReference(org.partOf?.reference);
@@ -90,12 +108,22 @@ export async function getOrganizationsFromMedplum(): Promise<ClinicSummary[]> {
 export async function getParentOrganizationFromMedplum(): Promise<ParentOrganizationSummary | null> {
   const medplum = await getAdminMedplum();
   const all = await medplum.searchResources("Organization", { _count: "200" });
-  const parent = (all ?? []).find(
+
+  // Prefer an explicit parent (no clinic identifier, no partOf).
+  const explicitParent = (all ?? []).find(
     (org) =>
       !org.partOf &&
       !org.identifier?.some((id) => id.system === CLINIC_IDENTIFIER_SYSTEM)
   );
-  return parent ? mapOrganizationToParentSummary(parent) : null;
+  if (explicitParent) return mapOrganizationToParentSummary(explicitParent);
+
+  // Fall back: standalone clinic (has identifier, no partOf) acts as auto-parent.
+  const autoParent = (all ?? []).find(
+    (org) =>
+      !org.partOf &&
+      org.identifier?.some((id) => id.system === CLINIC_IDENTIFIER_SYSTEM)
+  );
+  return autoParent ? mapOrganizationToParentSummary(autoParent) : null;
 }
 
 export async function saveParentOrganizationToMedplum(
@@ -308,7 +336,7 @@ function practitionerDisplayName(p: Practitioner): string {
 export async function getPractitionersFromMedplum(): Promise<PractitionerSummary[]> {
   const medplum = await getAdminMedplum();
   const [practitioners, roles, organizations] = await Promise.all([
-    medplum.searchResources("Practitioner", { active: "true", _count: "200" }),
+    medplum.searchResources("Practitioner", { _count: "200" }),
     medplum.searchResources("PractitionerRole", { _count: "500" }),
     medplum.searchResources("Organization", { _count: "200" }),
   ]);
@@ -329,7 +357,7 @@ export async function getPractitionersFromMedplum(): Promise<PractitionerSummary
     orgIdsByPractitioner.set(practitionerId, set);
   }
 
-  return (practitioners ?? []).map((p) => {
+  return (practitioners ?? []).filter((p) => p.active !== false).map((p) => {
     const email = p.telecom?.find((t) => t.system === "email")?.value;
     const orgIds = p.id ? Array.from(orgIdsByPractitioner.get(p.id) ?? []) : [];
     const orgs = orgIds
