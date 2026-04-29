@@ -98,34 +98,50 @@ function normalizeItems(items: PurchaseOrderItemInput[]): PurchaseOrderItem[] {
 }
 
 export async function getSuppliers(): Promise<Supplier[]> {
-  const snapshot = await getDocs(query(collection(db, SUPPLIERS), orderBy("name")));
-  return snapshot.docs.map((entry) => ({
-    id: entry.id,
-    ...convertTimestamps(entry.data()),
-  })) as Supplier[];
+  try {
+    const res = await fetch('/api/suppliers');
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.suppliers ?? [];
+  } catch {
+    return [];
+  }
 }
 
 export async function createSupplier(
   data: Omit<Supplier, "id" | "createdAt" | "updatedAt">
 ): Promise<string> {
-  const now = Timestamp.now();
-  const docRef = await addDoc(collection(db, SUPPLIERS), {
-    ...data,
-    createdAt: now,
-    updatedAt: now,
+  const res = await fetch('/api/suppliers', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
   });
-  return docRef.id;
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as any).error ?? 'Failed to create supplier');
+  }
+  const result = await res.json();
+  return result.supplier.id;
 }
 
 export async function updateSupplier(id: string, data: Partial<Supplier>): Promise<void> {
-  await updateDoc(doc(db, SUPPLIERS, id), {
-    ...data,
-    updatedAt: Timestamp.now(),
+  const res = await fetch('/api/suppliers', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, ...data }),
   });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as any).error ?? 'Failed to update supplier');
+  }
 }
 
 export async function deleteSupplier(id: string): Promise<void> {
-  await deleteDoc(doc(db, SUPPLIERS, id));
+  const res = await fetch(`/api/suppliers?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as any).error ?? 'Failed to delete supplier');
+  }
 }
 
 export async function getPurchaseOrders(): Promise<PurchaseOrder[]> {
