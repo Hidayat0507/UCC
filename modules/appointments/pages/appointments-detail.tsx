@@ -113,14 +113,7 @@ export default async function AppointmentDetailsPage({ params }: PageProps) {
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to appointments
         </Link>
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <AppointmentActions
-            appointmentId={appointment.id}
-            patientName={appointment.patientName}
-            scheduledAt={appointment.scheduledAt}
-          />
-          <Badge variant={badgeVariants[appointment.status]}>{statusLabels[appointment.status]}</Badge>
-        </div>
+        <Badge variant={badgeVariants[appointment.status]}>{statusLabels[appointment.status]}</Badge>
       </div>
 
       <Card>
@@ -142,14 +135,21 @@ export default async function AppointmentDetailsPage({ params }: PageProps) {
                 <p className="text-muted-foreground">{formatDisplayDate(scheduledAt)}</p>
               </div>
             </div>
-            <div className="flex items-start gap-3">
-              <Clock className="mt-0.5 h-4 w-4 text-muted-foreground" />
-              <div>
-                <p className="font-medium">Time & duration</p>
-                <p className="text-muted-foreground">
-                  {formatTime(scheduledAt)} • {appointment.durationMinutes ? `${appointment.durationMinutes} minutes` : "Duration not set"}
-                </p>
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <Clock className="mt-0.5 h-4 w-4 text-muted-foreground" />
+                <div>
+                  <p className="font-medium">Time & duration</p>
+                  <p className="text-muted-foreground">
+                    {formatTime(scheduledAt)} • {appointment.durationMinutes ? `${appointment.durationMinutes} minutes` : "Duration not set"}
+                  </p>
+                </div>
               </div>
+              <AppointmentActions
+                appointmentId={appointment.id}
+                patientName={appointment.patientName}
+                scheduledAt={appointment.scheduledAt}
+              />
             </div>
             <div className="flex items-start gap-3">
               <UserRound className="mt-0.5 h-4 w-4 text-muted-foreground" />

@@ -41,7 +41,7 @@ export default function AdminSidebar() {
     <div
       className={cn(
         "flex h-screen border-r bg-background relative transition-all duration-300",
-        isCollapsed ? "w-16" : "w-64"
+        isCollapsed ? "w-16" : "w-40"
       )}
     >
       <div className="flex flex-col flex-1">

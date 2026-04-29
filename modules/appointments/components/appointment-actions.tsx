@@ -3,17 +3,6 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -27,7 +16,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
-import { rescheduleAppointment, updateAppointmentStatus } from "@/lib/fhir/appointment-client";
+import { rescheduleAppointment } from "@/lib/fhir/appointment-client";
 
 type Props = {
   appointmentId: string;
@@ -74,26 +63,6 @@ export default function AppointmentActions({ appointmentId, patientName, schedul
     });
   };
 
-  const handleCancel = () => {
-    startTransition(async () => {
-      try {
-        await updateAppointmentStatus(appointmentId, "cancelled");
-        toast({
-          title: "Appointment cancelled",
-          description: `${patientName}'s appointment has been cancelled.`,
-        });
-        router.refresh();
-      } catch (error: any) {
-        console.error("Failed to cancel appointment", error);
-        toast({
-          title: "Unable to cancel appointment",
-          description: error?.message || "Please try again.",
-          variant: "destructive",
-        });
-      }
-    });
-  };
-
   return (
     <div className="flex flex-wrap gap-2">
       <Dialog open={rescheduleOpen} onOpenChange={setRescheduleOpen}>
@@ -126,28 +95,6 @@ export default function AppointmentActions({ appointmentId, patientName, schedul
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <AlertDialog>
-        <AlertDialogTrigger asChild>
-          <Button type="button" variant="outline" disabled={isPending}>
-            Cancel appointment
-          </Button>
-        </AlertDialogTrigger>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Cancel appointment?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will mark {patientName}&apos;s appointment as cancelled. It will remain in the record for audit history.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Keep appointment</AlertDialogCancel>
-            <AlertDialogAction onClick={handleCancel}>
-              Cancel appointment
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

@@ -13,9 +13,7 @@ import {
   Calendar,
   ChevronLeft,
   ChevronRight,
-  ClipboardListIcon,
   Image,
-  LayoutDashboard,
   LogOut,
   Package,
   Puzzle,
@@ -40,9 +38,7 @@ type SidebarProps = {
 };
 
 const baseNavigation = [
-  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Patients", href: "/patients", icon: Users },
-  { name: "Orders", href: "/orders", icon: ClipboardListIcon },
 ];
 
 const bottomNavigation = [
@@ -70,7 +66,7 @@ export default function Sidebar({ modules = [] }: SidebarProps) {
     const loadModules = () => {
       const enabled = getEnabledModules();
       const moduleNav = enabled
-        .filter((module) => module.route && module.id !== "triage")
+        .filter((module) => module.route && !["triage", "poct", "pacs"].includes(module.id))
         .map(module => ({
           name: module.name,
           href: module.route!,
@@ -108,12 +104,12 @@ export default function Sidebar({ modules = [] }: SidebarProps) {
   return (
     <div className={cn(
       "flex h-screen border-r bg-background relative transition-all duration-300",
-      isCollapsed ? "w-16" : "w-64"
+      isCollapsed ? "w-16" : "w-40"
     )}>
       <div className="flex flex-col flex-1">
         <div className="flex h-14 items-center border-b px-4 justify-between">
           {!isCollapsed && (
-            <Link href="/" className="flex items-center space-x-2">
+            <Link href="/dashboard" className="flex items-center space-x-2">
               <Activity className="h-6 w-6" />
               <span className="text-xl font-bold">Iatrum</span>
             </Link>

@@ -234,7 +234,6 @@ export default function QueueTable({ patients, onQueueUpdate }: QueueTableProps)
             <TableHead className="w-[80px]">Queue No.</TableHead>
             <TableHead>Patient Name</TableHead>
             <TableHead>NRIC</TableHead>
-            <TableHead>Phone</TableHead>
             <TableHead>Triage Level</TableHead>
             <TableHead>Chief Complaint</TableHead>
             <TableHead>Visit Context</TableHead>
@@ -256,7 +255,6 @@ export default function QueueTable({ patients, onQueueUpdate }: QueueTableProps)
                 </Link>
               </TableCell>
               <TableCell>{patient.nric}</TableCell>
-              <TableCell>{patient.phone}</TableCell>
               <TableCell>
                 {getTriageBadge(patient.triage?.triageLevel)}
               </TableCell>
@@ -324,7 +322,7 @@ export default function QueueTable({ patients, onQueueUpdate }: QueueTableProps)
           ))}
           {patients.length === 0 && (
             <TableRow>
-              <TableCell colSpan={10} className="text-center py-4">
+              <TableCell colSpan={9} className="text-center py-4">
                 No patients in queue
               </TableCell>
             </TableRow>
