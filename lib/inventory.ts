@@ -1,18 +1,3 @@
-import { db } from './firebase';
-import { 
-  collection, 
-  doc, 
-  getDocs, 
-  getDoc, 
-  addDoc, 
-  updateDoc,
-  deleteDoc,
-  query,
-  where,
-  Timestamp,
-  DocumentData 
-} from 'firebase/firestore';
-
 export interface Medication {
   id: string;
   name: string;
@@ -32,86 +17,61 @@ export function getBuiltInMedicationList(): Medication[] {
   return [];
 }
 
-const MEDICATIONS = 'medications';
-
-// Helper function to convert Firestore data to our types
-const convertTimestamps = (data: DocumentData) => {
-  const result = { ...data };
-  if (result.createdAt) {
-    result.createdAt = result.createdAt.toDate();
-  }
-  if (result.updatedAt) {
-    result.updatedAt = result.updatedAt.toDate();
-  }
-  return result;
-};
-
 export async function getMedications(): Promise<Medication[]> {
   try {
-    const snapshot = await getDocs(collection(db, MEDICATIONS));
-    return snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...convertTimestamps(doc.data())
-    } as Medication));
-  } catch (error) {
-    console.error('Error fetching medications:', error);
+    const res = await fetch('/api/inventory');
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.medications ?? [];
+  } catch {
     return [];
   }
 }
 
 export async function getMedicationById(id: string): Promise<Medication | null> {
   try {
-    const docRef = doc(db, MEDICATIONS, id);
-    const docSnap = await getDoc(docRef);
-    
-    if (!docSnap.exists()) {
-      return null;
-    }
-    
-    return {
-      id: docSnap.id,
-      ...convertTimestamps(docSnap.data())
-    } as Medication;
-  } catch (error) {
-    console.error('Error fetching medication:', error);
+    const res = await fetch(`/api/inventory?id=${encodeURIComponent(id)}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.medication ?? null;
+  } catch {
     return null;
   }
 }
 
-export async function createMedication(data: Omit<Medication, 'id' | 'createdAt' | 'updatedAt'>): Promise<string | null> {
-  try {
-    const docRef = await addDoc(collection(db, MEDICATIONS), {
-      ...data,
-      createdAt: Timestamp.now(),
-      updatedAt: Timestamp.now()
-    });
-    return docRef.id;
-  } catch (error) {
-    console.error('Error creating medication:', error);
-    return null;
+export async function createMedication(
+  data: Omit<Medication, 'id' | 'createdAt' | 'updatedAt'>
+): Promise<string> {
+  const res = await fetch('/api/inventory', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as any).error ?? 'Failed to create medication');
   }
+  const result = await res.json();
+  return result.medicationId;
 }
 
-export async function updateMedication(id: string, data: Partial<Medication>): Promise<boolean> {
-  try {
-    const docRef = doc(db, MEDICATIONS, id);
-    await updateDoc(docRef, {
-      ...data,
-      updatedAt: Timestamp.now()
-    });
-    return true;
-  } catch (error) {
-    console.error('Error updating medication:', error);
-    return false;
+export async function updateMedication(id: string, data: Partial<Medication>): Promise<void> {
+  const res = await fetch('/api/inventory', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ medicationId: id, ...data }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as any).error ?? 'Failed to update medication');
   }
 }
 
 export async function deleteMedication(id: string): Promise<boolean> {
-  try {
-    await deleteDoc(doc(db, MEDICATIONS, id));
-    return true;
-  } catch (error) {
-    console.error('Error deleting medication:', error);
-    return false;
+  const res = await fetch(`/api/inventory?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as any).error ?? 'Failed to delete medication');
   }
+  return true;
 }

@@ -156,7 +156,12 @@ export default function InventoryPage() {
       });
     } catch (err) {
       console.error("Failed to add medication:", err);
-      setError("Failed to add medication");
+      toast({
+        title: "Error",
+        description: err instanceof Error ? err.message : "Failed to save medication.",
+        variant: "destructive",
+      });
+      throw err;
     }
   }
 
@@ -180,8 +185,7 @@ export default function InventoryPage() {
 
   async function handleDeleteMedication(id: string) {
     try {
-      const success = await deleteMedication(id);
-      if (!success) throw new Error("Delete failed");
+      await deleteMedication(id);
       await reloadMedications();
       toast({
         title: "Medication deleted",
