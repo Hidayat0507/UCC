@@ -198,21 +198,41 @@ export default function InventoryPage() {
   }
 
   async function handleCreateSupplier(data: Omit<Supplier, "id" | "createdAt" | "updatedAt">) {
-    await createSupplier(data);
-    await reloadSuppliers();
-    toast({
-      title: "Supplier saved",
-      description: "The supplier can now be used in purchase orders.",
-    });
+    try {
+      await createSupplier(data);
+      await reloadSuppliers();
+      toast({
+        title: "Supplier saved",
+        description: "The supplier can now be used in purchase orders.",
+      });
+    } catch (err) {
+      console.error("Failed to create supplier:", err);
+      toast({
+        title: "Error",
+        description: err instanceof Error ? err.message : "Failed to save supplier.",
+        variant: "destructive",
+      });
+      throw err;
+    }
   }
 
   async function handleUpdateSupplier(id: string, data: Partial<Supplier>) {
-    await updateSupplier(id, data);
-    await reloadSuppliers();
-    toast({
-      title: "Supplier updated",
-      description: "Supplier details have been updated.",
-    });
+    try {
+      await updateSupplier(id, data);
+      await reloadSuppliers();
+      toast({
+        title: "Supplier updated",
+        description: "Supplier details have been updated.",
+      });
+    } catch (err) {
+      console.error("Failed to update supplier:", err);
+      toast({
+        title: "Error",
+        description: err instanceof Error ? err.message : "Failed to update supplier.",
+        variant: "destructive",
+      });
+      throw err;
+    }
   }
 
   async function handleDeleteSupplier(id: string) {
