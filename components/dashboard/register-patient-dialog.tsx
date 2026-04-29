@@ -13,8 +13,6 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-type VisitPurpose = "consultation" | "otc";
-
 type SearchHit = {
   id: string;
   fullName: string;
@@ -42,7 +40,6 @@ export type RegisterPatientDialogProps = {
  */
 export function RegisterPatientDialog({ open, onOpenChange }: RegisterPatientDialogProps) {
   const router = useRouter();
-  const [visitPurpose, setVisitPurpose] = React.useState<VisitPurpose>("consultation");
   const [query, setQuery] = React.useState("");
   const [results, setResults] = React.useState<SearchHit[]>([]);
   const [loading, setLoading] = React.useState(false);
@@ -55,7 +52,6 @@ export function RegisterPatientDialog({ open, onOpenChange }: RegisterPatientDia
       setQuery("");
       setResults([]);
       setListOpen(false);
-      setVisitPurpose("consultation");
     }
   }, [open]);
 
@@ -103,22 +99,19 @@ export function RegisterPatientDialog({ open, onOpenChange }: RegisterPatientDia
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, [listOpen]);
 
-  const visitParam = `visitIntent=${visitPurpose}`;
-
   const goNewPatient = () => {
     onOpenChange(false);
-    router.push(`/patients/new?${visitParam}`);
+    router.push("/patients/new");
   };
 
   const goMyKad = () => {
     onOpenChange(false);
-    router.push(`/patients/new/scan?${visitParam}`);
+    router.push("/patients/new/scan");
   };
 
   const selectExisting = (p: SearchHit) => {
     onOpenChange(false);
-    const search = encodeURIComponent(p.fullName || p.nric || p.phone || "");
-    router.push(`/check-in?search=${search}&${visitParam}`);
+    router.push(`/patients/${p.id}/triage`);
   };
 
   return (
@@ -136,32 +129,6 @@ export function RegisterPatientDialog({ open, onOpenChange }: RegisterPatientDia
         </DialogHeader>
 
         <div className="space-y-5 px-5 py-5">
-          <div className="space-y-2.5">
-            <p className="text-sm font-medium text-foreground">Choose visit purpose</p>
-            <div role="radiogroup" aria-label="Visit purpose" className="flex flex-wrap gap-8">
-              <label className="flex cursor-pointer items-center gap-2.5 text-sm text-foreground">
-                <input
-                  type="radio"
-                  name="yezza-visit-purpose"
-                  className="size-[15px] accent-foreground"
-                  checked={visitPurpose === "consultation"}
-                  onChange={() => setVisitPurpose("consultation")}
-                />
-                <span>Consultation</span>
-              </label>
-              <label className="flex cursor-pointer items-center gap-2.5 text-sm text-foreground">
-                <input
-                  type="radio"
-                  name="yezza-visit-purpose"
-                  className="size-[15px] accent-foreground"
-                  checked={visitPurpose === "otc"}
-                  onChange={() => setVisitPurpose("otc")}
-                />
-                <span>OTC</span>
-              </label>
-            </div>
-          </div>
-
           <div className="space-y-2" ref={searchWrapRef}>
             <p className="text-sm font-medium text-foreground">Search existing patient</p>
             <div className="relative">
