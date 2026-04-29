@@ -282,12 +282,22 @@ export default function InventoryPage() {
       expiryDate?: string;
     }>;
   }) {
-    await createPurchaseOrder(input);
-    await reloadPurchaseOrders();
-    toast({
-      title: "Purchase document created",
-      description: "The purchase document has been saved.",
-    });
+    try {
+      await createPurchaseOrder(input);
+      await reloadPurchaseOrders();
+      toast({
+        title: "Purchase document created",
+        description: "The purchase document has been saved.",
+      });
+    } catch (err) {
+      console.error("Failed to create purchase order:", err);
+      toast({
+        title: "Error",
+        description: err instanceof Error ? err.message : "Failed to save purchase document.",
+        variant: "destructive",
+      });
+      throw err;
+    }
   }
 
   async function handleReceivePurchaseOrder(id: string) {
