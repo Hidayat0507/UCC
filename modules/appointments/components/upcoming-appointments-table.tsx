@@ -143,8 +143,8 @@ export default function UpcomingAppointmentsTable({ appointments, loading, onRef
             <TableHead>Time</TableHead>
             <TableHead>Clinician</TableHead>
             <TableHead>Reason</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead className="text-right">Actions</TableHead>
+            <TableHead className="w-px whitespace-nowrap">Status</TableHead>
+            <TableHead className="w-px whitespace-nowrap text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -163,12 +163,12 @@ export default function UpcomingAppointmentsTable({ appointments, loading, onRef
                 <TableCell className="max-w-[260px] truncate text-muted-foreground">
                   {appointment.reason || "Clinic visit"}
                 </TableCell>
-                <TableCell>
+                <TableCell className="w-px whitespace-nowrap">
                   <Badge variant={statusVariants[appointment.status]}>
                     {statusLabels[appointment.status]}
                   </Badge>
                 </TableCell>
-                <TableCell>
+                <TableCell className="w-px whitespace-nowrap">
                   <div className="flex justify-end gap-2">
                     <Button
                       size="sm"
