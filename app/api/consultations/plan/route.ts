@@ -12,6 +12,7 @@ import {
 } from "@/lib/treatment-plan";
 
 const COLLECTION = "consultation_treatment_plans";
+let warnedPlanStoreUnavailable = false;
 
 type StoredPlan = {
   draftId: string;
@@ -47,6 +48,28 @@ function isPlanStoreUnavailable(error: unknown): boolean {
     message.includes("service account") ||
     message.includes("Firestore")
   );
+}
+
+function logPlanStoreUnavailable(error: unknown): void {
+  if (warnedPlanStoreUnavailable) return;
+  warnedPlanStoreUnavailable = true;
+
+  const message = error instanceof Error ? error.message : String(error);
+  console.warn(
+    `[consultations/plan] Treatment plan draft persistence is unavailable; using local-only drafts. ${message}`
+  );
+}
+
+function unavailablePlanStoreResponse(
+  draftId: string,
+  patientId: string,
+  consultationId?: string
+) {
+  return NextResponse.json({
+    success: true,
+    persistenceAvailable: false,
+    plan: buildEmptySnapshot(draftId, patientId, consultationId),
+  });
 }
 
 function tsToIso(value?: Timestamp): string {
@@ -101,8 +124,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ success: true, plan: toSnapshot(data) });
   } catch (error) {
     if (draftId && isPlanStoreUnavailable(error)) {
-      console.warn("[consultations/plan] Falling back to empty draft:", error);
-      return NextResponse.json({ success: true, plan: buildEmptySnapshot(draftId, patientId, consultationId) });
+      logPlanStoreUnavailable(error);
+      return unavailablePlanStoreResponse(draftId, patientId, consultationId);
     }
     return handleRouteError(error, "GET /api/consultations/plan");
   }
@@ -159,6 +182,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      persistenceAvailable: true,
       plan: {
         draftId,
         patientId,
@@ -169,6 +193,17 @@ export async function POST(request: NextRequest) {
       } satisfies TreatmentPlanSnapshot,
     });
   } catch (error) {
+    if (isPlanStoreUnavailable(error)) {
+      logPlanStoreUnavailable(error);
+      return NextResponse.json(
+        {
+          success: false,
+          persistenceAvailable: false,
+          error: "Treatment plan draft persistence is unavailable.",
+        },
+        { status: 503 }
+      );
+    }
     return handleRouteError(error, "POST /api/consultations/plan");
   }
 }
@@ -207,6 +242,7 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      persistenceAvailable: true,
       plan: {
         draftId: existing.draftId,
         patientId: existing.patientId,
@@ -217,6 +253,17 @@ export async function DELETE(request: NextRequest) {
       } satisfies TreatmentPlanSnapshot,
     });
   } catch (error) {
+    if (isPlanStoreUnavailable(error)) {
+      logPlanStoreUnavailable(error);
+      return NextResponse.json(
+        {
+          success: false,
+          persistenceAvailable: false,
+          error: "Treatment plan draft persistence is unavailable.",
+        },
+        { status: 503 }
+      );
+    }
     return handleRouteError(error, "DELETE /api/consultations/plan");
   }
 }

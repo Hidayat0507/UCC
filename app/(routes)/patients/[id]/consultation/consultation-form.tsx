@@ -415,12 +415,23 @@ export default function ConsultationForm({
         .map((entry) => entry.meta?.code as ImagingProcedureCode)
         .filter(Boolean);
 
+      const mcReferralNames = documentEntries
+        .filter((entry) => entry.meta?.kind === "mc" || entry.meta?.kind === "referral")
+        .map((entry) => entry.name.trim())
+        .filter(Boolean);
+      const docRequestLine =
+        mcReferralNames.length > 0 ? `Requested documents: ${mcReferralNames.join("; ")}` : "";
+      const notesWithDocuments =
+        additionalNotes.trim() && docRequestLine
+          ? `${additionalNotes.trim()}\n\n${docRequestLine}`
+          : additionalNotes.trim() || docRequestLine;
+
       const consultationData = {
         patientId,
         chiefComplaint: clinicalNotes,
         diagnosis,
         procedures: procedureEntries,
-        notes: additionalNotes,
+        notes: notesWithDocuments,
         progressNote,
         prescriptions,
       };
@@ -436,7 +447,7 @@ export default function ConsultationForm({
             consultationId: initialConsultation.id,
             chiefComplaint: clinicalNotes,
             diagnosis,
-            notes: additionalNotes,
+            notes: notesWithDocuments,
             progressNote,
             procedures: procedureEntries,
             prescriptions,
@@ -595,6 +606,18 @@ export default function ConsultationForm({
   }));
 
   const treatmentDocumentsCatalog = [
+    {
+      id: "letter-mc",
+      name: "Medical certificate (MC)",
+      unitPrice: 0,
+      meta: { kind: "mc" },
+    },
+    {
+      id: "letter-referral",
+      name: "Referral letter",
+      unitPrice: 0,
+      meta: { kind: "referral" },
+    },
     ...labOptions.map((lab) => ({
       id: `lab-${lab.code}`,
       name: `Lab: ${lab.label}`,
