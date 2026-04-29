@@ -19,7 +19,6 @@ import { useToast } from "@/components/ui/use-toast";
 import { getAllPatients, type Patient } from "@/lib/fhir/patient-client";
 import { saveAppointment } from "@/lib/fhir/appointment-client";
 import { useMedplumAuth } from "@/lib/auth-medplum";
-import type { AppointmentStatus } from "@/lib/models";
 import { cn } from "@/lib/utils";
 import {
   Command,
@@ -30,6 +29,8 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+
+type AppointmentStatus = "scheduled" | "checked_in" | "completed" | "cancelled" | "no_show";
 
 const appointmentStatuses = [
   "scheduled",

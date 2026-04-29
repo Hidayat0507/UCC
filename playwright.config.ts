@@ -14,11 +14,13 @@ const isLocal = process.env.PLAYWRIGHT_ENV === "local" || !process.env.EMR_CLINI
 
 const CLINIC_URL = isLocal
   ? "http://localhost:3000"
-  : process.env.EMR_CLINIC_URL || "https://klinikputeri.iatrum.com";
+  : process.env.EMR_CLINIC_URL || "https://demo.drhidayat.com";
 
 const ADMIN_URL = isLocal
   ? "http://localhost:3000"
   : process.env.EMR_ADMIN_URL || "https://admin.iatrum.com";
+
+const browserChannel = process.env.PLAYWRIGHT_BROWSER_CHANNEL || undefined;
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -31,6 +33,7 @@ export default defineConfig({
   outputDir: "test-results",
   use: {
     headless: true,
+    channel: browserChannel,
     screenshot: "only-on-failure",
     video: "retain-on-failure",
     trace: "on-first-retry",
@@ -69,6 +72,7 @@ export default defineConfig({
         "**/queue.spec.ts",
         "**/triage.spec.ts",
         "**/check-in.spec.ts",
+        "**/appointments.spec.ts",
         "**/referrals.spec.ts",
       ],
       use: {

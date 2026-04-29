@@ -2,13 +2,41 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Calendar, Clock, MapPin, UserRound } from "lucide-react";
+import { Calendar } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { useToast } from "@/components/ui/use-toast";
-import { formatDisplayDate } from "@/lib/utils";
 import { rescheduleAppointment, updateAppointmentStatus } from "@/lib/fhir/appointment-client";
 
 type AppointmentStatus = "scheduled" | "checked_in" | "completed" | "cancelled" | "no_show";
@@ -84,6 +112,16 @@ function formatDateTime(date: Date | string): { day: string; time: string } {
   };
 }
 
+function toDateTimeLocalValue(date: Date | string): string {
+  const instance = date instanceof Date ? date : new Date(date);
+  const pad = (value: number) => value.toString().padStart(2, "0");
+  return [
+    instance.getFullYear(),
+    pad(instance.getMonth() + 1),
+    pad(instance.getDate()),
+  ].join("-") + `T${pad(instance.getHours())}:${pad(instance.getMinutes())}`;
+}
+
 const statusLabels: Record<AppointmentStatus, string> = {
   scheduled: "Scheduled",
   checked_in: "Checked in",
@@ -106,6 +144,8 @@ export default function AppointmentsRootPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionId, setActionId] = useState<string | null>(null);
+  const [rescheduleTarget, setRescheduleTarget] = useState<Appointment | null>(null);
+  const [rescheduleValue, setRescheduleValue] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -156,22 +196,52 @@ export default function AppointmentsRootPage() {
     }
   }
 
-  async function handleReschedule(appointment: Appointment) {
+  function openRescheduleDialog(appointment: Appointment) {
+    setRescheduleTarget(appointment);
+    setRescheduleValue(toDateTimeLocalValue(appointment.scheduledAt));
+  }
+
+  async function handleRescheduleSubmit() {
+    if (!rescheduleTarget || !rescheduleValue) {
+      return;
+    }
+
     try {
-      setActionId(appointment.id);
-      const current = appointment.scheduledAt instanceof Date ? appointment.scheduledAt : new Date(appointment.scheduledAt);
-      const nextSlot = new Date(current);
-      nextSlot.setMinutes(nextSlot.getMinutes() + 30);
-      await rescheduleAppointment(appointment.id, nextSlot);
+      setActionId(rescheduleTarget.id);
+      const nextSlot = new Date(rescheduleValue);
+      await rescheduleAppointment(rescheduleTarget.id, nextSlot);
       toast({
         title: "Appointment rescheduled",
-        description: `${appointment.patientName} moved to ${nextSlot.toLocaleString()}.`,
+        description: `${rescheduleTarget.patientName} moved to ${nextSlot.toLocaleString()}.`,
       });
+      setRescheduleTarget(null);
+      setRescheduleValue("");
       await loadAppointments();
     } catch (err: any) {
       console.error("Failed to reschedule appointment", err);
       toast({
         title: "Unable to reschedule",
+        description: err?.message || "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setActionId(null);
+    }
+  }
+
+  async function handleCancelAppointment(appointment: Appointment) {
+    try {
+      setActionId(appointment.id);
+      await updateAppointmentStatus(appointment.id, "cancelled");
+      toast({
+        title: "Appointment cancelled",
+        description: `${appointment.patientName}'s appointment has been cancelled.`,
+      });
+      await loadAppointments();
+    } catch (err: any) {
+      console.error("Failed to cancel appointment", err);
+      toast({
+        title: "Unable to cancel appointment",
         description: err?.message || "Please try again.",
         variant: "destructive",
       });
@@ -236,9 +306,6 @@ export default function AppointmentsRootPage() {
         <div className="flex gap-2">
           <Button asChild>
             <Link href="/appointments/new">New appointment</Link>
-          </Button>
-          <Button variant="outline" asChild>
-            <Link href="/patients">View patients</Link>
           </Button>
         </div>
       </header>
@@ -314,70 +381,140 @@ export default function AppointmentsRootPage() {
           </Card>
         ) : null}
 
-        <div className="grid gap-4 lg:grid-cols-3">
-          {upcomingAppointments.map((appointment) => {
-            const { day, time } = formatDateTime(appointment.scheduledAt);
-            return (
-              <Card key={appointment.id}>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg">{appointment.patientName}</CardTitle>
-                    <Badge variant={statusVariants[appointment.status]}>{statusLabels[appointment.status]}</Badge>
-                  </div>
-                  <CardDescription>{appointment.reason || "Clinic visit"}</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3 text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-2 font-medium">
-                      <Calendar className="h-4 w-4 text-muted-foreground" /> {day}
-                    </span>
-                    <span className="flex items-center gap-1 text-muted-foreground">
-                      <Clock className="h-4 w-4" /> {time}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between text-muted-foreground">
-                    <span className="flex items-center gap-2">
-                      <UserRound className="h-4 w-4" /> {appointment.clinician}
-                    </span>
-                    {appointment.location ? (
-                      <span className="flex items-center gap-2">
-                        <MapPin className="h-4 w-4" /> {appointment.location}
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="text-muted-foreground">
-                    Booked on {formatDisplayDate(appointment.createdAt)}
-                  </div>
-                  {appointment.notes ? (
-                    <p className="rounded-md bg-muted p-3 text-muted-foreground">{appointment.notes}</p>
-                  ) : null}
-                  <div className="flex gap-2">
-                    <Button
-                      className="flex-1"
-                      variant="outline"
-                      onClick={() => handleMarkArrived(appointment)}
-                      disabled={actionId === appointment.id || appointment.status !== "scheduled"}
-                    >
-                      Mark arrived
-                    </Button>
-                    <Button
-                      className="flex-1"
-                      variant="outline"
-                      onClick={() => handleReschedule(appointment)}
-                      disabled={actionId === appointment.id || appointment.status === "completed" || appointment.status === "cancelled"}
-                    >
-                      Reschedule +30m
-                    </Button>
-                  </div>
-                  <Button className="w-full" variant="secondary" asChild>
-                    <Link href={`/appointments/${appointment.id}`}>View details</Link>
-                  </Button>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
+        {!loading && upcomingAppointments.length > 0 ? (
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Patient</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Time</TableHead>
+                  <TableHead>Clinician</TableHead>
+                  <TableHead>Reason</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {upcomingAppointments.map((appointment) => {
+                  const { day, time } = formatDateTime(appointment.scheduledAt);
+
+                  return (
+                    <TableRow key={appointment.id}>
+                      <TableCell className="font-medium">
+                        <Link href={`/appointments/${appointment.id}`} className="hover:underline">
+                          {appointment.patientName}
+                        </Link>
+                      </TableCell>
+                      <TableCell>{day}</TableCell>
+                      <TableCell>{time}</TableCell>
+                      <TableCell>{appointment.clinician || "N/A"}</TableCell>
+                      <TableCell className="max-w-[260px] truncate text-muted-foreground">
+                        {appointment.reason || "Clinic visit"}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={statusVariants[appointment.status]}>{statusLabels[appointment.status]}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleMarkArrived(appointment)}
+                            disabled={actionId === appointment.id || appointment.status !== "scheduled"}
+                          >
+                            Mark arrived
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => openRescheduleDialog(appointment)}
+                            disabled={actionId === appointment.id}
+                          >
+                            Reschedule
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={actionId === appointment.id}
+                              >
+                                Cancel
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Cancel appointment?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  This will mark {appointment.patientName}&apos;s appointment as cancelled. It will remain in the record for audit history.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Keep appointment</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => handleCancelAppointment(appointment)}>
+                                  Cancel appointment
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                          <Button size="sm" variant="secondary" asChild>
+                            <Link href={`/appointments/${appointment.id}`}>View</Link>
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        ) : null}
       </section>
+
+      <Dialog open={!!rescheduleTarget} onOpenChange={(open) => {
+        if (!open) {
+          setRescheduleTarget(null);
+          setRescheduleValue("");
+        }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reschedule appointment</DialogTitle>
+            <DialogDescription>
+              Choose the new appointment date and time.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="appointment-time">Date and time</Label>
+            <Input
+              id="appointment-time"
+              type="datetime-local"
+              value={rescheduleValue}
+              onChange={(event) => setRescheduleValue(event.target.value)}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setRescheduleTarget(null);
+                setRescheduleValue("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleRescheduleSubmit}
+              disabled={!rescheduleValue || actionId === rescheduleTarget?.id}
+            >
+              Save changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

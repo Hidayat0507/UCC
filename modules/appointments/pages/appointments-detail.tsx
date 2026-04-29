@@ -11,16 +11,42 @@ import {
   ClipboardList,
 } from "lucide-react";
 
-import { getAppointmentById } from "@/lib/models";
+import { getAppointmentFromMedplum, type SavedAppointment } from "@/lib/fhir/appointment-service";
+import { getMedplumForRequest } from "@/lib/server/medplum-auth";
 import { formatDisplayDate } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import AppointmentStatusForm from "../components/status-form";
 
+type DetailStatus = "scheduled" | "checked_in" | "completed" | "cancelled" | "no_show";
+
+function normalizeAppointment(appointment: SavedAppointment): Omit<SavedAppointment, "status"> & { status: DetailStatus } {
+  const status = (() => {
+    switch (appointment.status) {
+      case "booked":
+        return "scheduled";
+      case "arrived":
+        return "checked_in";
+      case "fulfilled":
+        return "completed";
+      case "noshow":
+        return "no_show";
+      case "cancelled":
+        return "cancelled";
+      default:
+        return "scheduled";
+    }
+  })();
+
+  return {
+    ...appointment,
+    status,
+  };
+}
+
 const statusLabels = {
   scheduled: "Scheduled",
   checked_in: "Checked in",
-  in_progress: "In progress",
   completed: "Completed",
   cancelled: "Cancelled",
   no_show: "No show",
@@ -29,7 +55,6 @@ const statusLabels = {
 const statusDescriptions = {
   scheduled: "Awaiting patient arrival",
   checked_in: "Patient has arrived and is waiting",
-  in_progress: "Clinical team is currently seeing the patient",
   completed: "Visit completed and documented",
   cancelled: "Cancelled by clinic or patient",
   no_show: "Patient did not attend",
@@ -38,7 +63,6 @@ const statusDescriptions = {
 const badgeVariants = {
   scheduled: "secondary",
   checked_in: "default",
-  in_progress: "default",
   completed: "outline",
   cancelled: "destructive",
   no_show: "destructive",
@@ -64,24 +88,22 @@ function formatDateTime(date: Date | string | null | undefined) {
 }
 
 type PageProps = {
-  params: { id: string };
+  params: { id: string } | Promise<{ id: string }>;
 };
 
 export default async function AppointmentDetailsPage({ params }: PageProps) {
-  const { id } = params;
-  const appointment = await getAppointmentById(id);
+  const { id } = await params;
+  const medplum = await getMedplumForRequest();
+  const rawAppointment = await getAppointmentFromMedplum(medplum, id);
 
-  if (!appointment) {
+  if (!rawAppointment) {
     notFound();
   }
 
+  const appointment = normalizeAppointment(rawAppointment);
   const scheduledAt = appointment.scheduledAt instanceof Date
     ? appointment.scheduledAt
     : new Date(appointment.scheduledAt ?? "");
-
-  const checkInTime = appointment.checkInTime ?? null;
-  const completedAt = appointment.completedAt ?? null;
-  const cancelledAt = appointment.cancelledAt ?? null;
 
   return (
     <div className="container max-w-4xl space-y-8 py-6">
@@ -164,15 +186,15 @@ export default async function AppointmentDetailsPage({ params }: PageProps) {
                 </div>
                 <div className="flex items-center justify-between">
                   <dt>Checked in</dt>
-                  <dd>{formatDateTime(checkInTime)}</dd>
+                  <dd>{appointment.status === "checked_in" ? formatDateTime(scheduledAt) : "-"}</dd>
                 </div>
                 <div className="flex items-center justify-between">
                   <dt>Completed</dt>
-                  <dd>{formatDateTime(completedAt)}</dd>
+                  <dd>{appointment.status === "completed" ? formatDateTime(scheduledAt) : "-"}</dd>
                 </div>
                 <div className="flex items-center justify-between">
                   <dt>Cancelled</dt>
-                  <dd>{formatDateTime(cancelledAt)}</dd>
+                  <dd>{appointment.status === "cancelled" || appointment.status === "no_show" ? formatDateTime(scheduledAt) : "-"}</dd>
                 </div>
               </dl>
             </div>
@@ -182,8 +204,6 @@ export default async function AppointmentDetailsPage({ params }: PageProps) {
                 <AppointmentStatusForm
                   appointmentId={appointment.id}
                   currentStatus={appointment.status}
-                  hasCheckIn={!!checkInTime}
-                  hasCompleted={!!completedAt}
                 />
               </div>
             </div>

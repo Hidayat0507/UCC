@@ -8,6 +8,18 @@ const ADMIN_PASSWORD = process.env.MEDPLUM_ADMIN_PASSWORD;
 const AUTH_DIR = path.join(__dirname, "../.auth");
 fs.mkdirSync(AUTH_DIR, { recursive: true });
 
+function getAppOrigin(baseURL?: string): string {
+  const url = new URL(baseURL || process.env.EMR_ADMIN_URL || "http://localhost:3000");
+  const parts = url.hostname.split(".");
+  if (parts[0] === "admin" && parts.length >= 3) {
+    url.hostname = parts.slice(1).join(".");
+  }
+  url.pathname = "";
+  url.search = "";
+  url.hash = "";
+  return url.toString().replace(/\/$/, "");
+}
+
 setup("authenticate as admin user", async ({ page }) => {
   const emptyState = JSON.stringify({ cookies: [], origins: [] });
   const adminStatePath = path.join(AUTH_DIR, "admin.json");
@@ -18,19 +30,26 @@ setup("authenticate as admin user", async ({ page }) => {
     return;
   }
 
-  await page.goto("/login", { waitUntil: "domcontentloaded" });
-  await expect(page.getByText("Welcome back")).toBeVisible({ timeout: 10_000 });
+  const appOrigin = getAppOrigin(setup.info().project.use.baseURL as string | undefined);
+  const loginResponse = await page.request.post(`${appOrigin}/api/auth/login`, {
+    data: {
+      email: ADMIN_EMAIL,
+      password: ADMIN_PASSWORD,
+      next: "/admin",
+    },
+    timeout: 30_000,
+  });
 
-  await page.fill("#email", ADMIN_EMAIL);
-  await page.fill("#password", ADMIN_PASSWORD);
-  await page.click('button[type="submit"]');
+  if (!loginResponse.ok()) {
+    const body = await loginResponse.text().catch(() => "");
+    throw new Error(
+      `Admin login failed with HTTP ${loginResponse.status()}: ${body}`
+    );
+  }
+
+  await page.goto(`${appOrigin}/admin`, { waitUntil: "domcontentloaded" });
 
   await page.waitForFunction(async () => {
-    const onNonLoginPage = !window.location.pathname.includes("/login");
-    if (onNonLoginPage) {
-      return true;
-    }
-
     const hasAdminHeading = Boolean(
       document
         .querySelector("h1, h2, [role='heading']")

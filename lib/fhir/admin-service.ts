@@ -3,7 +3,7 @@
  * Uses Medplum client credentials to access all organisations.
  */
 import type { MedplumClient } from "@medplum/core";
-import type { Organization, Practitioner } from "@medplum/fhirtypes";
+import type { Organization, Practitioner, ProjectMembership } from "@medplum/fhirtypes";
 import { getAdminMedplum } from "@/lib/server/medplum-admin";
 
 function getIdFromReference(reference?: string): string | undefined {
@@ -355,8 +355,10 @@ function practitionerDisplayName(p: Practitioner): string {
   );
 }
 
-export async function getPractitionersFromMedplum(): Promise<PractitionerSummary[]> {
-  const medplum = await getAdminMedplum();
+export async function getPractitionersFromMedplum(
+  medplum?: MedplumClient
+): Promise<PractitionerSummary[]> {
+  medplum ??= await getAdminMedplum();
   const [practitioners, roles, organizations] = await Promise.all([
     medplum.searchResources("Practitioner", { _count: "200" }),
     medplum.searchResources("PractitionerRole", { _count: "500" }),
@@ -404,6 +406,8 @@ export async function getPractitionerFromMedplum(
   } catch {
     return null;
   }
+
+  if (practitioner.active === false) return null;
 
   const roles = await medplum.searchResources("PractitionerRole", {
     practitioner: `Practitioner/${id}`,
@@ -525,18 +529,22 @@ export async function deletePractitionerFromMedplum(
     throw new Error(`Failed to load Practitioner before delete: ${message}`);
   }
 
-  const [roles, memberships] = await Promise.all([
-    medplum.searchResources("PractitionerRole", {
-      practitioner: `Practitioner/${practitionerId}`,
-      _count: "100",
-    }),
-    medplum.searchResources("ProjectMembership", { _count: "500" }),
-  ]);
+  const roles = await medplum.searchResources("PractitionerRole", {
+    practitioner: `Practitioner/${practitionerId}`,
+    _count: "100",
+  });
 
-  const matchingMemberships = (memberships ?? []).filter(
-    (membership) =>
-      membership.profile?.reference === `Practitioner/${practitionerId}`
-  );
+  // ProjectMembership search is best-effort — the admin client may not have
+  // permission to do a broad scan, and a failure here must not abort the delete.
+  let matchingMemberships: ProjectMembership[] = [];
+  try {
+    const memberships = await medplum.searchResources("ProjectMembership", { _count: "500" });
+    matchingMemberships = (memberships ?? []).filter(
+      (m) => m.profile?.reference === `Practitioner/${practitionerId}`
+    );
+  } catch (err) {
+    console.warn("[deletePractitioner] could not search ProjectMembership (skipping cleanup)", err);
+  }
 
   // Collect User refs so we can also drop the login identity. Without this
   // the User remains and causes "email already exists" on re-invite.

@@ -120,7 +120,7 @@ export default function UserEditForm({ user, clinics }: Props) {
         title: "User deleted",
         description: `${user.name} has been removed.`,
       });
-      router.replace(adminPath("/users"));
+      window.location.assign(adminPath("/users"));
     } catch (err: any) {
       toast({
         title: "Cannot delete",
