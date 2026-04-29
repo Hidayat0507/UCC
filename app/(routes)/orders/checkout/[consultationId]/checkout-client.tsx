@@ -2,14 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
-  Activity,
+  AlertCircle,
   ArrowLeft,
   CheckCircle2,
   CreditCard,
   FileText,
-  Megaphone,
-  Plus,
   ReceiptText,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -41,6 +40,8 @@ type CheckoutItem = {
   quantity: number;
   price: number;
 };
+
+type PaymentMethod = "cash" | "card" | "qr" | "panel";
 
 const DEFAULT_CONSULTATION_FEE = 50;
 
@@ -94,12 +95,15 @@ function buildCheckoutItems(consultation: Consultation | null): CheckoutItem[] {
 }
 
 export default function CheckoutClient({ consultationId, patientId }: CheckoutClientProps) {
+  const router = useRouter();
   const [details, setDetails] = useState<OrderDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState("cash");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
   const [paidAmount, setPaidAmount] = useState("");
   const [completed, setCompleted] = useState(false);
+  const [completionError, setCompletionError] = useState<string | null>(null);
+  const [completing, setCompleting] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -152,10 +156,39 @@ export default function CheckoutClient({ consultationId, patientId }: CheckoutCl
   const subtotal = checkoutItems.reduce((total, item) => total + item.quantity * item.price, 0);
   const paid = Number.parseFloat(paidAmount) || 0;
   const balance = Math.max(subtotal - paid, 0);
-  const invoiceNumber = useMemo(
-    () => `#${consultationId.replace(/[^a-zA-Z0-9]/g, "").slice(-6).toUpperCase() || "DRAFT"}`,
-    [consultationId]
-  );
+  const handleCompleteVisitation = async () => {
+    if (!details || completing || balance > 0) return;
+
+    setCompleting(true);
+    setCompletionError(null);
+
+    try {
+      const response = await fetch("/api/billing", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          consultationId,
+          patientId,
+          items: checkoutItems,
+          paymentMethod,
+          paidAmount: paid,
+          totalAmount: subtotal,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.error || "Failed to complete checkout.");
+      }
+
+      setCompleted(true);
+      router.push(`/orders?checkout=completed&invoiceId=${encodeURIComponent(payload.invoiceId || "")}`);
+    } catch (err) {
+      setCompletionError(err instanceof Error ? err.message : "Failed to complete checkout.");
+    } finally {
+      setCompleting(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -191,8 +224,8 @@ export default function CheckoutClient({ consultationId, patientId }: CheckoutCl
       : patient.fullName;
 
   return (
-    <main className="container mx-auto space-y-6 py-8">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+    <main className="w-full space-y-6 px-3 py-8 sm:px-4 lg:px-5 2xl:px-6">
+      <div className="flex flex-col gap-4">
         <div className="space-y-3">
           <Button asChild variant="ghost" className="-ml-3 w-fit">
             <Link href="/orders">
@@ -202,7 +235,9 @@ export default function CheckoutClient({ consultationId, patientId }: CheckoutCl
           </Button>
           <div>
             <div className="flex flex-wrap items-center gap-3">
-              <h1 className="text-3xl font-bold tracking-tight">Invoice {invoiceNumber}</h1>
+              <h1 className="text-3xl font-bold tracking-tight">
+                {completed ? "Completed invoice" : "Draft invoice"}
+              </h1>
               <Badge variant={completed ? "default" : "secondary"}>
                 {completed ? "Completed" : "Checkout"}
               </Badge>
@@ -212,53 +247,34 @@ export default function CheckoutClient({ consultationId, patientId }: CheckoutCl
             </p>
           </div>
         </div>
-
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline">
-            <Megaphone className="mr-2 h-4 w-4" />
-            Call in
-          </Button>
-          <Button variant="outline">
-            <Activity className="mr-2 h-4 w-4" />
-            View activity log
-          </Button>
-          <Button variant="outline">Switch old version</Button>
-        </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
+      <div className="grid gap-6 xl:grid-cols-[280px_minmax(0,1fr)_340px] 2xl:grid-cols-[300px_minmax(0,1fr)_360px]">
         <div className="space-y-6">
           <Card>
-            <CardHeader>
-              <CardTitle>Patient Summary</CardTitle>
-              <CardDescription>Visit and billing context for this checkout.</CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4 md:grid-cols-3">
+            <CardContent className="space-y-5 pt-6">
               <div>
                 <p className="text-xs font-medium text-muted-foreground">Patient</p>
                 <Link href={`/patients/${patient.id}`} className="mt-1 block font-medium text-primary hover:underline">
                   {patient.fullName}
                 </Link>
               </div>
-              <div>
-                <p className="text-xs font-medium text-muted-foreground">NRIC / Passport</p>
-                <p className="mt-1 font-medium">{patient.nric || "N/A"}</p>
-              </div>
-              <div>
-                <p className="text-xs font-medium text-muted-foreground">Phone</p>
-                <p className="mt-1 font-medium">{patient.phone || "N/A"}</p>
-              </div>
-            </CardContent>
-          </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Bill To</CardTitle>
-              <CardDescription>Self-pay and dependent billing information.</CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">NRIC / Passport</p>
+                  <p className="mt-1 font-medium">{patient.nric || "N/A"}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">Phone</p>
+                  <p className="mt-1 font-medium">{patient.phone || "N/A"}</p>
+                </div>
+              </div>
+
+              <Separator />
+
               <div>
-                <p className="text-xs font-medium text-muted-foreground">Billing person</p>
+                <p className="text-xs font-medium text-muted-foreground">Bill to</p>
                 <p className="mt-1 font-medium">{billToName}</p>
                 {patient.billingPerson === "dependent" ? (
                   <p className="mt-1 text-sm text-muted-foreground">
@@ -274,19 +290,11 @@ export default function CheckoutClient({ consultationId, patientId }: CheckoutCl
               </div>
             </CardContent>
           </Card>
+        </div>
 
+        <div>
           <Card>
-            <CardHeader className="gap-4 md:flex md:flex-row md:items-center md:justify-between">
-              <div>
-                <CardTitle>Treatment</CardTitle>
-                <CardDescription>Items, services, packages, and documents attached to this invoice.</CardDescription>
-              </div>
-              <Button variant="outline">
-                <Plus className="mr-2 h-4 w-4" />
-                Add treatment
-              </Button>
-            </CardHeader>
-            <CardContent>
+            <CardContent className="pt-6">
               <Tabs defaultValue="all">
                 <TabsList className="mb-4 flex w-full overflow-x-auto md:w-fit">
                   <TabsTrigger value="all">All</TabsTrigger>
@@ -351,7 +359,7 @@ export default function CheckoutClient({ consultationId, patientId }: CheckoutCl
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="payment-method">Payment method</Label>
-                <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                <Select value={paymentMethod} onValueChange={(value) => setPaymentMethod(value as PaymentMethod)}>
                   <SelectTrigger id="payment-method">
                     <SelectValue />
                   </SelectTrigger>
@@ -379,13 +387,28 @@ export default function CheckoutClient({ consultationId, patientId }: CheckoutCl
                   <span className="font-semibold">{currency(balance)}</span>
                 </div>
               </div>
-              <Button variant="outline" className="w-full">
+              {completionError ? (
+                <div className="flex gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>{completionError}</span>
+                </div>
+              ) : null}
+              <Button
+                variant="outline"
+                className="w-full"
+                type="button"
+                onClick={() => setCompletionError("e-Invoice submission is not connected yet. Complete visitation records this checkout invoice.")}
+              >
                 <FileText className="mr-2 h-4 w-4" />
                 Submit e-Invoice
               </Button>
-              <Button className="w-full" disabled={balance > 0} onClick={() => setCompleted(true)}>
+              <Button
+                className="w-full"
+                disabled={balance > 0 || completing || checkoutItems.length === 0}
+                onClick={handleCompleteVisitation}
+              >
                 <CheckCircle2 className="mr-2 h-4 w-4" />
-                Complete visitation
+                {completing ? "Completing..." : "Complete visitation"}
               </Button>
               {balance > 0 ? (
                 <p className="text-xs text-muted-foreground">

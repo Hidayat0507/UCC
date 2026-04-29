@@ -3,7 +3,6 @@
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { Search } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -19,7 +18,6 @@ import { BillableConsultation, QueueStatus } from '@/lib/types';
 
 interface BillingTableProps {
   consultations: BillableConsultation[];
-  onGenerate: (consultationId: string, patientId: string, type: 'Bill' | 'MC' | 'Referral') => void;
 }
 
 function getStatusBadge(status: QueueStatus | undefined | string) {
@@ -33,7 +31,7 @@ function getStatusBadge(status: QueueStatus | undefined | string) {
   }
 }
 
-export default function BillingTable({ consultations, onGenerate }: BillingTableProps) {
+export default function BillingTable({ consultations }: BillingTableProps) {
   const [searchQuery, setSearchQuery] = useState('');
 
   const filtered = useMemo(() => {
@@ -63,7 +61,6 @@ export default function BillingTable({ consultations, onGenerate }: BillingTable
               <TableHead>Patient Name</TableHead>
               <TableHead>Consultation Date</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -80,24 +77,11 @@ export default function BillingTable({ consultations, onGenerate }: BillingTable
                   </TableCell>
                   <TableCell>{formatDisplayDate(consultation.date)}</TableCell>
                   <TableCell>{getStatusBadge(consultation.queueStatus)}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button size="sm" variant="outline" onClick={() => onGenerate(consultation.id!, consultation.patientId, 'Bill')}>
-                        Bill
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => onGenerate(consultation.id!, consultation.patientId, 'MC')}>
-                        MC
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => onGenerate(consultation.id!, consultation.patientId, 'Referral')}>
-                        Referral
-                      </Button>
-                    </div>
-                  </TableCell>
                 </TableRow>
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={4} className="text-center py-4">
+                <TableCell colSpan={3} className="text-center py-4">
                   No billable consultations found
                 </TableCell>
               </TableRow>

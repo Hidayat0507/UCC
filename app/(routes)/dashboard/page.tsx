@@ -9,18 +9,14 @@ import {
   UserPlus,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import type { Patient, Consultation } from "@/lib/models";
+import type { Patient } from "@/lib/models";
 import QueueTable from "@/components/queue-table";
 import Link from "next/link";
-import { toast } from "@/components/ui/use-toast";
 import { RegisterPatientDialog } from "@/components/dashboard/register-patient-dialog";
 import UpcomingAppointmentsTable, { normalizeAppointmentStatus } from "@/modules/appointments/components/upcoming-appointments-table";
 import type { UpcomingAppointment } from "@/modules/appointments/components/upcoming-appointments-table";
 import BillingTable from "@/components/billing/billing-table";
 import { BillableConsultation } from "@/lib/types";
-import dynamic from "next/dynamic";
-const BillModal = dynamic(() => import("@/components/billing/bill-modal"), { ssr: false });
-const McModal = dynamic(() => import("@/components/mc/mc-modal"), { ssr: false });
 
 interface RawAppointment {
   id: string;
@@ -41,13 +37,6 @@ export default function Dashboard() {
   const [apptLoading, setApptLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [registerDialogOpen, setRegisterDialogOpen] = useState(false);
-
-  const [isBillModalOpen, setIsBillModalOpen] = useState(false);
-  const [currentBillData, setCurrentBillData] = useState<{ patient: Patient | null; consultation: Consultation | null } | null>(null);
-  const [billLoading, setBillLoading] = useState(false);
-  const [isMcModalOpen, setIsMcModalOpen] = useState(false);
-  const [currentMcData, setCurrentMcData] = useState<{ patient: Patient | null; consultation: Consultation | null } | null>(null);
-  const [mcLoading, setMcLoading] = useState(false);
 
   const loadQueue = async () => {
     setLoading(true);
@@ -97,38 +86,6 @@ export default function Dashboard() {
       setConsultations(result.consultations || []);
     } catch (err) {
       console.error('Error loading consultations:', err);
-    }
-  };
-
-  const handleGenerate = async (consultationId: string, patientId: string, type: 'Bill' | 'MC' | 'Referral') => {
-    if (type === 'Referral') {
-      toast({ title: `Generating ${type}... (Not implemented)` });
-      return;
-    }
-
-    const isBill = type === 'Bill';
-    const setModalLoading = isBill ? setBillLoading : setMcLoading;
-    const setCurrentData = isBill ? setCurrentBillData : setCurrentMcData;
-    const setModalOpen = isBill ? setIsBillModalOpen : setIsMcModalOpen;
-
-    setModalLoading(true);
-    setCurrentData(null);
-    setModalOpen(true);
-    try {
-      const res = await fetch(`/api/orders?consultationId=${consultationId}&patientId=${patientId}`);
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Failed to fetch details');
-      }
-      const { patient, consultation } = await res.json();
-      if (!patient || !consultation) throw new Error('Failed to fetch details.');
-      setCurrentData({ patient, consultation });
-    } catch (err) {
-      console.error(`Error fetching data for ${type}:`, err);
-      toast({ title: `Error generating ${type}`, description: err instanceof Error ? err.message : 'Could not load details.', variant: 'destructive' });
-      setModalOpen(false);
-    } finally {
-      setModalLoading(false);
     }
   };
 
@@ -245,32 +202,18 @@ export default function Dashboard() {
             <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <CardTitle>Billing & Documents</CardTitle>
-                <CardDescription>Generate bills, MCs, and referral letters.</CardDescription>
+                <CardDescription>Open checkout for completed consultations.</CardDescription>
               </div>
               <Button variant="outline" size="sm" asChild>
                 <Link href="/orders">View all</Link>
               </Button>
             </CardHeader>
             <CardContent>
-              <BillingTable consultations={consultations} onGenerate={handleGenerate} />
+              <BillingTable consultations={consultations} />
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
-
-      <BillModal
-        isOpen={isBillModalOpen}
-        onClose={() => setIsBillModalOpen(false)}
-        isLoading={billLoading}
-        data={currentBillData}
-      />
-
-      <McModal
-        isOpen={isMcModalOpen}
-        onClose={() => setIsMcModalOpen(false)}
-        isLoading={mcLoading}
-        data={currentMcData}
-      />
 
       <RegisterPatientDialog open={registerDialogOpen} onOpenChange={setRegisterDialogOpen} />
     </div>
