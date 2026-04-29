@@ -19,7 +19,6 @@ import {
   Puzzle,
   Settings,
   TestTube,
-  Users,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { ThemeToggle } from "./theme-toggle";
@@ -37,9 +36,7 @@ type SidebarProps = {
   modules?: SidebarModule[];
 };
 
-const baseNavigation = [
-  { name: "Patients", href: "/patients", icon: Users },
-];
+const baseNavigation: Array<{ name: string; href: string; icon: LucideIcon }> = [];
 
 const bottomNavigation = [
   { name: "Settings", href: "/settings", icon: Settings },
