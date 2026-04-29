@@ -16,6 +16,7 @@ import { getMedplumForRequest } from "@/lib/server/medplum-auth";
 import { formatDisplayDate } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import AppointmentActions from "../components/appointment-actions";
 import AppointmentStatusForm from "../components/status-form";
 
 type DetailStatus = "scheduled" | "checked_in" | "completed" | "cancelled" | "no_show";
@@ -112,7 +113,14 @@ export default async function AppointmentDetailsPage({ params }: PageProps) {
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to appointments
         </Link>
-        <Badge variant={badgeVariants[appointment.status]}>{statusLabels[appointment.status]}</Badge>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <AppointmentActions
+            appointmentId={appointment.id}
+            patientName={appointment.patientName}
+            scheduledAt={appointment.scheduledAt}
+          />
+          <Badge variant={badgeVariants[appointment.status]}>{statusLabels[appointment.status]}</Badge>
+        </div>
       </div>
 
       <Card>

@@ -8,27 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
   Table,
   TableBody,
   TableCell,
@@ -37,7 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/components/ui/use-toast";
-import { rescheduleAppointment, updateAppointmentStatus } from "@/lib/fhir/appointment-client";
+import { updateAppointmentStatus } from "@/lib/fhir/appointment-client";
 
 type AppointmentStatus = "scheduled" | "checked_in" | "completed" | "cancelled" | "no_show";
 
@@ -112,16 +91,6 @@ function formatDateTime(date: Date | string): { day: string; time: string } {
   };
 }
 
-function toDateTimeLocalValue(date: Date | string): string {
-  const instance = date instanceof Date ? date : new Date(date);
-  const pad = (value: number) => value.toString().padStart(2, "0");
-  return [
-    instance.getFullYear(),
-    pad(instance.getMonth() + 1),
-    pad(instance.getDate()),
-  ].join("-") + `T${pad(instance.getHours())}:${pad(instance.getMinutes())}`;
-}
-
 const statusLabels: Record<AppointmentStatus, string> = {
   scheduled: "Scheduled",
   checked_in: "Checked in",
@@ -144,8 +113,6 @@ export default function AppointmentsRootPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionId, setActionId] = useState<string | null>(null);
-  const [rescheduleTarget, setRescheduleTarget] = useState<Appointment | null>(null);
-  const [rescheduleValue, setRescheduleValue] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -188,60 +155,6 @@ export default function AppointmentsRootPage() {
       console.error("Failed to mark as arrived", err);
       toast({
         title: "Unable to update appointment",
-        description: err?.message || "Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setActionId(null);
-    }
-  }
-
-  function openRescheduleDialog(appointment: Appointment) {
-    setRescheduleTarget(appointment);
-    setRescheduleValue(toDateTimeLocalValue(appointment.scheduledAt));
-  }
-
-  async function handleRescheduleSubmit() {
-    if (!rescheduleTarget || !rescheduleValue) {
-      return;
-    }
-
-    try {
-      setActionId(rescheduleTarget.id);
-      const nextSlot = new Date(rescheduleValue);
-      await rescheduleAppointment(rescheduleTarget.id, nextSlot);
-      toast({
-        title: "Appointment rescheduled",
-        description: `${rescheduleTarget.patientName} moved to ${nextSlot.toLocaleString()}.`,
-      });
-      setRescheduleTarget(null);
-      setRescheduleValue("");
-      await loadAppointments();
-    } catch (err: any) {
-      console.error("Failed to reschedule appointment", err);
-      toast({
-        title: "Unable to reschedule",
-        description: err?.message || "Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setActionId(null);
-    }
-  }
-
-  async function handleCancelAppointment(appointment: Appointment) {
-    try {
-      setActionId(appointment.id);
-      await updateAppointmentStatus(appointment.id, "cancelled");
-      toast({
-        title: "Appointment cancelled",
-        description: `${appointment.patientName}'s appointment has been cancelled.`,
-      });
-      await loadAppointments();
-    } catch (err: any) {
-      console.error("Failed to cancel appointment", err);
-      toast({
-        title: "Unable to cancel appointment",
         description: err?.message || "Please try again.",
         variant: "destructive",
       });
@@ -425,39 +338,6 @@ export default function AppointmentsRootPage() {
                           >
                             Mark arrived
                           </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => openRescheduleDialog(appointment)}
-                            disabled={actionId === appointment.id}
-                          >
-                            Reschedule
-                          </Button>
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                disabled={actionId === appointment.id}
-                              >
-                                Cancel
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Cancel appointment?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  This will mark {appointment.patientName}&apos;s appointment as cancelled. It will remain in the record for audit history.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Keep appointment</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => handleCancelAppointment(appointment)}>
-                                  Cancel appointment
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
                           <Button size="sm" variant="secondary" asChild>
                             <Link href={`/appointments/${appointment.id}`}>View</Link>
                           </Button>
@@ -471,50 +351,6 @@ export default function AppointmentsRootPage() {
           </div>
         ) : null}
       </section>
-
-      <Dialog open={!!rescheduleTarget} onOpenChange={(open) => {
-        if (!open) {
-          setRescheduleTarget(null);
-          setRescheduleValue("");
-        }
-      }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Reschedule appointment</DialogTitle>
-            <DialogDescription>
-              Choose the new appointment date and time.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2">
-            <Label htmlFor="appointment-time">Date and time</Label>
-            <Input
-              id="appointment-time"
-              type="datetime-local"
-              value={rescheduleValue}
-              onChange={(event) => setRescheduleValue(event.target.value)}
-            />
-          </div>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setRescheduleTarget(null);
-                setRescheduleValue("");
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              onClick={handleRescheduleSubmit}
-              disabled={!rescheduleValue || actionId === rescheduleTarget?.id}
-            >
-              Save changes
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
