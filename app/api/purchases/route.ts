@@ -157,23 +157,32 @@ export async function PATCH(req: NextRequest) {
         return NextResponse.json({ success: false, error: 'Cannot receive this document' }, { status: 400 });
       }
 
-      for (const item of current.items ?? []) {
+      const receivedItems = (current.items ?? []).map((item: any) => {
+        // Use || not ?? so that an explicit 0 falls through to requestedQuantity
+        const qty = Number(item.receivedQuantity || item.requestedQuantity || item.quantity || 0);
+        return { ...item, receivedQuantity: qty };
+      });
+
+      for (const item of receivedItems) {
+        if (!item.medicationId || item.receivedQuantity === 0) continue;
         const medication = await getInventoryMedicationByIdFromMedplum(
           medplum,
           item.medicationId,
           clinicId
         );
         if (!medication) continue;
-
-        const qty =
-          Number(item.receivedQuantity ?? item.requestedQuantity ?? item.quantity ?? 0) || 0;
         await updateInventoryMedicationInMedplum(medplum, item.medicationId, {
-          stock: medication.stock + qty,
+          stock: medication.stock + item.receivedQuantity,
           unitPrice: Number(item.unitCost) || medication.unitPrice,
         }, clinicId);
       }
 
-      const updated = { ...current, status: 'received', receivedAt: new Date().toISOString() };
+      const updated = {
+        ...current,
+        status: 'received',
+        receivedAt: new Date().toISOString(),
+        items: receivedItems,
+      };
       const saved = await medplum.updateResource({ ...toBasic(updated, clinicId), id });
       return NextResponse.json({ success: true, purchaseOrder: fromBasic(saved) });
     }
