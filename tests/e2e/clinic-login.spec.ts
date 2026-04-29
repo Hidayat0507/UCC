@@ -100,23 +100,22 @@ test.describe("Authenticated session", () => {
     await page.screenshot({ path: "test-results/dashboard-authenticated.png" });
   });
 
-  test("check-in page loads", async ({ page }) => {
-    const response = await page.goto("/check-in", { waitUntil: "domcontentloaded" });
+  test("patients page loads when authenticated", async ({ page }) => {
+    const response = await page.goto("/patients", { waitUntil: "domcontentloaded" });
     const status = response?.status() ?? 0;
 
-    // Skip gracefully if the route is not yet deployed
     if (status === 404 || status === 500) {
       test.info().annotations.push({
         type: "skip-reason",
-        description: `/check-in returned ${status} — page not yet deployed to live site.`,
+        description: `/patients returned ${status} — page not yet deployed to live site.`,
       });
       return;
     }
 
     await expect(
-      page.getByRole("heading", { name: /check.?in/i })
+      page.getByRole("heading", { name: /^patients$/i })
     ).toBeVisible({ timeout: 15_000 });
-    await page.screenshot({ path: "test-results/check-in-page.png" });
+    await page.screenshot({ path: "test-results/patients-page.png" });
   });
 
   test("session survives a hard page reload", async ({ page }) => {

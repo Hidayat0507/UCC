@@ -1,7 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const CLINIC_URL =
-  process.env.CLINIC_URL || "https://klinikputeri.iatrum.com";
+  process.env.CLINIC_URL || "https://demo.drhidayat.com";
 
 export default defineConfig({
   testDir: "./e2e",

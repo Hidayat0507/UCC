@@ -9,6 +9,7 @@ import { useMedplumAuth } from "@/lib/auth-medplum";
 import { useAdminPath } from "@/hooks/use-admin-path";
 import {
   Building2,
+  GitBranch,
   LayoutDashboard,
   LogOut,
   Settings,
@@ -28,7 +29,8 @@ export default function AdminSidebar() {
 
   const navigation = [
     { name: "Overview", href: adminPath("/"), icon: LayoutDashboard, exact: true },
-    { name: "Clinics", href: adminPath("/clinics"), icon: Building2 },
+    { name: "Organisations", href: adminPath("/organisation"), icon: Building2 },
+    { name: "Branches", href: adminPath("/clinics"), icon: GitBranch },
     { name: "Users", href: adminPath("/users"), icon: Users },
     { name: "Settings", href: adminPath("/settings"), icon: Settings },
   ];
@@ -39,7 +41,7 @@ export default function AdminSidebar() {
     <div
       className={cn(
         "flex h-screen border-r bg-background relative transition-all duration-300",
-        isCollapsed ? "w-16" : "w-64"
+        isCollapsed ? "w-16" : "w-40"
       )}
     >
       <div className="flex flex-col flex-1">

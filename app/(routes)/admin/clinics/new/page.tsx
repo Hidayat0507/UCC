@@ -1,154 +1,48 @@
-"use client";
-
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { getParentOrganizationsFromMedplum } from "@/lib/fhir/admin-service";
+import { adminPathForHost } from "@/lib/admin-routes";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useToast } from "@/components/ui/use-toast";
-import { ArrowLeft } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 import Link from "next/link";
-import { useAdminPath } from "@/hooks/use-admin-path";
+import { headers } from "next/headers";
+import { getHostFromHeaders } from "@/lib/server/subdomain-host";
+import NewBranchForm from "./new-branch-form";
 
-export default function NewClinicPage() {
-  const router = useRouter();
-  const { toast } = useToast();
-  const adminPath = useAdminPath();
-  const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({
-    name: "",
-    subdomain: "",
-    phone: "",
-    address: "",
-    logoUrl: "",
-  });
+export const dynamic = "force-dynamic";
 
-  const handleChange = (field: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
-    let value = e.target.value;
-    if (field === "subdomain") {
-      // Auto-sanitise subdomain: lowercase, alphanumeric + hyphens only
-      value = value.toLowerCase().replace(/[^a-z0-9-]/g, "");
-    }
-    setForm((prev) => ({ ...prev, [field]: value }));
-  };
+export default async function NewBranchPage() {
+  const host = getHostFromHeaders(await headers());
+  const adminPath = (path: string) => adminPathForHost(path, host);
+  const organisations = await getParentOrganizationsFromMedplum().catch(() => []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.name || !form.subdomain) {
-      toast({ title: "Required fields missing", variant: "destructive" });
-      return;
-    }
-    setLoading(true);
-    try {
-      const res = await fetch("/api/admin/clinics", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || "Failed to create clinic");
-      }
-      toast({ title: "Clinic created!", description: `${form.name} is now live.` });
-      router.replace(adminPath("/clinics"));
-    } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN || "yourdomain.com";
-
-  return (
-    <div className="max-w-2xl space-y-6">
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="sm" asChild>
-          <Link href={adminPath("/clinics")}>
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
-        </Button>
+  if (organisations.length === 0) {
+    return (
+      <div className="max-w-2xl space-y-6">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">New Clinic</h1>
-          <p className="text-muted-foreground text-sm">Register a new clinic on the platform.</p>
+          <h1 className="text-2xl font-bold tracking-tight">New Branch</h1>
+          <p className="text-muted-foreground text-sm">
+            Register a new clinic branch.
+          </p>
         </div>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Clinic Details</CardTitle>
-          <CardDescription>This creates an Organisation in Medplum and assigns a subdomain.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Clinic Name *</Label>
-              <Input
-                id="name"
-                placeholder="Klinik Anda"
-                value={form.name}
-                onChange={handleChange("name")}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="subdomain">Subdomain *</Label>
-              <div className="flex items-center gap-2">
-                <Input
-                  id="subdomain"
-                  placeholder="klinikanda"
-                  value={form.subdomain}
-                  onChange={handleChange("subdomain")}
-                  required
-                  className="flex-1"
-                />
-                <span className="text-muted-foreground text-sm whitespace-nowrap">
-                  .{baseDomain}
-                </span>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Lowercase letters, numbers and hyphens only.
+        <Card className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
+          <CardContent className="flex items-start gap-3 py-6">
+            <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <div className="space-y-3">
+              <p className="text-sm text-amber-800 dark:text-amber-300">
+                You need to create an organisation before adding clinic
+                branches.
               </p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="phone">Phone</Label>
-              <Input
-                id="phone"
-                placeholder="+60 3-1234 5678"
-                value={form.phone}
-                onChange={handleChange("phone")}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="address">Address</Label>
-              <Input
-                id="address"
-                placeholder="123 Jalan Bunga, Kuala Lumpur"
-                value={form.address}
-                onChange={handleChange("address")}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="logoUrl">Logo URL</Label>
-              <Input
-                id="logoUrl"
-                placeholder="https://example.com/logo.png"
-                value={form.logoUrl}
-                onChange={handleChange("logoUrl")}
-              />
-            </div>
-            <div className="pt-2 flex gap-3">
-              <Button type="submit" disabled={loading}>
-                {loading ? "Creating..." : "Create Clinic"}
-              </Button>
-              <Button type="button" variant="outline" asChild>
-                <Link href={adminPath("/clinics")}>Cancel</Link>
+              <Button asChild size="sm">
+                <Link href={adminPath("/organisation")}>
+                  Create Organisation
+                </Link>
               </Button>
             </div>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
-  );
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  return <NewBranchForm organisations={organisations} />;
 }

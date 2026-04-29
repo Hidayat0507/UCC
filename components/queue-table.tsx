@@ -11,9 +11,8 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Clock, MoreHorizontal, UserPlus, X, Receipt, AlertTriangle } from "lucide-react";
+import { Clock, MoreHorizontal, UserPlus, X, Receipt } from "lucide-react";
 import Link from "next/link";
-import { TRIAGE_LEVELS } from "@/lib/types";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "@/components/ui/use-toast";
 import { QueueStatus } from "@/lib/types";
@@ -163,7 +162,7 @@ export default function QueueTable({ patients, onQueueUpdate }: QueueTableProps)
         return (
           <Badge variant="outline" className="flex items-center gap-1">
             <Clock className="h-3 w-3" />
-            Arrived (awaiting triage)
+            Arrived
           </Badge>
         );
       case 'waiting':
@@ -199,33 +198,6 @@ export default function QueueTable({ patients, onQueueUpdate }: QueueTableProps)
     }
   };
 
-  const getTriageBadge = (triageLevel: number | undefined) => {
-    if (!triageLevel) {
-      return (
-        <Badge variant="outline" className="flex items-center gap-1">
-          <AlertTriangle className="h-3 w-3" />
-          Not Triaged
-        </Badge>
-      );
-    }
-
-    const triageInfo = TRIAGE_LEVELS[triageLevel as keyof typeof TRIAGE_LEVELS];
-    const colorClasses = {
-      1: "bg-red-500 text-white hover:bg-red-600",
-      2: "bg-orange-500 text-white hover:bg-orange-600",
-      3: "bg-yellow-500 text-zinc-900 hover:bg-yellow-600",
-      4: "bg-green-500 text-white hover:bg-green-600",
-      5: "bg-blue-500 text-white hover:bg-blue-600",
-    };
-
-    return (
-      <Badge className={`flex items-center gap-1 ${colorClasses[triageLevel as keyof typeof colorClasses]}`}>
-        <span className="font-bold">{triageLevel}</span>
-        <span className="hidden md:inline">- {triageInfo?.label}</span>
-      </Badge>
-    );
-  };
-
   return (
     <div className="rounded-md border">
       <Table>
@@ -234,8 +206,6 @@ export default function QueueTable({ patients, onQueueUpdate }: QueueTableProps)
             <TableHead className="w-[80px]">Queue No.</TableHead>
             <TableHead>Patient Name</TableHead>
             <TableHead>NRIC</TableHead>
-            <TableHead>Phone</TableHead>
-            <TableHead>Triage Level</TableHead>
             <TableHead>Chief Complaint</TableHead>
             <TableHead>Visit Context</TableHead>
             <TableHead>Added At</TableHead>
@@ -256,10 +226,6 @@ export default function QueueTable({ patients, onQueueUpdate }: QueueTableProps)
                 </Link>
               </TableCell>
               <TableCell>{patient.nric}</TableCell>
-              <TableCell>{patient.phone}</TableCell>
-              <TableCell>
-                {getTriageBadge(patient.triage?.triageLevel)}
-              </TableCell>
               <TableCell className="max-w-[200px] truncate">
                 {patient.triage?.chiefComplaint || 'N/A'}
               </TableCell>
@@ -302,8 +268,8 @@ export default function QueueTable({ patients, onQueueUpdate }: QueueTableProps)
                     </DropdownMenuItem>
                     {!patient.triage?.isTriaged && (
                       <DropdownMenuItem asChild>
-                        <Link href={`/patients/${patient.id}/triage`}>
-                          Perform Triage
+                        <Link href={`/patients/${patient.id}/check-in`}>
+                          Check-in
                         </Link>
                       </DropdownMenuItem>
                     )}
@@ -324,7 +290,7 @@ export default function QueueTable({ patients, onQueueUpdate }: QueueTableProps)
           ))}
           {patients.length === 0 && (
             <TableRow>
-              <TableCell colSpan={10} className="text-center py-4">
+              <TableCell colSpan={8} className="text-center py-4">
                 No patients in queue
               </TableCell>
             </TableRow>

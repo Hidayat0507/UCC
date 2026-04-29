@@ -1,10 +1,10 @@
 /**
- * Triage workflow E2E tests
+ * Check-in / triage form E2E tests (route: /patients/:id/check-in)
  *
- * Covers the triage form that nurses use to take vitals and add a patient
+ * Covers the form staff use to capture vitals and add a patient
  * to the waiting queue:
- *   1. Triage page is accessible from the patient profile
- *   2. Submitting the triage form with vitals adds the patient to the queue
+ *   1. Check-in page is accessible from the patient profile
+ *   2. Submitting the form with vitals adds the patient to the queue
  *   3. Attempting to submit with no chief complaint shows a validation error
  *   4. /api/triage auth is covered in emr-auth.spec.ts
  */
@@ -44,14 +44,14 @@ async function createTestPatient(page: Page): Promise<string> {
 }
 
 async function openTriageForm(page: Page, patientId: string): Promise<void> {
-  await page.goto(`${CLINIC_URL}/patients/${patientId}/triage`, { waitUntil: "domcontentloaded" });
+  await page.goto(`${CLINIC_URL}/patients/${patientId}/check-in`, { waitUntil: "domcontentloaded" });
   await expect(page).not.toHaveURL(/\/login/);
-  await expect(page).toHaveURL(new RegExp(`/patients/${patientId}/triage$`), {
+  await expect(page).toHaveURL(new RegExp(`/patients/${patientId}/check-in$`), {
     timeout: 15_000,
   });
 }
 
-test.describe("Triage workflow", () => {
+test.describe("Check-in workflow", () => {
   let patientId: string;
 
   test.beforeEach(async ({ page }) => {
@@ -63,8 +63,8 @@ test.describe("Triage workflow", () => {
     await expect(page).not.toHaveURL(/\/login/);
 
     const triageLink = page
-      .getByRole("link", { name: /triage/i })
-      .or(page.getByRole("button", { name: /triage/i }))
+      .getByRole("link", { name: /check-?in/i })
+      .or(page.getByRole("button", { name: /check-?in/i }))
       .first();
 
     await expect(triageLink).toBeVisible({ timeout: 10_000 });
@@ -73,12 +73,8 @@ test.describe("Triage workflow", () => {
   test("triage form loads with vitals fields", async ({ page }) => {
     await openTriageForm(page, patientId);
 
-    await expect(
-      page.getByRole("heading", { name: /triage assessment/i })
-    ).toBeVisible({ timeout: 15_000 });
-    await expect(
-      page.getByPlaceholder(/chest pain|shortness of breath/i)
-    ).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("heading", { name: /^check-?in$/i })).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator("#chief-complaint")).toBeVisible({ timeout: 15_000 });
     await expect(page.getByPlaceholder(/systolic/i)).toBeVisible({ timeout: 10_000 });
   });
 
@@ -86,7 +82,7 @@ test.describe("Triage workflow", () => {
     await openTriageForm(page, patientId);
 
     // Chief complaint (required)
-    const complaint = page.getByPlaceholder(/chest pain|shortness of breath/i);
+    const complaint = page.locator("#chief-complaint");
     await expect(complaint).toBeVisible({ timeout: 15_000 });
     await complaint.fill("Fever and headache for 3 days");
 
@@ -114,7 +110,7 @@ test.describe("Triage workflow", () => {
       { timeout: 20_000 }
     );
 
-    await page.getByRole("button", { name: /complete triage/i }).click();
+    await page.getByRole("button", { name: /complete check-?in/i }).click();
     const triageResponse = await submitTriage;
     expect(triageResponse.ok()).toBe(true);
 

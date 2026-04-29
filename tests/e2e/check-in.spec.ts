@@ -1,11 +1,12 @@
 /**
- * Check-in workflow E2E tests
+ * Reception flow after removing the standalone /check-in page.
  *
- * Covers the check-in screen used at reception:
- *   1. Check-in page is accessible
- *   2. Searching by NRIC / name shows a patient card
- *   3. Checking in a patient updates their status to "arrived"
- *   4. /api/check-in auth is covered in emr-auth.spec.ts
+ * Covers:
+ *   1. Patient check-in screen (/patients/:id/check-in) loads
+ *   2. Patients list search can surface a patient by NRIC
+ *   3. POST /api/check-in still succeeds (API remains for queue arrival)
+ *
+ * Auth for /api/check-in is covered in emr-auth.spec.ts
  */
 
 import { test, expect, type Page } from "@playwright/test";
@@ -63,7 +64,7 @@ async function createTestPatient(page: Page): Promise<{ id: string; nric: string
   return { id: patientId, nric: PATIENT_NRIC };
 }
 
-test.describe("Check-in workflow", () => {
+test.describe("Reception / check-in API", () => {
   let patient: { id: string; nric: string };
 
   test.beforeAll(async ({ browser }) => {
@@ -75,49 +76,37 @@ test.describe("Check-in workflow", () => {
     await ctx.close();
   });
 
-  test("check-in page loads", async ({ page }) => {
-    const response = await page.goto(`${CLINIC_URL}/check-in`, { waitUntil: "domcontentloaded" });
+  test("patient check-in page loads", async ({ page }) => {
+    test.skip(!patient.id, "Test patient id missing from registration response");
+
+    const response = await page.goto(
+      `${CLINIC_URL}/patients/${patient.id}/check-in`,
+      { waitUntil: "domcontentloaded" }
+    );
     const status = response?.status() ?? 0;
 
-    // Skip gracefully if the route is not yet deployed
     if (status === 404 || status === 500) {
       test.info().annotations.push({
         type: "skip-reason",
-        description: `/check-in returned ${status} — page not yet deployed to live site.`,
+        description: `/patients/{id}/check-in returned ${status} — route not available on target.`,
       });
       return;
     }
 
     await expect(page).not.toHaveURL(/\/login/);
-
-    await expect(page.getByRole("heading", { name: /walk-in check-in/i })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("heading", { name: /^check-?in$/i })).toBeVisible({
+      timeout: 15_000,
+    });
   });
 
-  test("check-in page has a search / NRIC input", async ({ page }) => {
-    await page.goto(`${CLINIC_URL}/check-in`, { waitUntil: "domcontentloaded" });
+  test("patients list search finds the test patient by NRIC", async ({ page }) => {
+    await page.goto(`${CLINIC_URL}/patients`, { waitUntil: "domcontentloaded" });
     await expect(page).not.toHaveURL(/\/login/);
 
-    const searchInput = page
-      .getByPlaceholder(/type at least 2 characters/i)
-      .or(page.locator('input[type="search"]'))
-      .or(page.locator('input[name*="nric" i]'))
-      .first();
-
-    await expect(searchInput).toBeVisible({ timeout: 15_000 });
-  });
-
-  test("searching by NRIC finds the test patient", async ({ page }) => {
-    await page.goto(`${CLINIC_URL}/check-in`, { waitUntil: "domcontentloaded" });
-    await expect(page).not.toHaveURL(/\/login/);
-
-    const searchInput = page
-      .getByPlaceholder(/type at least 2 characters/i)
-      .or(page.locator('input[type="search"]'))
-      .or(page.locator('input[name*="nric" i]'))
-      .first();
-
+    const searchInput = page.getByPlaceholder(/search patients/i);
     await expect(searchInput).toBeVisible({ timeout: 15_000 });
     await searchInput.fill(PATIENT_NRIC);
+
     await expect
       .poll(
         async () => {
@@ -125,62 +114,22 @@ test.describe("Check-in workflow", () => {
             `${CLINIC_URL}/api/patients?search=${encodeURIComponent(PATIENT_NRIC)}`
           );
           const data = await response.json().catch(() => ({}));
-          return (data?.patients || []).some((p: any) => p.nric === PATIENT_NRIC);
+          return (data?.patients || []).some((p: { nric?: string }) => p.nric === PATIENT_NRIC);
         },
         { timeout: 15_000, intervals: [500, 1000, 2000] }
       )
       .toBe(true);
+
     await expect(page.getByRole("cell", { name: PATIENT_NAME }).first()).toBeVisible({
       timeout: 15_000,
     });
   });
 
-  test("checking in updates patient status to arrived", async ({ page }) => {
-    await page.goto(`${CLINIC_URL}/check-in`, { waitUntil: "domcontentloaded" });
-    await expect(page).not.toHaveURL(/\/login/);
-
-    const searchInput = page
-      .getByPlaceholder(/type at least 2 characters/i)
-      .or(page.locator('input[type="search"]'))
-      .or(page.locator('input[name*="nric" i]'))
-      .first();
-
-    await expect(searchInput).toBeVisible({ timeout: 15_000 });
-    await searchInput.fill(PATIENT_NRIC);
-    await expect
-      .poll(
-        async () => {
-          const response = await page.request.get(
-            `${CLINIC_URL}/api/patients?search=${encodeURIComponent(PATIENT_NRIC)}`
-          );
-          const data = await response.json().catch(() => ({}));
-          return (data?.patients || []).some((p: any) => p.nric === PATIENT_NRIC);
-        },
-        { timeout: 15_000, intervals: [500, 1000, 2000] }
-      )
-      .toBe(true);
-    await expect(page.getByRole("cell", { name: PATIENT_NAME }).first()).toBeVisible({
-      timeout: 15_000,
+  test("POST /api/check-in returns success for test patient", async ({ request }) => {
+    test.skip(!patient.id, "Test patient id missing from registration response");
+    const res = await request.post(`${CLINIC_URL}/api/check-in`, {
+      data: { patientId: patient.id },
     });
-
-    // Click check-in button
-    const checkInBtn = page
-      .getByRole("button", { name: /check.?in|arrive/i })
-      .first();
-
-    if (await checkInBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
-      await checkInBtn.click();
-
-      // Status badge or success message
-      await expect(
-        page.getByText(/arrived|checked in|success/i).first()
-      ).toBeVisible({ timeout: 10_000 });
-    } else {
-      // Check-in may use a direct API — verify via API response
-      const res = await page.request.post(`${CLINIC_URL}/api/check-in`, {
-        data: { patientId: patient.id },
-      });
-      expect([200, 201]).toContain(res.status());
-    }
+    expect([200, 201]).toContain(res.status());
   });
 });

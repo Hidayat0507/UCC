@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState } from 'react';
-import { MedplumClient } from '@medplum/core';
+import { MedplumClient, type IClientStorage } from '@medplum/core';
 import type { Resource } from '@medplum/fhirtypes';
 
 const MEDPLUM_BASE_URL = process.env.NEXT_PUBLIC_MEDPLUM_BASE_URL || 'http://localhost:8103';
@@ -24,6 +24,28 @@ interface MedplumAuthContextType {
 }
 
 const MedplumAuthContext = createContext<MedplumAuthContextType | null>(null);
+
+function createMemoryStorage(): IClientStorage {
+  const values = new Map<string, unknown>();
+  return {
+    clear: () => values.clear(),
+    getString: (key) => {
+      const value = values.get(key);
+      return typeof value === 'string' ? value : undefined;
+    },
+    setString: (key, value) => {
+      if (value === undefined) {
+        values.delete(key);
+      } else {
+        values.set(key, value);
+      }
+    },
+    getObject: <T,>(key: string) => values.get(key) as T | undefined,
+    setObject: <T,>(key: string, value: T) => {
+      values.set(key, value);
+    },
+  };
+}
 
 type AuthMeResponse = {
   authenticated: boolean;
@@ -52,6 +74,7 @@ export function MedplumAuthProvider({ children }: { children: React.ReactNode })
   const [medplum] = useState(() => new MedplumClient({
     baseUrl: MEDPLUM_BASE_URL,
     clientId: MEDPLUM_CLIENT_ID || undefined,
+    storage: createMemoryStorage(),
     onUnauthenticated: () => {
       setProfile(null);
       setIsAdmin(false);
@@ -62,6 +85,7 @@ export function MedplumAuthProvider({ children }: { children: React.ReactNode })
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [clinicId, setClinicIdState] = useState<string | null>(null);
+  const [accessToken, setAccessTokenState] = useState<string | undefined>();
 
   const refreshAuthState = async (): Promise<AuthMeResponse> => {
     const [sessionRes, authMeRes] = await Promise.all([
@@ -75,7 +99,7 @@ export function MedplumAuthProvider({ children }: { children: React.ReactNode })
 
     const accessToken = sessionPayload?.accessToken;
     if (typeof accessToken === 'string' && accessToken) {
-      medplum.setAccessToken(accessToken);
+      setAccessTokenState(accessToken);
     }
 
     if (typeof sessionPayload?.clinicId === 'string' || sessionPayload?.clinicId === null) {
@@ -192,17 +216,17 @@ export function MedplumAuthProvider({ children }: { children: React.ReactNode })
 
   const signOut = async () => {
     try {
-      medplum.signOut();
       setProfile(null);
       setIsAdmin(false);
       setClinicIdState(null);
+      setAccessTokenState(undefined);
       await fetch('/api/auth/medplum-session', { method: 'DELETE', credentials: 'include' });
     } catch (error) {
       console.error('Logout failed:', error);
     }
   };
 
-  const getAccessToken = () => medplum.getAccessToken();
+  const getAccessToken = () => accessToken;
 
   const value: MedplumAuthContextType = {
     medplum,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMedplumAuth } from "@/lib/auth-medplum";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -35,14 +35,52 @@ function resolveAdminOrigin(): string | null {
   return `${protocol}//${targetHost}${suffix}`;
 }
 
+function isLocalHost(hostname: string): boolean {
+  return hostname === "localhost" || /^\d{1,3}(\.\d{1,3}){3}$/.test(hostname);
+}
+
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const { signIn } = useMedplumAuth();
+  const {
+    signIn,
+    loading: authLoading,
+    isAuthenticated,
+    isAdmin,
+    clinicId: authenticatedClinicId,
+  } = useMedplumAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (authLoading || !isAuthenticated) {
+      return;
+    }
+
+    const next = searchParams.get("next");
+    const requestedNext = next && next.startsWith("/") ? next : undefined;
+    const redirectUrl = requestedNext ?? (isAdmin ? "/admin" : "/dashboard");
+
+    if (typeof window !== "undefined") {
+      if (isAdmin) {
+        const adminOrigin = resolveAdminOrigin();
+        if (adminOrigin && adminOrigin !== window.location.origin) {
+          window.location.href = `${adminOrigin}${redirectUrl}`;
+          return;
+        }
+      } else if (authenticatedClinicId) {
+        const base = process.env.NEXT_PUBLIC_BASE_DOMAIN;
+        if (base && !isLocalHost(window.location.hostname) && !window.location.hostname.startsWith(`${authenticatedClinicId}.`)) {
+          window.location.href = `${window.location.protocol}//${authenticatedClinicId}.${base}${redirectUrl}`;
+          return;
+        }
+      }
+    }
+
+    router.replace(redirectUrl);
+  }, [authLoading, authenticatedClinicId, isAdmin, isAuthenticated, router, searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,7 +99,7 @@ export default function Login() {
           }
         } else if (clinicId) {
           const base = process.env.NEXT_PUBLIC_BASE_DOMAIN;
-          if (base && !window.location.hostname.startsWith(`${clinicId}.`)) {
+          if (base && !isLocalHost(window.location.hostname) && !window.location.hostname.startsWith(`${clinicId}.`)) {
             window.location.href = `${window.location.protocol}//${clinicId}.${base}${redirectUrl}`;
             return;
           }

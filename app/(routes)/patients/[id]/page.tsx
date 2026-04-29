@@ -109,17 +109,14 @@ export default async function PatientProfilePage({ params }: PatientProfilePageP
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-3xl font-bold tracking-tight">{patient.fullName}</h1>
-        <div className="flex items-center gap-2">
-          {/* Triage Button - Show if not triaged or not in queue */}
-          {(!patient.triage?.isTriaged || !patient.queueStatus) && (
-            <Button asChild variant="outline">
-              <Link href={`/patients/${id}/triage`}>
-                <ClipboardList className="mr-2 h-4 w-4" /> Triage
-              </Link>
-            </Button>
-          )}
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <Button asChild variant="outline">
+            <Link href={`/patients/${id}/check-in`}>
+              <ClipboardList className="mr-2 h-4 w-4" /> Check-in
+            </Link>
+          </Button>
           <Button asChild variant="outline">
             <Link href={`/patients/${id}/edit`}>
               <Pencil className="mr-2 h-4 w-4" /> Edit Patient

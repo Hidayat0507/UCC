@@ -192,7 +192,9 @@ function buildTriageExtension(triageData: Omit<TriageData, 'triageAt' | 'isTriag
         triageData.registrationAt,
         triageData.performedBy
       ),
-      { url: 'vitalSigns', extension: vitalExtensions },
+      ...(vitalExtensions.length
+        ? [{ url: 'vitalSigns', extension: vitalExtensions }]
+        : []),
       ...(redFlagExtensions.length
         ? [
             {
@@ -383,31 +385,42 @@ export async function saveTriageEncounter(
 ): Promise<void> {
   const client = medplum;
   const existing = await getActiveTriageEncounter(patientId, client, clinicId);
+
+  // Only reuse an encounter that belongs to today's visit. Historical encounters
+  // (from previous days) must not be reused — their period.start falls outside
+  // getTriageQueueForToday's date filter and the patient would never appear in queue.
+  const todayMidnight = new Date();
+  todayMidnight.setHours(0, 0, 0, 0);
+  const existingStartedToday = existing?.queueAddedAt
+    ? new Date(existing.queueAddedAt) >= todayMidnight
+    : false;
+  const reusableEncounter = existingStartedToday ? existing : null;
+
   const queueStatus: QueueStatus = 'waiting';
   const triageAtIso =
-    existing?.triage?.triageAt?.toString() ||
-    existing?.queueAddedAt?.toString() ||
+    reusableEncounter?.triage?.triageAt?.toString() ||
+    reusableEncounter?.queueAddedAt?.toString() ||
     new Date().toISOString();
 
   const triagePayload = {
     ...triageData,
-    visitIntent: triageData.visitIntent ?? existing?.visitIntent,
-    payerType: triageData.payerType ?? existing?.payerType,
-    paymentMethod: triageData.paymentMethod ?? existing?.paymentMethod,
-    billingPerson: triageData.billingPerson ?? existing?.billingPerson,
-    dependentName: triageData.dependentName ?? existing?.dependentName,
-    dependentRelationship: triageData.dependentRelationship ?? existing?.dependentRelationship,
-    dependentPhone: triageData.dependentPhone ?? existing?.dependentPhone,
-    assignedClinician: triageData.assignedClinician ?? existing?.assignedClinician,
-    registrationSource: triageData.registrationSource ?? existing?.registrationSource,
-    registrationAt: triageData.registrationAt ?? existing?.registrationAt,
-    performedBy: triageData.performedBy ?? existing?.performedBy,
+    visitIntent: triageData.visitIntent ?? reusableEncounter?.visitIntent,
+    payerType: triageData.payerType ?? reusableEncounter?.payerType,
+    paymentMethod: triageData.paymentMethod ?? reusableEncounter?.paymentMethod,
+    billingPerson: triageData.billingPerson ?? reusableEncounter?.billingPerson,
+    dependentName: triageData.dependentName ?? reusableEncounter?.dependentName,
+    dependentRelationship: triageData.dependentRelationship ?? reusableEncounter?.dependentRelationship,
+    dependentPhone: triageData.dependentPhone ?? reusableEncounter?.dependentPhone,
+    assignedClinician: triageData.assignedClinician ?? reusableEncounter?.assignedClinician,
+    registrationSource: triageData.registrationSource ?? reusableEncounter?.registrationSource,
+    registrationAt: triageData.registrationAt ?? reusableEncounter?.registrationAt,
+    performedBy: triageData.performedBy ?? reusableEncounter?.performedBy,
   };
 
   let encounterId: string;
 
-  if (existing?.id) {
-    const encounter = await client.readResource('Encounter', existing.id) as any;
+  if (reusableEncounter?.id) {
+    const encounter = await client.readResource('Encounter', reusableEncounter.id) as any;
     assertEncounterBelongsToClinic(encounter, clinicId);
     const otherExtensions =
       (encounter.extension || []).filter((ext: any) => ext.url !== TRIAGE_ENCOUNTER_EXTENSION_URL);

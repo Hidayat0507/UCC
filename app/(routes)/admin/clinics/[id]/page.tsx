@@ -1,5 +1,8 @@
 import { notFound } from "next/navigation";
-import { getOrganizationFromMedplum } from "@/lib/fhir/admin-service";
+import {
+  getOrganizationFromMedplum,
+  getParentOrganizationsFromMedplum,
+} from "@/lib/fhir/admin-service";
 import ClinicEditForm from "./clinic-edit-form";
 
 type Props = {
@@ -8,9 +11,12 @@ type Props = {
 
 export default async function EditClinicPage({ params }: Props) {
   const { id } = await params;
-  const clinic = await getOrganizationFromMedplum(id);
+  const [clinic, organisations] = await Promise.all([
+    getOrganizationFromMedplum(id),
+    getParentOrganizationsFromMedplum(),
+  ]);
   if (!clinic) {
     notFound();
   }
-  return <ClinicEditForm clinic={clinic} />;
+  return <ClinicEditForm clinic={clinic} organisations={organisations} />;
 }

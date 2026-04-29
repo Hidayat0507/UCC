@@ -45,7 +45,8 @@ type RefreshResult = {
 function setSessionCookie(
   cookieStore: Awaited<ReturnType<typeof cookies>>,
   name: string,
-  value: string
+  value: string,
+  domain: string | undefined
 ): void {
   try {
     cookieStore.set(name, value, {
@@ -54,11 +55,25 @@ function setSessionCookie(
       sameSite: 'lax',
       path: '/',
       maxAge: MAX_AGE_SECONDS,
-      domain: COOKIE_DOMAIN,
+      domain,
     });
   } catch {
     // Read-only cookie store contexts cannot persist rotations.
   }
+}
+
+function cookieDomainForRequest(req?: NextRequest): string | undefined {
+  if (!COOKIE_DOMAIN || !req) {
+    return COOKIE_DOMAIN;
+  }
+
+  const host = req.headers.get('x-forwarded-host') || req.headers.get('host');
+  const hostname = host?.split(':')[0] ?? '';
+  if (hostname === 'localhost' || /^\d{1,3}(\.\d{1,3}){3}$/.test(hostname)) {
+    return undefined;
+  }
+
+  return COOKIE_DOMAIN;
 }
 
 async function refreshAccessToken(refreshToken: string): Promise<RefreshResult | null> {
@@ -147,9 +162,10 @@ export async function getMedplumForRequest(req?: NextRequest): Promise<MedplumCl
     }
 
     accessToken = refreshed.accessToken;
-    setSessionCookie(cookieStore, SESSION_COOKIE, refreshed.accessToken);
+    const cookieDomain = cookieDomainForRequest(req);
+    setSessionCookie(cookieStore, SESSION_COOKIE, refreshed.accessToken, cookieDomain);
     if (refreshed.refreshToken) {
-      setSessionCookie(cookieStore, REFRESH_COOKIE, refreshed.refreshToken);
+      setSessionCookie(cookieStore, REFRESH_COOKIE, refreshed.refreshToken, cookieDomain);
     }
   }
 

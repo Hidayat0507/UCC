@@ -175,7 +175,7 @@ export default function NewPatientForm({
         return;
       }
 
-      router.push(`/patients/${patientId}/triage`);
+      router.push(`/patients/${patientId}/check-in`);
     } catch (error: any) {
       console.error('Failed to register patient:', error);
       toast({ 

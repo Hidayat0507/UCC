@@ -5,6 +5,17 @@
 import { MedplumClient } from '@medplum/core';
 import type { Appointment as FHIRAppointment } from '@medplum/fhirtypes';
 
+/** Relative `Patient/id` or absolute server URL ending with `Patient/id`. */
+function patientIdFromActorReference(ref: string | undefined): string {
+  if (!ref) return '';
+  const m = ref.match(/Patient\/([^/?#]+)/i);
+  return m?.[1]?.trim() ?? '';
+}
+
+function isPatientParticipantReference(ref: string | undefined): boolean {
+  return patientIdFromActorReference(ref).length > 0;
+}
+
 export interface AppointmentData {
   patientId: string;
   patientName: string;
@@ -78,12 +89,12 @@ export async function getAppointmentFromMedplum(medplum: MedplumClient, appointm
   try {
     const fhirAppt = await medplum.readResource('Appointment', appointmentId);
 
-    const patientParticipant = fhirAppt.participant?.find(p => p.actor?.reference?.startsWith('Patient/'));
-    const clinicianParticipant = fhirAppt.participant?.find(p => !p.actor?.reference?.startsWith('Patient/'));
+    const patientParticipant = fhirAppt.participant?.find((p) => isPatientParticipantReference(p.actor?.reference));
+    const clinicianParticipant = fhirAppt.participant?.find((p) => !isPatientParticipantReference(p.actor?.reference));
 
     return {
       id: fhirAppt.id!,
-      patientId: patientParticipant?.actor?.reference?.replace('Patient/', '') || '',
+      patientId: patientIdFromActorReference(patientParticipant?.actor?.reference) || '',
       patientName: patientParticipant?.actor?.display || '',
       clinician: clinicianParticipant?.actor?.display || '',
       reason: fhirAppt.reasonCode?.[0]?.text || '',

@@ -18,7 +18,7 @@ type ClinicOption = {
   id: string;
   name: string;
   subdomain: string;
-  parentOrganizationName?: string;
+  parentName?: string;
 };
 
 export default function InviteUserPage() {
@@ -173,8 +173,8 @@ export default function InviteUserPage() {
                   {clinics.map((clinic) => (
                     <SelectItem key={clinic.id} value={clinic.id}>
                       {clinic.name}
-                      {clinic.parentOrganizationName
-                        ? ` - Branch of ${clinic.parentOrganizationName}`
+                      {clinic.parentName
+                        ? ` - Branch of ${clinic.parentName}`
                         : ""}
                       {` (${clinic.subdomain})`}
                     </SelectItem>

@@ -96,7 +96,7 @@ export default async function RootLayout({
             attribute="class"
             defaultTheme="light"
             enableSystem={false}
-            themes={["light", "dark", "warm"]}
+            themes={["light", "warm"]}
             disableTransitionOnChange
           >
             <MedplumAuthProvider>

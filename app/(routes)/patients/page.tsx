@@ -22,7 +22,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { useToast } from "@/components/ui/use-toast";
 import { useMedplumAuth } from "@/lib/auth-medplum";
 
 export default function PatientsPage() {
@@ -36,7 +35,6 @@ export default function PatientsPage() {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { toast } = useToast();
   const { loading: authLoading } = useMedplumAuth();
 
   useEffect(() => {
@@ -87,33 +85,6 @@ export default function PatientsPage() {
 
     loadPatients();
   }, [authLoading]);
-
-  const handleAddToQueue = async (patient: Patient) => {
-    try {
-      const res = await fetch('/api/check-in', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ patientId: patient.id }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Failed to check in');
-      }
-      toast({
-        title: "Checked in",
-        description: `${patient.fullName} has been marked as arrived.`,
-      });
-      // Refresh the page to update the queue status
-      window.location.reload();
-    } catch (error) {
-      console.error('Error checking in:', error);
-      toast({
-        title: "Error",
-        description: "Failed to check patient in. Please try again.",
-        variant: "destructive"
-      });
-    }
-  };
 
   const filteredPatients = useMemo(() => {
     if (!searchQuery) {
@@ -259,12 +230,10 @@ export default function PatientsPage() {
                           )}
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button
-                            size="sm"
-                            onClick={() => handleAddToQueue(patient)}
-                            disabled={['arrived', 'waiting', 'in_consultation'].includes((patient as any).queueStatus)}
-                          >
-                            Check in
+                          <Button asChild size="sm">
+                            <Link href={`/patients/${patient.id}/check-in`}>
+                              Check-in
+                            </Link>
                           </Button>
                         </TableCell>
                       </TableRow>

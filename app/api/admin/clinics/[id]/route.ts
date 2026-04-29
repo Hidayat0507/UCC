@@ -41,6 +41,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       phone: body.phone ? String(body.phone).trim() : undefined,
       address: body.address ? String(body.address).trim() : undefined,
       logoUrl: body.logoUrl ? String(body.logoUrl).trim() : undefined,
+      parentId: body.parentId ? String(body.parentId).trim() : undefined,
     });
 
     return NextResponse.json({ success: true, clinic: updated });

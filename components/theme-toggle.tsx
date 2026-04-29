@@ -1,13 +1,12 @@
 "use client";
 
 import * as React from "react";
-import { Home, Moon, Sun } from "lucide-react";
+import { Home, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
 
 const THEME_OPTIONS = [
   { key: "light" as const, icon: Sun, label: "Light" },
-  { key: "dark" as const, icon: Moon, label: "Dark" },
   { key: "warm" as const, icon: Home, label: "Warm" },
 ];
 
@@ -23,14 +22,14 @@ export function ThemeToggle({ className }: { className?: string }) {
     return (
       <div
         className={cn(
-          "inline-flex items-center bg-muted rounded-full p-1 h-[40px] w-[112px]",
+          "inline-flex items-center bg-muted rounded-full p-1 h-[40px] w-[76px]",
           className,
         )}
       />
     );
   }
 
-  const active = theme === "dark" || theme === "warm" ? theme : "light";
+  const active = theme === "warm" ? theme : "light";
 
   return (
     <div className={cn("inline-flex items-center bg-muted rounded-full p-1 gap-0.5", className)}>

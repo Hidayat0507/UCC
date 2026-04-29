@@ -16,6 +16,15 @@ const nextConfig = {
       { protocol: 'https', hostname: '**.firebasestorage.googleapis.com' },
     ],
   },
+  async redirects() {
+    return [
+      {
+        source: "/patients/:id/triage",
+        destination: "/patients/:id/check-in",
+        permanent: true,
+      },
+    ];
+  },
   async headers() {
     return [
       {

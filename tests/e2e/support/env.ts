@@ -11,7 +11,7 @@ export const ADMIN_PASSWORD = process.env.MEDPLUM_ADMIN_PASSWORD || "";
 // ── Clinic-specific ─────────────────────────────────────────────────────────
 
 export const KLINIK_PUTERI_URL =
-  process.env.CLINIC_URL || "https://klinikputeri.iatrum.com";
+  process.env.CLINIC_URL || "https://demo.drhidayat.com";
 
 export const KLINIK_PUTERI_EMAIL =
   process.env.KLINIK_PUTERI_EMAIL || "";

@@ -13,11 +13,24 @@ import { Badge } from "@/components/ui/badge";
 import { ChevronRight, Users, UserPlus } from "lucide-react";
 import { headers } from "next/headers";
 import { getHostFromHeaders } from "@/lib/server/subdomain-host";
+import { requirePlatformAdminPage } from "@/lib/server/medplum-auth";
 
 export default async function UsersPage() {
   const host = getHostFromHeaders(await headers());
   const adminPath = (path: string) => adminPathForHost(path, host);
-  const practitioners = await getPractitionersFromMedplum().catch(() => []);
+  let practitioners: Awaited<ReturnType<typeof getPractitionersFromMedplum>> = [];
+  let loadError: string | null = null;
+
+  try {
+    const medplum = await requirePlatformAdminPage(adminPath("/users"));
+    practitioners = await getPractitionersFromMedplum(medplum);
+  } catch (error) {
+    console.error("[admin/users] Failed to load practitioners", error);
+    loadError =
+      error instanceof Error
+        ? error.message
+        : "Unable to load users from Medplum.";
+  }
 
   return (
     <div className="space-y-6">
@@ -45,7 +58,16 @@ export default async function UsersPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {practitioners.length === 0 ? (
+          {loadError ? (
+            <div className="rounded-md border border-destructive/30 bg-destructive/10 p-4">
+              <h3 className="font-semibold text-destructive">
+                Unable to load users
+              </h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                {loadError}
+              </p>
+            </div>
+          ) : practitioners.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <Users className="h-12 w-12 text-muted-foreground mb-4" />
               <h3 className="font-semibold">No users yet</h3>

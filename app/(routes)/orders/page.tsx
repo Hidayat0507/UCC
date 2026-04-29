@@ -16,6 +16,8 @@ export default async function OrdersPage({ searchParams }: Props) {
   const otcPatientId = typeof resolvedParams.patientId === "string" ? resolvedParams.patientId : "";
   const otcPatientName = typeof resolvedParams.patientName === "string" ? resolvedParams.patientName : "";
   const source = typeof resolvedParams.source === "string" ? resolvedParams.source : "";
+  const checkout = typeof resolvedParams.checkout === "string" ? resolvedParams.checkout : "";
+  const invoiceId = typeof resolvedParams.invoiceId === "string" ? resolvedParams.invoiceId : "";
 
   const statuses: QueueStatus[] = ['meds_and_bills', 'completed'];
   const consultations = await getConsultationsWithDetails(statuses);
@@ -26,6 +28,11 @@ export default async function OrdersPage({ searchParams }: Props) {
       otcContext={
         source === "registration-otc" && otcPatientId
           ? { patientId: otcPatientId, patientName: otcPatientName }
+          : undefined
+      }
+      checkoutComplete={
+        checkout === "completed"
+          ? { invoiceId }
           : undefined
       }
     />

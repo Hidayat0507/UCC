@@ -17,9 +17,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/components/ui/use-toast";
 import { getAllPatients, type Patient } from "@/lib/fhir/patient-client";
+import { getAllPractitioners, type PractitionerOption } from "@/lib/fhir/practitioner-client";
 import { saveAppointment } from "@/lib/fhir/appointment-client";
 import { useMedplumAuth } from "@/lib/auth-medplum";
-import type { AppointmentStatus } from "@/lib/models";
 import { cn } from "@/lib/utils";
 import {
   Command,
@@ -30,6 +30,8 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+
+type AppointmentStatus = "scheduled" | "checked_in" | "completed" | "cancelled" | "no_show";
 
 const appointmentStatuses = [
   "scheduled",
@@ -52,12 +54,6 @@ const appointmentSchema = z.object({
 
 type AppointmentFormValues = z.input<typeof appointmentSchema>;
 
-const clinicianOptions = [
-  "Dr. Sarah Wong",
-  "Dr. Lucas Patel",
-  "Dr. Amir Rahman",
-  "Nurse Practitioner Lim",
-];
 
 const visitTypes = [
   "Consultation",
@@ -154,6 +150,8 @@ export default function NewAppointmentForm() {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loadingPatients, setLoadingPatients] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [practitioners, setPractitioners] = useState<PractitionerOption[]>([]);
+  const [loadingPractitioners, setLoadingPractitioners] = useState(true);
   const defaultScheduledAt = useMemo(() => new Date(Date.now() + 30 * 60 * 1000), []);
 
   const form = useForm<AppointmentFormValues>({
@@ -202,6 +200,12 @@ export default function NewAppointmentForm() {
     }
 
     loadPatients();
+
+    setLoadingPractitioners(true);
+    getAllPractitioners()
+      .then(setPractitioners)
+      .catch(() => {})
+      .finally(() => setLoadingPractitioners(false));
   }, [authLoading]);
 
   const patientOptions = useMemo(() => {
@@ -378,9 +382,11 @@ export default function NewAppointmentForm() {
                               <SelectValue placeholder="Select clinician" />
                             </SelectTrigger>
                             <SelectContent>
-                              {clinicianOptions.map((clinician) => (
-                                <SelectItem key={clinician} value={clinician}>
-                                  {clinician}
+                              {loadingPractitioners ? (
+                                <SelectItem value="_loading" disabled>Loading…</SelectItem>
+                              ) : practitioners.map((p) => (
+                                <SelectItem key={p.id} value={p.name}>
+                                  {p.name}
                                 </SelectItem>
                               ))}
                             </SelectContent>

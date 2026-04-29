@@ -3,9 +3,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { 
   Activity, 
-  FileText, 
   Settings, 
-  Users 
 } from "lucide-react";
 import { useMedplumAuth } from "@/lib/auth-medplum";
 
@@ -13,7 +11,6 @@ export default function Navbar() {
   const { profile, signOut } = useMedplumAuth();
   const navigation = [
     { name: "Dashboard", href: "/dashboard", icon: Activity },
-    { name: "Patients", href: "/patients", icon: Users },
     { name: "Settings", href: "/settings", icon: Settings },
   ];
 

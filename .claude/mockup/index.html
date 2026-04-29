@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Admin Portal Mockup — Org Hierarchy</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f4f5f7; color: #1a1a2e; display: flex; height: 100vh; overflow: hidden; }
+
+  /* Sidebar */
+  .sidebar { width: 220px; background: #0f172a; color: #e2e8f0; display: flex; flex-direction: column; flex-shrink: 0; }
+  .sidebar-logo { padding: 20px 16px 14px; font-size: 15px; font-weight: 700; letter-spacing: .3px; color: #fff; border-bottom: 1px solid #1e293b; }
+  .sidebar-logo span { color: #6366f1; }
+  .sidebar-nav { flex: 1; padding: 10px 8px; display: flex; flex-direction: column; gap: 2px; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 7px; font-size: 13.5px; cursor: pointer; color: #94a3b8; transition: background .15s, color .15s; }
+  .nav-item:hover { background: #1e293b; color: #e2e8f0; }
+  .nav-item.active { background: #1e293b; color: #fff; }
+  .nav-item .icon { width: 16px; text-align: center; opacity: .8; }
+  .sidebar-footer { padding: 12px 8px; border-top: 1px solid #1e293b; display: flex; gap: 6px; }
+  .footer-btn { flex: 1; padding: 7px; border-radius: 7px; background: #1e293b; border: none; color: #94a3b8; font-size: 12px; cursor: pointer; }
+  .footer-btn:hover { color: #fff; }
+
+  /* Main */
+  .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .topbar { background: #fff; border-bottom: 1px solid #e5e7eb; padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+  .topbar-title { font-size: 17px; font-weight: 600; }
+  .topbar-actions { display: flex; gap: 8px; }
+  .btn { padding: 7px 14px; border-radius: 7px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; }
+  .btn-primary { background: #6366f1; color: #fff; }
+  .btn-primary:hover { background: #4f46e5; }
+  .btn-outline { background: #fff; color: #374151; border: 1px solid #d1d5db; }
+  .btn-outline:hover { background: #f9fafb; }
+
+  .content { flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 20px; }
+
+  /* Company card */
+  .company-card { background: #fff; border-radius: 12px; border: 2px solid #6366f1; padding: 20px 24px; display: flex; align-items: center; gap: 18px; }
+  .company-avatar { width: 52px; height: 52px; border-radius: 12px; background: linear-gradient(135deg, #6366f1, #8b5cf6); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 22px; font-weight: 700; flex-shrink: 0; }
+  .company-info { flex: 1; }
+  .company-info .label { font-size: 11px; text-transform: uppercase; letter-spacing: .8px; color: #6366f1; font-weight: 600; margin-bottom: 3px; }
+  .company-info h2 { font-size: 18px; font-weight: 700; }
+  .company-info .meta { font-size: 12.5px; color: #6b7280; margin-top: 2px; }
+  .company-badge { padding: 4px 10px; border-radius: 20px; background: #ede9fe; color: #6366f1; font-size: 11.5px; font-weight: 600; }
+
+  /* Section header */
+  .section-header { display: flex; align-items: center; justify-content: space-between; }
+  .section-header h3 { font-size: 14px; font-weight: 600; color: #374151; }
+  .count-badge { background: #f3f4f6; color: #6b7280; font-size: 12px; padding: 2px 8px; border-radius: 10px; font-weight: 500; }
+
+  /* Branch connector */
+  .branches-container { display: flex; flex-direction: column; gap: 0; }
+  .branch-row { display: flex; align-items: stretch; }
+  .branch-connector { width: 28px; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; }
+  .branch-connector .v-line { width: 2px; background: #e5e7eb; flex: 1; margin-left: 13px; }
+  .branch-connector .h-line { width: 100%; height: 2px; background: #e5e7eb; margin-top: 28px; }
+  .branch-connector.last .v-line { height: 28px; flex: none; }
+  .branch-card { flex: 1; margin-left: 8px; margin-bottom: 8px; background: #fff; border-radius: 10px; border: 1px solid #e5e7eb; padding: 14px 18px; display: flex; align-items: center; gap: 14px; transition: border-color .15s, box-shadow .15s; cursor: pointer; }
+  .branch-card:hover { border-color: #6366f1; box-shadow: 0 2px 8px rgba(99,102,241,.12); }
+  .branch-avatar { width: 38px; height: 38px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 700; color: #fff; flex-shrink: 0; }
+  .branch-info { flex: 1; min-width: 0; }
+  .branch-info h4 { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .branch-info .subdomain { font-size: 12px; color: #6b7280; margin-top: 1px; }
+  .branch-info .subdomain code { background: #f3f4f6; padding: 1px 5px; border-radius: 4px; font-size: 11px; }
+  .branch-meta { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .status-dot { width: 7px; height: 7px; border-radius: 50%; background: #22c55e; }
+  .status-dot.inactive { background: #d1d5db; }
+  .user-count { font-size: 12px; color: #6b7280; }
+  .branch-actions { display: flex; gap: 6px; }
+  .icon-btn { width: 30px; height: 30px; border-radius: 6px; border: 1px solid #e5e7eb; background: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 13px; color: #6b7280; }
+  .icon-btn:hover { background: #f3f4f6; color: #374151; }
+
+  /* Add branch placeholder */
+  .add-branch { flex: 1; margin-left: 8px; margin-bottom: 8px; background: #f9fafb; border-radius: 10px; border: 2px dashed #d1d5db; padding: 14px 18px; display: flex; align-items: center; gap: 10px; cursor: pointer; color: #9ca3af; font-size: 13.5px; transition: border-color .15s, color .15s; }
+  .add-branch:hover { border-color: #6366f1; color: #6366f1; }
+
+  /* Stats row */
+  .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .stat-card { background: #fff; border-radius: 10px; border: 1px solid #e5e7eb; padding: 16px 18px; }
+  .stat-card .stat-label { font-size: 12px; color: #6b7280; margin-bottom: 6px; }
+  .stat-card .stat-value { font-size: 24px; font-weight: 700; }
+  .stat-card .stat-sub { font-size: 11.5px; color: #9ca3af; margin-top: 2px; }
+
+  /* Nav section label */
+  .nav-section-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: .8px; color: #475569; padding: 12px 10px 4px; font-weight: 600; }
+
+  /* Tab bar */
+  .tab-bar { display: flex; gap: 0; border-bottom: 1px solid #e5e7eb; background: #fff; padding: 0 24px; flex-shrink: 0; }
+  .tab { padding: 12px 16px; font-size: 13.5px; font-weight: 500; color: #6b7280; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .tab.active { color: #6366f1; border-bottom-color: #6366f1; }
+
+  .colors { --c0: #6366f1; --c1: #0ea5e9; --c2: #f59e0b; --c3: #10b981; --c4: #ef4444; }
+  .bg-0 { background: #6366f1; }
+  .bg-1 { background: #0ea5e9; }
+  .bg-2 { background: #f59e0b; }
+  .bg-3 { background: #10b981; }
+  .bg-4 { background: #ef4444; }
+</style>
+</head>
+<body class="colors">
+
+<!-- Sidebar -->
+<aside class="sidebar">
+  <div class="sidebar-logo">Iatrum <span>Admin</span></div>
+  <nav class="sidebar-nav">
+    <div class="nav-section-label">Platform</div>
+    <div class="nav-item active"><span class="icon">⊞</span> Overview</div>
+    <div class="nav-item"><span class="icon">🏢</span> Organisation</div>
+
+    <div class="nav-section-label">Management</div>
+    <div class="nav-item"><span class="icon">🏥</span> Branches</div>
+    <div class="nav-item"><span class="icon">👥</span> Users</div>
+
+    <div class="nav-section-label">System</div>
+    <div class="nav-item"><span class="icon">⚙</span> Settings</div>
+  </nav>
+  <div class="sidebar-footer">
+    <button class="footer-btn">☀ Theme</button>
+    <button class="footer-btn">⎋ Logout</button>
+  </div>
+</aside>
+
+<!-- Main -->
+<div class="main">
+  <div class="topbar">
+    <span class="topbar-title">Overview</span>
+    <div class="topbar-actions">
+      <button class="btn btn-outline">⚙ Settings</button>
+      <button class="btn btn-primary">+ Add Branch</button>
+    </div>
+  </div>
+
+  <!-- Tab bar -->
+  <div class="tab-bar">
+    <div class="tab active">Overview</div>
+    <div class="tab">Branches</div>
+    <div class="tab">Users</div>
+    <div class="tab">Settings</div>
+  </div>
+
+  <div class="content">
+
+    <!-- Stats -->
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-label">Total Branches</div>
+        <div class="stat-value">4</div>
+        <div class="stat-sub">across 1 organisation</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Active Users</div>
+        <div class="stat-value">12</div>
+        <div class="stat-sub">practitioners + admins</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Active Patients</div>
+        <div class="stat-value">248</div>
+        <div class="stat-sub">across all branches</div>
+      </div>
+    </div>
+
+    <!-- Parent company -->
+    <div>
+      <div class="section-header" style="margin-bottom:12px">
+        <h3>Organisation</h3>
+      </div>
+      <div class="company-card">
+        <div class="company-avatar">U</div>
+        <div class="company-info">
+          <div class="label">Parent Company</div>
+          <h2>Universal Care Clinic</h2>
+          <div class="meta">ucc.drhidayat.com &nbsp;·&nbsp; Kuala Lumpur, Malaysia</div>
+        </div>
+        <div class="company-badge">Platform Owner</div>
+        <button class="btn btn-outline" style="margin-left:8px">Edit</button>
+      </div>
+    </div>
+
+    <!-- Branches -->
+    <div>
+      <div class="section-header" style="margin-bottom:12px">
+        <h3>Clinic Branches</h3>
+        <span class="count-badge">4 branches</span>
+      </div>
+
+      <div class="branches-container">
+
+        <!-- Branch 1 -->
+        <div class="branch-row">
+          <div class="branch-connector">
+            <div class="v-line"></div>
+          </div>
+          <div class="branch-card">
+            <div class="branch-avatar bg-0">KL</div>
+            <div class="branch-info">
+              <h4>UCC Kuala Lumpur</h4>
+              <div class="subdomain">subdomain: <code>kl.drhidayat.com</code></div>
+            </div>
+            <div class="branch-meta">
+              <div class="status-dot"></div>
+              <span class="user-count">4 users</span>
+            </div>
+            <div class="branch-actions">
+              <button class="icon-btn">✎</button>
+              <button class="icon-btn">⋯</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Branch 2 -->
+        <div class="branch-row">
+          <div class="branch-connector">
+            <div class="v-line"></div>
+          </div>
+          <div class="branch-card">
+            <div class="branch-avatar bg-1">PJ</div>
+            <div class="branch-info">
+              <h4>UCC Petaling Jaya</h4>
+              <div class="subdomain">subdomain: <code>pj.drhidayat.com</code></div>
+            </div>
+            <div class="branch-meta">
+              <div class="status-dot"></div>
+              <span class="user-count">3 users</span>
+            </div>
+            <div class="branch-actions">
+              <button class="icon-btn">✎</button>
+              <button class="icon-btn">⋯</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Branch 3 -->
+        <div class="branch-row">
+          <div class="branch-connector">
+            <div class="v-line"></div>
+          </div>
+          <div class="branch-card">
+            <div class="branch-avatar bg-2">SB</div>
+            <div class="branch-info">
+              <h4>UCC Subang</h4>
+              <div class="subdomain">subdomain: <code>subang.drhidayat.com</code></div>
+            </div>
+            <div class="branch-meta">
+              <div class="status-dot"></div>
+              <span class="user-count">3 users</span>
+            </div>
+            <div class="branch-actions">
+              <button class="icon-btn">✎</button>
+              <button class="icon-btn">⋯</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Branch 4 -->
+        <div class="branch-row">
+          <div class="branch-connector last">
+            <div class="v-line"></div>
+          </div>
+          <div class="branch-card">
+            <div class="branch-avatar bg-3">SS</div>
+            <div class="branch-info">
+              <h4>UCC Shah Alam</h4>
+              <div class="subdomain">subdomain: <code>shahalam.drhidayat.com</code></div>
+            </div>
+            <div class="branch-meta">
+              <div class="status-dot inactive"></div>
+              <span class="user-count">2 users</span>
+            </div>
+            <div class="branch-actions">
+              <button class="icon-btn">✎</button>
+              <button class="icon-btn">⋯</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Add branch -->
+        <div class="branch-row">
+          <div class="branch-connector" style="visibility:hidden"></div>
+          <div class="add-branch">
+            <span style="font-size:18px">＋</span> Add new branch
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>

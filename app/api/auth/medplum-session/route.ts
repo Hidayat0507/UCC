@@ -1,11 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { SESSION_COOKIE, CLINIC_COOKIE, REFRESH_COOKIE } from "@/lib/server/cookie-constants";
+import { getHostFromNextRequest } from "@/lib/server/subdomain-host";
 
 const MAX_AGE_SECONDS = 60 * 60 * 24; // 24 hours
 const isProd = process.env.NODE_ENV === "production";
 // Set cookie domain to share session across all subdomains (e.g. .iatrum.com)
 const COOKIE_DOMAIN = process.env.COOKIE_DOMAIN || undefined;
+
+function cookieDomainForRequest(req: NextRequest): string | undefined {
+  if (!COOKIE_DOMAIN) {
+    return undefined;
+  }
+
+  const host = getHostFromNextRequest(req);
+  const hostname = host?.split(":")[0] ?? "";
+  if (hostname === "localhost" || /^\d{1,3}(\.\d{1,3}){3}$/.test(hostname)) {
+    return undefined;
+  }
+
+  return COOKIE_DOMAIN;
+}
 
 /**
  * POST /api/auth/medplum-session
@@ -23,6 +38,7 @@ export async function POST(req: NextRequest) {
     }
 
     const cookieStore = await cookies();
+    const cookieDomain = cookieDomainForRequest(req);
 
     if (typeof accessToken === "string" && accessToken.length > 0) {
       cookieStore.set(SESSION_COOKIE, accessToken, {
@@ -31,7 +47,7 @@ export async function POST(req: NextRequest) {
         sameSite: "lax",
         maxAge: MAX_AGE_SECONDS,
         path: "/",
-        domain: COOKIE_DOMAIN,
+        domain: cookieDomain,
       });
     }
 
@@ -42,7 +58,7 @@ export async function POST(req: NextRequest) {
         sameSite: "lax",
         maxAge: MAX_AGE_SECONDS,
         path: "/",
-        domain: COOKIE_DOMAIN,
+        domain: cookieDomain,
       });
     } else if (clinicId === null) {
       cookieStore.delete(CLINIC_COOKIE);
@@ -64,9 +80,10 @@ export async function POST(req: NextRequest) {
  * domain-scoped cookies (e.g. `.drhidayat.com`) are NOT removed by the browser
  * and the session effectively survives logout.
  */
-export async function DELETE() {
+export async function DELETE(req: NextRequest) {
   try {
     const cookieStore = await cookies();
+    const cookieDomain = cookieDomainForRequest(req);
     const expire = (name: string, httpOnly: boolean) => {
       cookieStore.set(name, "", {
         httpOnly,
@@ -74,7 +91,7 @@ export async function DELETE() {
         sameSite: "lax",
         path: "/",
         maxAge: 0,
-        domain: COOKIE_DOMAIN,
+        domain: cookieDomain,
       });
     };
     expire(SESSION_COOKIE, true);

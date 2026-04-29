@@ -27,11 +27,11 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     await requirePlatformAdmin(req);
-    const { name, subdomain, phone, address, logoUrl } = await req.json();
+    const { name, subdomain, phone, address, logoUrl, parentId } = await req.json();
 
-    if (!name || !subdomain) {
+    if (!name || !subdomain || !parentId) {
       return NextResponse.json(
-        { error: "name and subdomain are required" },
+        { error: "name, subdomain, and parentId are required" },
         { status: 400 }
       );
     }
@@ -45,7 +45,13 @@ export async function POST(req: NextRequest) {
     }
 
     await saveOrganizationDetailsToMedplum(
-      { name, phone: phone || undefined, address: address || undefined, logoUrl: logoUrl || undefined },
+      {
+        name,
+        phone: phone || undefined,
+        address: address || undefined,
+        logoUrl: logoUrl || undefined,
+        parentId,
+      },
       subdomain
     );
 

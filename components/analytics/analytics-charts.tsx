@@ -30,9 +30,9 @@ function CustomTooltip({ active, payload, label }: any) {
   if (!active || !payload || !payload.length) return null;
   const item = payload[0];
   return (
-    <div className="rounded-md border bg-white px-2.5 py-1.5 shadow-sm">
-      <div className="text-xs font-medium text-gray-500">{label}</div>
-      <div className="text-sm font-semibold text-gray-900">{item.value}</div>
+    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
+      <div className="text-xs font-medium text-slate-500">{label}</div>
+      <div className="text-sm font-semibold text-slate-950">{item.value}</div>
     </div>
   );
 }
@@ -43,8 +43,7 @@ export default function AnalyticsCharts({ genderData, ageData, weeklyVisits, dia
 
   return (
     <div className="grid gap-6 md:grid-cols-2">
-      <div className="h-[280px] rounded-xl border p-4 shadow-sm">
-        <h3 className="mb-3 text-sm font-semibold">Gender Distribution</h3>
+      <ChartPanel title="Gender distribution">
         <ResponsiveContainer width="100%" height="90%">
           <BarChart data={genderData} layout="vertical" margin={{ left: 8, right: 16 }}>
             <CartesianGrid stroke={gridColor} strokeDasharray="3 3" />
@@ -59,10 +58,9 @@ export default function AnalyticsCharts({ genderData, ageData, weeklyVisits, dia
             </Bar>
           </BarChart>
         </ResponsiveContainer>
-      </div>
+      </ChartPanel>
 
-      <div className="h-[280px] rounded-xl border p-4 shadow-sm">
-        <h3 className="mb-3 text-sm font-semibold">Age Buckets</h3>
+      <ChartPanel title="Age buckets">
         <ResponsiveContainer width="100%" height="90%">
           <BarChart data={ageData} layout="vertical" margin={{ left: 8, right: 16 }}>
             <CartesianGrid stroke={gridColor} strokeDasharray="3 3" />
@@ -77,10 +75,9 @@ export default function AnalyticsCharts({ genderData, ageData, weeklyVisits, dia
             </Bar>
           </BarChart>
         </ResponsiveContainer>
-      </div>
+      </ChartPanel>
 
-      <div className="h-[280px] rounded-xl border p-4 shadow-sm">
-        <h3 className="mb-3 text-sm font-semibold">Weekly Visits</h3>
+      <ChartPanel title="Weekly visits">
         <ResponsiveContainer width="100%" height="90%">
           <BarChart data={weeklyVisits} margin={{ left: 8, right: 8 }}>
             <CartesianGrid stroke={gridColor} strokeDasharray="3 3" />
@@ -92,28 +89,30 @@ export default function AnalyticsCharts({ genderData, ageData, weeklyVisits, dia
             </Bar>
           </BarChart>
         </ResponsiveContainer>
-      </div>
+      </ChartPanel>
 
-      <div className="h-[280px] rounded-xl border p-4 shadow-sm">
-        <h3 className="mb-3 text-sm font-semibold">Top Diagnoses</h3>
-        <ResponsiveContainer width="100%" height="90%">
-          <BarChart data={diagnosisTop} layout="vertical" margin={{ left: 8, right: 16 }}>
-            <CartesianGrid stroke={gridColor} strokeDasharray="3 3" />
-            <XAxis type="number" tick={axisTick} axisLine={false} tickLine={false} />
-            <YAxis type="category" dataKey="name" width={120} tick={axisTick} axisLine={false} tickLine={false} />
-            <Tooltip content={<CustomTooltip />} />
-            <Bar dataKey="value" name="Count" radius={[0, 8, 8, 0]}>
-              {diagnosisTop.map((entry, index) => (
-                <Cell key={`d-${index}`} fill={COLORS[index % COLORS.length]} />
-              ))}
-              <LabelList dataKey="value" position="right" className="text-xs fill-gray-700" />
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
+      <ChartPanel title="Top diagnoses">
+        {diagnosisTop.length > 0 ? (
+          <ResponsiveContainer width="100%" height="90%">
+            <BarChart data={diagnosisTop} layout="vertical" margin={{ left: 8, right: 16 }}>
+              <CartesianGrid stroke={gridColor} strokeDasharray="3 3" />
+              <XAxis type="number" tick={axisTick} axisLine={false} tickLine={false} />
+              <YAxis type="category" dataKey="name" width={120} tick={axisTick} axisLine={false} tickLine={false} />
+              <Tooltip content={<CustomTooltip />} />
+              <Bar dataKey="value" name="Count" radius={[0, 8, 8, 0]}>
+                {diagnosisTop.map((entry, index) => (
+                  <Cell key={`d-${index}`} fill={COLORS[index % COLORS.length]} />
+                ))}
+                <LabelList dataKey="value" position="right" className="text-xs fill-slate-700" />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        ) : (
+          <EmptyChartState>No diagnoses recorded yet.</EmptyChartState>
+        )}
+      </ChartPanel>
 
-      <div className="h-[300px] rounded-xl border p-4 shadow-sm md:col-span-2">
-        <h3 className="mb-3 text-sm font-semibold">Revenue (Last 12 Months)</h3>
+      <ChartPanel title="Revenue (last 12 months)" className="h-[300px] md:col-span-2">
         <ResponsiveContainer width="100%" height="90%">
           <BarChart data={revenueMonthly} margin={{ left: 8, right: 8 }}>
             <CartesianGrid stroke={gridColor} strokeDasharray="3 3" />
@@ -125,8 +124,32 @@ export default function AnalyticsCharts({ genderData, ageData, weeklyVisits, dia
             </Bar>
           </BarChart>
         </ResponsiveContainer>
-      </div>
+      </ChartPanel>
     </div>
   );
 }
 
+function ChartPanel({
+  title,
+  className = "h-[280px]",
+  children,
+}: {
+  title: string;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className={`rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm ${className}`}>
+      <h3 className="mb-3 text-sm font-semibold text-slate-950">{title}</h3>
+      {children}
+    </div>
+  );
+}
+
+function EmptyChartState({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex h-[88%] items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 text-sm text-muted-foreground">
+      {children}
+    </div>
+  );
+}

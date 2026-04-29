@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic';
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import type { ReactNode } from "react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Activity, Users, Calendar, TrendingUp } from "lucide-react";
 import { getPatients, getConsultationsByPatientId } from "@/lib/models";
 import AnalyticsCharts from "@/components/analytics/analytics-charts";
@@ -91,50 +92,39 @@ export default async function AnalyticsPage() {
   });
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Analytics</h1>
-        <p className="text-muted-foreground">Insights and statistics from your data</p>
+    <div className="space-y-6 pb-10">
+      <div className="space-y-2">
+        <h1 className="text-3xl font-semibold tracking-tight text-slate-950">Analytics</h1>
+        <p className="text-sm text-muted-foreground">
+          Clinic performance, patient mix, visit trends, and revenue movement.
+        </p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Total Patients</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalPatients}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Consultations (This Month)</CardTitle>
-            <Activity className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{consultationsThisMonth}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Average Wait Time</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{avgWait} min</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Revenue (This Month)</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">${revenueThisMonth.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">All-time: ${revenueAllTime.toFixed(2)}</p>
-          </CardContent>
-        </Card>
+        <AnalyticsMetricCard
+          icon={<Users className="h-4 w-4 text-sky-700" />}
+          label="Total patients"
+          value={totalPatients.toString()}
+          hint="Active patient records"
+        />
+        <AnalyticsMetricCard
+          icon={<Activity className="h-4 w-4 text-emerald-700" />}
+          label="Consultations"
+          value={consultationsThisMonth.toString()}
+          hint="This month"
+        />
+        <AnalyticsMetricCard
+          icon={<Calendar className="h-4 w-4 text-amber-700" />}
+          label="Average wait"
+          value={`${avgWait} min`}
+          hint={`${waitTimes.length} completed queue samples`}
+        />
+        <AnalyticsMetricCard
+          icon={<TrendingUp className="h-4 w-4 text-violet-700" />}
+          label="Revenue"
+          value={`RM ${revenueThisMonth.toFixed(2)}`}
+          hint={`All-time RM ${revenueAllTime.toFixed(2)}`}
+        />
       </div>
 
       <AnalyticsCharts
@@ -145,5 +135,32 @@ export default async function AnalyticsPage() {
         revenueMonthly={revenueMonthly}
       />
     </div>
+  );
+}
+
+function AnalyticsMetricCard({
+  icon,
+  label,
+  value,
+  hint,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+  hint: string;
+}) {
+  return (
+    <Card className="border-slate-200/80 shadow-sm">
+      <CardContent className="flex items-center justify-between p-4">
+        <div className="min-w-0">
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
+          <div className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">{value}</div>
+          <p className="mt-1 truncate text-xs text-muted-foreground">{hint}</p>
+        </div>
+        <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-slate-100">
+          {icon}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
