@@ -239,7 +239,11 @@ export async function completeCheckoutInvoice(
     ? await medplum.updateResource(invoice)
     : await medplum.createResource<Invoice>(invoice);
 
-  await updateQueueStatusForPatient(input.patientId, "completed", medplum, input.clinicId);
+  try {
+    await updateQueueStatusForPatient(input.patientId, "completed", medplum, input.clinicId);
+  } catch (err) {
+    console.error("[billing-service] Invoice saved but queue status update failed for patient", input.patientId, err);
+  }
 
   return saved;
 }

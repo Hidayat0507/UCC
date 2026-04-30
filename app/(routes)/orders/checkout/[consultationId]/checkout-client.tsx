@@ -76,9 +76,8 @@ function buildCheckoutItems(consultation: Consultation | null): CheckoutItem[] {
   }));
 
   const items = [...procedures, ...prescriptions];
-  const hasChargeableItem = items.some((item) => item.price > 0);
 
-  if (hasChargeableItem) {
+  if (items.length > 0) {
     return items;
   }
 
@@ -101,7 +100,6 @@ export default function CheckoutClient({ consultationId, patientId }: CheckoutCl
   const [error, setError] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
   const [paidAmount, setPaidAmount] = useState("");
-  const [completed, setCompleted] = useState(false);
   const [completionError, setCompletionError] = useState<string | null>(null);
   const [completing, setCompleting] = useState(false);
 
@@ -181,7 +179,6 @@ export default function CheckoutClient({ consultationId, patientId }: CheckoutCl
         throw new Error(payload.error || "Failed to complete checkout.");
       }
 
-      setCompleted(true);
       router.push(`/orders?checkout=completed&invoiceId=${encodeURIComponent(payload.invoiceId || "")}`);
     } catch (err) {
       setCompletionError(err instanceof Error ? err.message : "Failed to complete checkout.");
@@ -235,12 +232,8 @@ export default function CheckoutClient({ consultationId, patientId }: CheckoutCl
           </Button>
           <div>
             <div className="flex flex-wrap items-center gap-3">
-              <h1 className="text-3xl font-bold tracking-tight">
-                {completed ? "Completed invoice" : "Draft invoice"}
-              </h1>
-              <Badge variant={completed ? "default" : "secondary"}>
-                {completed ? "Completed" : "Checkout"}
-              </Badge>
+              <h1 className="text-3xl font-bold tracking-tight">Draft invoice</h1>
+              <Badge variant="secondary">Checkout</Badge>
             </div>
             <p className="mt-1 text-sm text-muted-foreground">
               {patient.fullName} · {formatDisplayDate(consultation.date)}
