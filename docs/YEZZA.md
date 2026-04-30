@@ -377,8 +377,59 @@ Observed diagnosis behavior: existing diagnoses appear as removable chips (e.g. 
 - Search by name or group name
 - `Add in bulk` · `Add from past visit` · `Edit plan`
 - Category tabs: All · Items · Services · Packages · Documents
-- Verified rows: `TAB PARACETAMOL 500MG`, `TAB CETIRIZINE`
-- Row detail: item name, selling price, pricing tier/quantity, instruction summary
+- The `Documents` tab starts empty when no document has been added
+- Verified document rows/search results: `MEDICAL CERTIFICATE (MC)`, `REFERRAL LETTER`, `QUARANTINE LETTER`
+- Search for `memo` returned `No results match` in this demo account
+- Document rows show completion state (`Incomplete | Continue`, `Completed | Edit`) plus quantity, price tier, and amount fields
+- Non-document rows remain searchable from the same selector, e.g. `TAB PARACETAMOL 500MG`, `TAB CETIRIZINE`, services, investigations, and bundles
+
+Screenshots:
+
+![Treatment plan tab active](assets/yezza-screenshots/45-consultation-treatment-plan-active.png)
+
+![Documents tab empty state](assets/yezza-screenshots/46-consultation-documents-tab-empty.png)
+
+![Document selector showing Medical Certificate](assets/yezza-screenshots/47-consultation-document-search-mc.png)
+
+### Consultation documents
+
+Documents are added from `Treatment plan` → `Documents` / `Add treatment` → search inventory and services.
+
+**Medical Certificate (MC):**
+
+- Search term: `medical` or visible in default first page as `MEDICAL CERTIFICATE (MC)`
+- Category: Documents
+- Price: RM 0.00 in demo
+- Selecting it opens a structured MC form and live preview
+- Fields observed: Date of visit, Doctor, No of days, Start date, End date, Diagnosis, optional dependent patient/dependent manual info
+- Actions: `Complete later` · `Complete document`
+- Diagnosis was not prefilled; the preview showed a blank diagnosis sentence until a diagnosis is selected
+- Observed wording issue in preview for a 15-day-old patient: `15 day years old`
+
+![Medical Certificate form and preview](assets/yezza-screenshots/48-consultation-medical-certificate-form.png)
+
+**Referral letter:**
+
+- Search term: `referral`
+- Category: Documents
+- Price: RM 0.00 in demo
+- Selecting it opens a rich-text editor with live document preview
+- Toolbar includes font size/style, bold, italic, underline, alignment, lists, undo/redo, more text, and insert table controls
+- Smart fields observed: Patient name, Doctor name, Visit date, Identification, Age, Time in, Diagnosis
+- Template content includes `{{visit_date}}`, `{{patient_name}}`, `{{age}}`, `{{identification}}`, `{{patient_address}}`, `{{patient_gender}}`, `{{diagnosis}}`, `{{doctor_name}}`, and `{{doctor_mmc_no }}` placeholders
+- Actions: `Complete later` · `Complete document`
+
+![Referral letter search result](assets/yezza-screenshots/49-consultation-document-search-referral.png)
+
+![Referral letter editor and preview](assets/yezza-screenshots/50-consultation-referral-letter-editor.png)
+
+**Memo:**
+
+- Search term tested: `memo`
+- Result: `No results match`
+- No memo document template was available in this demo account during this run
+
+![Memo search returns no results](assets/yezza-screenshots/51-consultation-document-search-memo-no-results.png)
 
 ### Vital-sign recording modal
 
@@ -709,7 +760,7 @@ If these are misconfigured, operational flows are affected at runtime.
 
 ## 12. Screenshot index
 
-All screenshots are stored in `/Users/hidayat/Documents/Projects/UCC/output/playwright/yezza-screenshots/`
+Legacy screenshots were originally stored in `/Users/hidayat/Documents/Projects/UCC/output/playwright/yezza-screenshots/`. Updated in-repo screenshots are stored in `docs/assets/yezza-screenshots/`.
 
 | File | Description |
 |---|---|
@@ -757,6 +808,13 @@ All screenshots are stored in `/Users/hidayat/Documents/Projects/UCC/output/play
 | `42-settings-payment-gateway.png` | Payment gateway settings shell |
 | `43-settings-templates.png` | Templates management — categories and status toggles |
 | `44-settings-drug-label-error.png` | Drug label settings error/loading state |
+| `45-consultation-treatment-plan-active.png` | Active consultation Treatment Plan tab |
+| `46-consultation-documents-tab-empty.png` | Documents tab empty state before adding documents |
+| `47-consultation-document-search-mc.png` | Document selector showing Medical Certificate (MC) |
+| `48-consultation-medical-certificate-form.png` | Medical Certificate form and live preview |
+| `49-consultation-document-search-referral.png` | Document selector filtered to Referral Letter |
+| `50-consultation-referral-letter-editor.png` | Referral Letter rich-text editor, smart fields, and preview |
+| `51-consultation-document-search-memo-no-results.png` | Memo search showing no matching document template |
 
 ---
 
