@@ -5,6 +5,7 @@ import { Search, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -68,6 +69,19 @@ function kindLabelForTab(tab: TreatmentPlanTab): string {
   }
 }
 
+function documentKind(item: CatalogItem): "mc" | "referral" | null {
+  if (item.meta?.kind === "mc" || item.id === "letter-mc") return "mc";
+  if (item.meta?.kind === "referral" || item.id === "letter-referral") return "referral";
+  return null;
+}
+
+function documentDisplayName(item: CatalogItem): string {
+  const kind = documentKind(item);
+  if (kind === "mc") return "MEDICAL CERTIFICATE (MC)";
+  if (kind === "referral") return "REFERRAL LETTER";
+  return item.name;
+}
+
 function isDraftPersistenceUnavailable(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   return (
@@ -103,6 +117,14 @@ export function OrderComposer({
   const [savingIds, setSavingIds] = React.useState<Record<string, boolean>>({});
   const [persistenceDisabled, setPersistenceDisabled] = React.useState(!persistDrafts);
   const [detailEntryId, setDetailEntryId] = React.useState<string | null>(null);
+  const [pendingDocumentTemplate, setPendingDocumentTemplate] = React.useState<CatalogItem | null>(null);
+  const [mcDays, setMcDays] = React.useState(1);
+  const [mcDiagnosis, setMcDiagnosis] = React.useState("");
+  const [referralTo, setReferralTo] = React.useState("(Insert Hosp name)");
+  const [referralDiagnosis, setReferralDiagnosis] = React.useState("");
+  const [referralContent, setReferralContent] = React.useState(
+    "Please include any medical information you deem relevant for the referral"
+  );
 
   const catalogByTab = React.useMemo<Record<TreatmentPlanTab, CatalogItem[]>>(
     () => ({
@@ -130,7 +152,7 @@ export function OrderComposer({
     const term = searchQuery.trim().toLowerCase();
     if (!term) return [];
     return unifiedCatalogRows.filter(({ item, kindLabel }) => {
-      const h = `${item.name} ${kindLabel}`.toLowerCase();
+      const h = `${documentDisplayName(item)} ${item.name} ${kindLabel}`.toLowerCase();
       return h.includes(term);
     });
   }, [unifiedCatalogRows, searchQuery]);
@@ -141,6 +163,7 @@ export function OrderComposer({
   );
 
   const detailEntry = detailEntryId ? entries.find((e) => e.id === detailEntryId) : undefined;
+  const pendingDocumentKind = pendingDocumentTemplate ? documentKind(pendingDocumentTemplate) : null;
 
   React.useEffect(() => {
     if (detailEntryId && !entries.some((e) => e.id === detailEntryId)) {
@@ -262,7 +285,7 @@ export function OrderComposer({
         id: crypto.randomUUID(),
         tab,
         catalogRef: item.id,
-        name: item.name,
+        name: documentDisplayName(item),
         quantity: 1,
         unitPrice: Number(item.unitPrice || 0),
         lineTotal: Number((item.unitPrice || 0).toFixed(2)),
@@ -328,6 +351,41 @@ export function OrderComposer({
     [draftId, entries, persistenceDisabled, publishPlan, toast]
   );
 
+  function handlePickerRowClick(row: { tab: TreatmentPlanTab; item: CatalogItem; kindLabel: string }) {
+    const kind = row.tab === "documents" ? documentKind(row.item) : null;
+    if (kind === "mc" || kind === "referral") {
+      setPendingDocumentTemplate(row.item);
+      setSearchQuery("");
+      return;
+    }
+    void addCatalogItem(row.tab, row.item);
+    setSearchQuery("");
+  }
+
+  function closePendingDocumentDialog() {
+    setPendingDocumentTemplate(null);
+  }
+
+  async function handleCompletePendingDocument(status: "draft" | "completed") {
+    if (!pendingDocumentTemplate) return;
+    await addCatalogItem("documents", {
+      ...pendingDocumentTemplate,
+      meta: {
+        ...(pendingDocumentTemplate.meta || {}),
+        documentStatus: status,
+        mcDays: String(mcDays),
+        mcDiagnosis,
+        referralTo,
+        referralDiagnosis,
+      },
+    });
+    toast({
+      title: status === "completed" ? "Document completed" : "Document saved as incomplete",
+      description: `${documentDisplayName(pendingDocumentTemplate)} added to the composer.`,
+    });
+    closePendingDocumentDialog();
+  }
+
   const updateEntryField = React.useCallback(
     async (entry: TreatmentPlanEntry, patch: Partial<TreatmentPlanEntryInput>) => {
       const prev = entries;
@@ -391,13 +449,10 @@ export function OrderComposer({
                   key={`${row.tab}-${row.item.id}`}
                   type="button"
                   className="w-full rounded-md border px-2 py-1.5 text-left text-sm hover:bg-muted"
-                  onClick={() => {
-                    void addCatalogItem(row.tab, row.item);
-                    setSearchQuery("");
-                  }}
+                  onClick={() => handlePickerRowClick(row)}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="min-w-0 flex-1 truncate">{row.item.name}</span>
+                    <span className="min-w-0 flex-1 truncate">{documentDisplayName(row.item)}</span>
                     <div className="flex shrink-0 items-center gap-2">
                       <Badge variant="secondary" className="text-[10px] font-normal">
                         {row.kindLabel}
@@ -454,6 +509,96 @@ export function OrderComposer({
           </p>
         </div>
       </div>
+
+      <Dialog open={Boolean(pendingDocumentTemplate)} onOpenChange={(open) => !open && closePendingDocumentDialog()}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>{pendingDocumentTemplate ? documentDisplayName(pendingDocumentTemplate) : "Document"}</DialogTitle>
+            <DialogDescription>
+              Fill out information below to complete document. The document is only added to the composer after you
+              choose Complete later or Complete document.
+            </DialogDescription>
+          </DialogHeader>
+          {pendingDocumentKind === "mc" ? (
+            <div className="grid gap-4 md:grid-cols-[1fr_1fr]">
+              <div className="space-y-3">
+                <div>
+                  <Label className="text-xs">No of days</Label>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={mcDays}
+                    onChange={(event) => setMcDays(Number(event.target.value || 1))}
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Diagnosis</Label>
+                  <Input
+                    placeholder="Diagnosis"
+                    value={mcDiagnosis}
+                    onChange={(event) => setMcDiagnosis(event.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="rounded-lg border bg-muted/30 p-4 text-sm">
+                <p className="mb-3 text-xs font-semibold uppercase text-muted-foreground">Document preview</p>
+                <h3 className="text-center text-lg font-bold">MEDICAL CERTIFICATE</h3>
+                <p className="mt-4">To whom it may concern,</p>
+                <p className="mt-2">
+                  This is to certify that the patient was seen and is medically unfit for work/school for {mcDays} day(s).
+                </p>
+                <p className="mt-2">Diagnosis: {mcDiagnosis || "{{diagnosis}}"}</p>
+              </div>
+            </div>
+          ) : null}
+          {pendingDocumentKind === "referral" ? (
+            <div className="grid gap-4 md:grid-cols-[1fr_1fr]">
+              <div className="space-y-3">
+                <div>
+                  <Label className="text-xs">Referral to:</Label>
+                  <Input value={referralTo} onChange={(event) => setReferralTo(event.target.value)} />
+                </div>
+                <div>
+                  <Label className="text-xs">Diagnosis</Label>
+                  <Input
+                    placeholder="Diagnosis"
+                    value={referralDiagnosis}
+                    onChange={(event) => setReferralDiagnosis(event.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Compose content</Label>
+                  <Textarea
+                    className="min-h-40"
+                    value={referralContent}
+                    onChange={(event) => setReferralContent(event.target.value)}
+                  />
+                </div>
+                <div className="rounded-md border p-2 text-xs text-muted-foreground">
+                  <p className="font-semibold text-foreground">Insert smart fields</p>
+                  <p>Patient name · Doctor name · Visit date · Identification · Age · Time in · Diagnosis</p>
+                </div>
+              </div>
+              <div className="rounded-lg border bg-muted/30 p-4 text-sm whitespace-pre-wrap">
+                <p className="mb-3 text-xs font-semibold uppercase text-muted-foreground">Document preview</p>
+                <h3 className="text-center text-lg font-bold">REFERRAL LETTER</h3>
+                <p className="mt-4">Referral to: {referralTo}</p>
+                <p className="mt-2">Patient name: {"{{patient_name}}"}</p>
+                <p>Diagnosis: {referralDiagnosis || "{{diagnosis}}"}</p>
+                <p className="mt-3">{referralContent}</p>
+              </div>
+            </div>
+          ) : null}
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="outline" onClick={() => void handleCompletePendingDocument("draft")}>
+              Complete later
+            </Button>
+            <Button type="button" onClick={() => void handleCompletePendingDocument("completed")}>
+              Complete document
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={Boolean(detailEntry)} onOpenChange={(open) => !open && setDetailEntryId(null)}>
         <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-md">
