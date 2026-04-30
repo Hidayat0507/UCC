@@ -1,18 +1,9 @@
 import { db } from "./firebase";
 import {
   Timestamp,
-  addDoc,
   collection,
   collectionGroup,
-  doc,
-  getDoc,
   getDocs,
-  limit,
-  orderBy,
-  query,
-  setDoc,
-  updateDoc,
-  where,
   type DocumentData,
 } from "firebase/firestore";
 import { safeToISOString } from "./utils";
@@ -106,38 +97,7 @@ export interface Prescription {
   price?: number;
 }
 
-export type AppointmentStatus =
-  | "scheduled"
-  | "checked_in"
-  | "in_progress"
-  | "completed"
-  | "cancelled"
-  | "no_show";
-
-export interface Appointment {
-  id: string;
-  patientId: string;
-  patientName: string;
-  patientContact?: string;
-  clinician: string;
-  reason: string;
-  type?: string;
-  location?: string;
-  notes?: string;
-  status: AppointmentStatus;
-  scheduledAt: Date | string;
-  durationMinutes?: number;
-  createdAt: Date | string;
-  updatedAt?: Date | string;
-  checkInTime?: Date | string | null;
-  completedAt?: Date | string | null;
-  cancelledAt?: Date | string | null;
-}
-
 const PATIENTS = "patients";
-const CONSULTATIONS = "consultations";
-const REFERRALS = "referrals";
-const APPOINTMENTS = "appointments";
 const PATIENT_DOCUMENTS = "documents";
 
 type TimestampInput = Timestamp | Date | string | null | undefined;
@@ -161,9 +121,6 @@ const TIMESTAMP_FIELDS = [
   "cancelledAt",
 ] as const;
 
-const APPOINTMENT_DATE_FIELDS = ["scheduledAt", "checkInTime", "completedAt", "cancelledAt"] as const;
-const APPOINTMENT_DATE_FIELD_SET = new Set<string>(APPOINTMENT_DATE_FIELDS);
-
 function coerceDate(value: TimestampInput): Date | null {
   if (!value) {
     return null;
@@ -183,11 +140,6 @@ function coerceDate(value: TimestampInput): Date | null {
   }
 
   return null;
-}
-
-function coerceTimestamp(value: TimestampInput): Timestamp | null {
-  const date = coerceDate(value);
-  return date ? Timestamp.fromDate(date) : null;
 }
 
 function convertTimestamps(data: DocumentData): DocumentData {
@@ -213,14 +165,6 @@ function convertTimestamps(data: DocumentData): DocumentData {
 function mapDocument<T>(doc: DocWithData): T {
   const data = doc.data() ?? {};
   return { id: doc.id, ...convertTimestamps(data) } as T;
-}
-
-function requireTimestamp(value: TimestampInput, field: string): Timestamp {
-  const timestamp = coerceTimestamp(value);
-  if (!timestamp) {
-    throw new Error(`Invalid ${field} provided for appointment.`);
-  }
-  return timestamp;
 }
 
 function toIsoIfPossible(value: Date | string | null | undefined) {
@@ -302,112 +246,6 @@ export async function createPatient(data: Omit<Patient, "id" | "createdAt" | "up
   
   console.log(`✅ Patient created in Medplum: ${medplumId}`);
   return medplumId;
-}
-
-export async function getAppointments(statuses?: AppointmentStatus[]): Promise<Appointment[]> {
-  const appointmentsQuery = query(collection(db, APPOINTMENTS), orderBy("scheduledAt", "asc"));
-  const snapshot = await getDocs(appointmentsQuery);
-  const appointments = snapshot.docs.map((docSnap) => mapDocument<Appointment>(docSnap));
-
-  if (statuses && statuses.length > 0) {
-    const allowed = new Set(statuses);
-    return appointments.filter((appointment) => appointment.status && allowed.has(appointment.status));
-  }
-
-  return appointments;
-}
-
-export async function getAppointmentById(id: string): Promise<Appointment | null> {
-  const docRef = doc(db, APPOINTMENTS, id);
-  const docSnap = await getDoc(docRef);
-
-  if (!docSnap.exists()) {
-    return null;
-  }
-
-  return mapDocument<Appointment>(docSnap);
-}
-
-export interface CreateAppointmentInput {
-  patientId: string;
-  patientName: string;
-  patientContact?: string;
-  clinician: string;
-  reason: string;
-  type?: string;
-  location?: string;
-  notes?: string;
-  scheduledAt: Date | string;
-  durationMinutes?: number;
-  status?: AppointmentStatus;
-}
-
-export async function createAppointment(appointment: CreateAppointmentInput): Promise<string> {
-  const now = Timestamp.now();
-  const scheduledTimestamp = requireTimestamp(appointment.scheduledAt, "scheduledAt");
-
-  const payload: Record<string, unknown> = {
-    patientId: appointment.patientId,
-    patientName: appointment.patientName,
-    patientContact: appointment.patientContact ?? "",
-    clinician: appointment.clinician,
-    reason: appointment.reason,
-    type: appointment.type ?? "",
-    location: appointment.location ?? "",
-    notes: appointment.notes ?? "",
-    durationMinutes: appointment.durationMinutes ?? null,
-    status: appointment.status ?? "scheduled",
-    scheduledAt: scheduledTimestamp,
-    createdAt: now,
-    updatedAt: now,
-  };
-
-  const docRef = await addDoc(collection(db, APPOINTMENTS), payload);
-
-  try {
-    const patientRef = doc(db, PATIENTS, appointment.patientId);
-    await updateDoc(patientRef, {
-      upcomingAppointment: scheduledTimestamp,
-      updatedAt: Timestamp.now(),
-    });
-  } catch (error) {
-    console.error("Failed to update patient upcoming appointment after scheduling:", error);
-  }
-
-  return docRef.id;
-}
-
-export async function updateAppointment(id: string, data: Partial<Appointment>): Promise<void> {
-  const docRef = doc(db, APPOINTMENTS, id);
-  const updatePayload: Record<string, unknown> = {};
-
-  for (const [key, value] of Object.entries(data)) {
-    if (value === undefined || key === "id" || key === "createdAt") {
-      continue;
-    }
-
-    if (APPOINTMENT_DATE_FIELD_SET.has(key)) {
-      if (value === null) {
-        updatePayload[key] = null;
-        continue;
-      }
-
-      const timestamp = coerceTimestamp(value as TimestampInput);
-      if (!timestamp) {
-        console.warn(`Skipping invalid date field ${key} when updating appointment ${id}`);
-        continue;
-      }
-
-      updatePayload[key] = timestamp;
-      continue;
-    }
-
-    updatePayload[key] = value;
-  }
-
-  updatePayload.updatedAt = Timestamp.now();
-
-  await updateDoc(docRef, updatePayload as Record<string, unknown>);
 }
 
 export async function getConsultationsByPatientId(patientId: string): Promise<Consultation[]> {
@@ -588,52 +426,6 @@ export async function getConsultationsWithDetails(statuses: QueueStatus[]): Prom
     console.error("Error in getConsultationsWithDetails:", error);
     return [];
   }
-}
-
-export interface Referral {
-  id?: string;
-  patientId: string;
-  date: Date;
-  specialty: string;
-  facility: string;
-  department?: string;
-  doctorName?: string;
-  urgency?: "routine" | "urgent" | "emergency";
-  reason?: string;
-  clinicalInfo?: string;
-  letterText: string;
-  createdAt?: Date;
-  updatedAt?: Date;
-}
-
-export async function createReferral(referral: Omit<Referral, "id" | "createdAt" | "updatedAt">): Promise<string> {
-  const now = Timestamp.now();
-  const dataToSave = { ...referral, createdAt: now, updatedAt: now };
-  if (!dataToSave.date) {
-    dataToSave.date = now.toDate();
-  }
-  const docRef = await addDoc(collection(db, REFERRALS), dataToSave);
-  return docRef.id;
-}
-
-export async function getReferralsByPatientId(patientId: string): Promise<Referral[]> {
-  const referralQuery = query(collection(db, REFERRALS), where("patientId", "==", patientId));
-  const snapshot = await getDocs(referralQuery);
-  return snapshot.docs.map((docSnap) => mapDocument<Referral>(docSnap));
-}
-
-export async function getReferralById(id: string): Promise<Referral | null> {
-  const docRef = doc(db, REFERRALS, id);
-  const docSnap = await getDoc(docRef);
-  if (!docSnap.exists()) {
-    return null;
-  }
-  return mapDocument<Referral>(docSnap);
-}
-
-export async function updateReferral(id: string, data: Partial<Referral>): Promise<void> {
-  const docRef = doc(db, REFERRALS, id);
-  await updateDoc(docRef, { ...data, updatedAt: Timestamp.now() });
 }
 
 export interface PatientDocument {
