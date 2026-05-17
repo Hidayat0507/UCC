@@ -59,6 +59,7 @@ export default function InventoryPage() {
   const [purchaseOrders, setPurchaseOrders] = React.useState<PurchaseOrder[]>([]);
   const [autoCreateDocType, setAutoCreateDocType] = React.useState<PurchaseDocumentType | null>(null);
   const [searchTerm, setSearchTerm] = React.useState("");
+  const [overviewFilter, setOverviewFilter] = React.useState("All");
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -129,6 +130,12 @@ export default function InventoryPage() {
   );
   const totalTrackedStock = stockReceived + stockPending;
   const receivedPercentage = totalTrackedStock === 0 ? 0 : Math.round((stockReceived / totalTrackedStock) * 100);
+  const overviewMedications = React.useMemo(() => {
+    if (overviewFilter === "All") return medications;
+    if (overviewFilter === "Out of stock") return medications.filter((m) => m.stock === 0);
+    if (overviewFilter === "Order soon") return medications.filter((m) => m.stock <= m.minimumStock);
+    return medications.filter((m) => m.category === overviewFilter);
+  }, [medications, overviewFilter]);
 
   async function handleAddMedication(data: Omit<Medication, "id" | "createdAt" | "updatedAt">) {
     try {
@@ -398,7 +405,13 @@ export default function InventoryPage() {
                     <button
                       key={label}
                       type="button"
-                      className="rounded-full px-3 py-1 text-slate-600 transition hover:bg-slate-100"
+                      onClick={() => setOverviewFilter(label)}
+                      className={[
+                        "rounded-full px-3 py-1 transition",
+                        overviewFilter === label
+                          ? "bg-slate-900 text-white hover:bg-slate-800"
+                          : "text-slate-600 hover:bg-slate-100",
+                      ].join(" ")}
                     >
                       {label}
                     </button>
@@ -407,7 +420,13 @@ export default function InventoryPage() {
                     <button
                       key={category}
                       type="button"
-                      className="rounded-full px-3 py-1 text-slate-600 transition hover:bg-slate-100"
+                      onClick={() => setOverviewFilter(category)}
+                      className={[
+                        "rounded-full px-3 py-1 transition",
+                        overviewFilter === category
+                          ? "bg-slate-900 text-white hover:bg-slate-800"
+                          : "text-slate-600 hover:bg-slate-100",
+                      ].join(" ")}
                     >
                       {category}
                     </button>
@@ -425,7 +444,7 @@ export default function InventoryPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {medications.slice(0, 6).map((item) => (
+                      {overviewMedications.slice(0, 6).map((item) => (
                         <tr key={item.id} className="border-t border-slate-100">
                           <td className="px-4 py-3 font-medium text-slate-900">{item.name}</td>
                           <td className="px-4 py-3">{item.stock} {item.unit}</td>
@@ -446,7 +465,7 @@ export default function InventoryPage() {
                           </td>
                         </tr>
                       ))}
-                      {medications.length === 0 ? (
+                      {overviewMedications.length === 0 ? (
                         <tr>
                           <td colSpan={4} className="px-4 py-10 text-center text-muted-foreground">
                             No inventory items yet.
@@ -456,6 +475,24 @@ export default function InventoryPage() {
                     </tbody>
                   </table>
                 </div>
+
+                {overviewMedications.length > 0 ? (
+                  <div className="flex items-center justify-between pt-1 text-xs text-slate-500">
+                    <span>
+                      Showing {Math.min(6, overviewMedications.length)} of {overviewMedications.length}
+                      {overviewFilter !== "All" ? ` matching "${overviewFilter}"` : ""}
+                    </span>
+                    {overviewMedications.length > 6 ? (
+                      <button
+                        type="button"
+                        className="text-slate-700 underline hover:text-slate-900"
+                        onClick={() => setActiveTab("items")}
+                      >
+                        View all
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
               </CardContent>
             </Card>
 
