@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import {
   ArrowLeft,
   Calendar,
@@ -94,7 +94,12 @@ type PageProps = {
 
 export default async function AppointmentDetailsPage({ params }: PageProps) {
   const { id } = await params;
-  const medplum = await getMedplumForRequest();
+  let medplum;
+  try {
+    medplum = await getMedplumForRequest();
+  } catch {
+    redirect('/login');
+  }
   const rawAppointment = await getAppointmentFromMedplum(medplum, id);
 
   if (!rawAppointment) {
