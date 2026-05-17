@@ -16,6 +16,7 @@ import {
   ChevronRight,
   Image,
   LogOut,
+  MessageCircle,
   Package,
   Puzzle,
   Settings,
@@ -99,6 +100,7 @@ export default function Sidebar({ modules = [] }: SidebarProps) {
   const navigation = useMemo(() => {
     // Combine base navigation with enabled modules.
     const items = [...baseNavigation, ...enabledModules];
+    items.push({ name: "Follow Up", href: "/follow-up", icon: MessageCircle });
     if (MEDPLUM_BILLING_EXCEPTION_TASKS_ENABLED) {
       items.push({ name: "Tasks", href: "/tasks", icon: ClipboardCheck });
     }
