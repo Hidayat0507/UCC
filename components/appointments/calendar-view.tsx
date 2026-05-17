@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -349,17 +350,18 @@ export default function AppointmentsCalendarView({ appointments, viewMode, onVie
                   </div>
                   <div className="space-y-0.5">
                     {visible.map((appt) => (
-                      <div
+                      <Link
                         key={appt.id}
+                        href={`/appointments/${appt.id}`}
                         title={`${appt.patientName} · ${formatTime(appt.scheduledAt)}`}
                         className={[
-                          "flex items-center gap-1 rounded px-1 py-0.5 text-[11px] font-medium leading-tight",
+                          "flex items-center gap-1 rounded px-1 py-0.5 text-[11px] font-medium leading-tight cursor-pointer hover:opacity-80",
                           PILL_CLASSES[appt.status] ?? "bg-muted text-muted-foreground",
                         ].join(" ")}
                       >
                         <span className={["h-1.5 w-1.5 shrink-0 rounded-full", DOT_CLASSES[appt.status] ?? "bg-muted-foreground"].join(" ")} />
                         <span className="truncate">{formatTime(appt.scheduledAt)} {appt.patientName}</span>
-                      </div>
+                      </Link>
                     ))}
                     {overflow > 0 && (
                       <div className="px-1 text-[11px] text-muted-foreground">+{overflow} more</div>
@@ -414,17 +416,18 @@ export default function AppointmentsCalendarView({ appointments, viewMode, onVie
                     {/* Appointment list */}
                     <div className="flex flex-1 flex-col items-start gap-2 p-2" style={{ minHeight: "calc(100dvh - 370px)" }}>
                       {dayAppts.map((appt) => (
-                        <div
+                        <Link
                           key={appt.id}
+                          href={`/appointments/${appt.id}`}
                           title={`${appt.patientName} · ${formatTime(appt.scheduledAt)}`}
                           className={[
-                            "flex w-full max-w-full items-center gap-1 overflow-hidden rounded px-1 py-0.5 text-[11px] font-medium leading-tight",
+                            "flex w-full max-w-full items-center gap-1 overflow-hidden rounded px-1 py-0.5 text-[11px] font-medium leading-tight cursor-pointer hover:opacity-80",
                             PILL_CLASSES[appt.status] ?? "bg-muted text-muted-foreground",
                           ].join(" ")}
                         >
                           <span className={["h-1.5 w-1.5 shrink-0 rounded-full", DOT_CLASSES[appt.status] ?? "bg-muted-foreground"].join(" ")} />
                           <span className="truncate">{formatTime(appt.scheduledAt)} {appt.patientName}</span>
-                        </div>
+                        </Link>
                       ))}
                     </div>
                   </div>
@@ -478,10 +481,11 @@ export default function AppointmentsCalendarView({ appointments, viewMode, onVie
                   ].filter(Boolean).join(" ")}
                 >
                   {slotAppts.map((appt) => (
-                    <div
+                    <Link
                       key={appt.id}
+                      href={`/appointments/${appt.id}`}
                       className={[
-                        "rounded-md px-2.5 py-2",
+                        "block rounded-md px-2.5 py-2 cursor-pointer hover:opacity-80",
                         PILL_CLASSES[appt.status] ?? "bg-muted text-muted-foreground",
                       ].join(" ")}
                     >
@@ -498,7 +502,7 @@ export default function AppointmentsCalendarView({ appointments, viewMode, onVie
                         <p>{formatTime(appt.scheduledAt)}{appt.reason ? ` · ${appt.reason}` : ""}</p>
                         {appt.clinician && <p className="opacity-75">{appt.clinician}</p>}
                       </div>
-                    </div>
+                    </Link>
                   ))}
                 </div>
               </div>
@@ -513,10 +517,11 @@ export default function AppointmentsCalendarView({ appointments, viewMode, onVie
               </div>
               <div className="flex-1 space-y-1.5 px-3 py-1.5">
                 {currentDayOutsideAppts.map((appt) => (
-                  <div
+                  <Link
                     key={appt.id}
+                    href={`/appointments/${appt.id}`}
                     className={[
-                      "rounded-md px-2.5 py-2",
+                      "block rounded-md px-2.5 py-2 cursor-pointer hover:opacity-80",
                       PILL_CLASSES[appt.status] ?? "bg-muted text-muted-foreground",
                     ].join(" ")}
                   >
@@ -533,7 +538,7 @@ export default function AppointmentsCalendarView({ appointments, viewMode, onVie
                       <p>{formatTime(appt.scheduledAt)}{appt.reason ? ` · ${appt.reason}` : ""}</p>
                       {appt.clinician && <p className="opacity-75">{appt.clinician}</p>}
                     </div>
-                  </div>
+                  </Link>
                 ))}
               </div>
             </div>
@@ -552,7 +557,11 @@ export default function AppointmentsCalendarView({ appointments, viewMode, onVie
           ) : (
             <div className="divide-y divide-border">
               {panelAppointments.map((appt) => (
-                <div key={appt.id} className="flex items-center justify-between gap-4 py-2.5">
+                <Link
+                  key={appt.id}
+                  href={`/appointments/${appt.id}`}
+                  className="flex items-center justify-between gap-4 py-2.5 cursor-pointer hover:opacity-80"
+                >
                   <div className="flex min-w-0 items-center gap-3">
                     <span className="w-20 shrink-0 text-sm font-medium tabular-nums text-muted-foreground">
                       {formatPanelTime(appt.scheduledAt, viewMode)}
@@ -567,7 +576,7 @@ export default function AppointmentsCalendarView({ appointments, viewMode, onVie
                   <Badge className={TODAY_BADGE_CLASSES[appt.status]}>
                     {STATUS_LABELS[appt.status] ?? appt.status}
                   </Badge>
-                </div>
+                </Link>
               ))}
             </div>
           )}
