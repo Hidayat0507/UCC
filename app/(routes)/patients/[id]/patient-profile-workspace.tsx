@@ -118,7 +118,7 @@ function mergeByVisit(consultations: ProfileConsultation[]): ProfileConsultation
   const visits = new Map<string, ProfileConsultation>();
 
   for (const consultation of consultations) {
-    const key = consultationVisitKey(consultation);
+    const key = consultation.id ?? consultationVisitKey(consultation);
     const existing = visits.get(key);
 
     if (!existing) {

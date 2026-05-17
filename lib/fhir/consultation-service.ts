@@ -206,25 +206,30 @@ async function getOrCreatePatient(
 
   // Create new patient if not found
   if (!patient) {
-    patient = await medplum.createResource({
-      resourceType: 'Patient',
-      identifier: addClinicIdentifier([
-        { system: 'firebase', value: patientData.id },
-        ...(patientData.ic ? [{ system: 'ic', value: patientData.ic }] : []),
-      ], clinicId),
-      name: [
-        {
-          text: (patientData as any).name || (patientData as any).fullName,
-          family: ((patientData as any).name || (patientData as any).fullName)?.split(' ').pop(),
-          given: ((patientData as any).name || (patientData as any).fullName)?.split(' ').slice(0, -1),
-        },
-      ],
-      birthDate: (patientData as any).dob?.toISOString?.().split('T')[0] || (patientData as any).dateOfBirth,
-      gender: (patientData.gender?.toLowerCase() as 'male' | 'female' | 'other') || 'unknown',
-      telecom: patientData.phone ? [{ system: 'phone', value: patientData.phone }] : undefined,
-      address: patientData.address ? [{ text: patientData.address }] : undefined,
-      managingOrganization: clinicId ? { reference: `Organization/${clinicId}` } : undefined,
-    });
+    patient = await medplum.createResource(
+      {
+        resourceType: 'Patient',
+        identifier: addClinicIdentifier([
+          { system: 'firebase', value: patientData.id },
+          ...(patientData.ic ? [{ system: 'ic', value: patientData.ic }] : []),
+        ], clinicId),
+        name: [
+          {
+            text: (patientData as any).name || (patientData as any).fullName,
+            family: ((patientData as any).name || (patientData as any).fullName)?.split(' ').pop(),
+            given: ((patientData as any).name || (patientData as any).fullName)?.split(' ').slice(0, -1),
+          },
+        ],
+        birthDate: (patientData as any).dob?.toISOString?.().split('T')[0] || (patientData as any).dateOfBirth,
+        gender: (patientData.gender?.toLowerCase() as 'male' | 'female' | 'other') || 'unknown',
+        telecom: patientData.phone ? [{ system: 'phone', value: patientData.phone }] : undefined,
+        address: patientData.address ? [{ text: patientData.address }] : undefined,
+        managingOrganization: clinicId ? { reference: `Organization/${clinicId}` } : undefined,
+      },
+      patientData.ic
+        ? `identifier=nric|${patientData.ic}`
+        : `identifier=firebase|${patientData.id}`
+    );
     console.log(`✅ Created FHIR Patient: ${patient.id}`);
   } else if (clinicId && !matchesClinic(patient as any, clinicId)) {
     // Patient exists but not linked to this clinic -> deny
