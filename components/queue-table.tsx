@@ -3,6 +3,16 @@
 import { useState } from "react";
 import { Patient } from "@/lib/models";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Table,
   TableBody,
   TableCell,
@@ -58,6 +68,7 @@ function formatLabel(value: string) {
 export default function QueueTable({ patients, onQueueUpdate }: QueueTableProps) {
   const router = useRouter();
   const [loadingItemId, setLoadingItemId] = useState<string | null>(null);
+  const [pendingRemovePatient, setPendingRemovePatient] = useState<Patient | null>(null);
 
   const handleAddToQueue = async (patient: Patient) => {
     setLoadingItemId(patient.id);
@@ -229,6 +240,34 @@ export default function QueueTable({ patients, onQueueUpdate }: QueueTableProps)
   };
 
   return (
+    <>
+    <AlertDialog
+      open={pendingRemovePatient !== null}
+      onOpenChange={(open) => { if (!open) setPendingRemovePatient(null); }}
+    >
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Remove from Queue</AlertDialogTitle>
+          <AlertDialogDescription>
+            Are you sure you want to remove {pendingRemovePatient?.fullName} from the queue? This action cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            onClick={() => {
+              if (pendingRemovePatient) {
+                void handleRemoveFromQueue(pendingRemovePatient);
+              }
+              setPendingRemovePatient(null);
+            }}
+          >
+            Remove
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
     <div className="rounded-md border">
       <Table>
         <TableHeader>
@@ -321,6 +360,13 @@ export default function QueueTable({ patients, onQueueUpdate }: QueueTableProps)
                         Mark as Complete
                       </DropdownMenuItem>
                     )}
+                    <DropdownMenuItem
+                      disabled={loadingItemId === patient.id}
+                      className="text-destructive focus:text-destructive"
+                      onClick={() => setPendingRemovePatient(patient)}
+                    >
+                      Remove from Queue
+                    </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </TableCell>
@@ -336,5 +382,6 @@ export default function QueueTable({ patients, onQueueUpdate }: QueueTableProps)
         </TableBody>
       </Table>
     </div>
+    </>
   );
-} 
+}

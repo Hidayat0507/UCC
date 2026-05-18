@@ -17,6 +17,16 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -298,6 +308,7 @@ export default function CheckoutClient({ consultationId, patientId }: CheckoutCl
   const [completionError, setCompletionError] = useState<string | null>(null);
   const [completing, setCompleting] = useState(false);
   const [billPreviewOpen, setBillPreviewOpen] = useState(false);
+  const [confirmComplete, setConfirmComplete] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -700,7 +711,7 @@ export default function CheckoutClient({ consultationId, patientId }: CheckoutCl
               <Button
                 className="w-full"
                 disabled={balance > 0 || completing || checkoutItems.length === 0}
-                onClick={handleCompleteVisitation}
+                onClick={() => setConfirmComplete(true)}
               >
                 <CheckCircle2 className="mr-2 h-4 w-4" />
                 {completing ? "Completing..." : "Complete visitation"}
@@ -714,6 +725,23 @@ export default function CheckoutClient({ consultationId, patientId }: CheckoutCl
           </Card>
         </aside>
       </div>
+
+      <AlertDialog open={confirmComplete} onOpenChange={setConfirmComplete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Complete Visitation</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to complete this visitation? This action is irreversible and cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setConfirmComplete(false); void handleCompleteVisitation(); }}>
+              Complete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={billPreviewOpen} onOpenChange={setBillPreviewOpen}>
         <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-3xl">
