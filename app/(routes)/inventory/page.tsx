@@ -475,6 +475,24 @@ export default function InventoryPage() {
                     </tbody>
                   </table>
                 </div>
+
+                {overviewMedications.length > 0 ? (
+                  <div className="flex items-center justify-between pt-1 text-xs text-slate-500">
+                    <span>
+                      Showing {Math.min(6, overviewMedications.length)} of {overviewMedications.length}
+                      {overviewFilter !== "All" ? ` matching "${overviewFilter}"` : ""}
+                    </span>
+                    {overviewMedications.length > 6 ? (
+                      <button
+                        type="button"
+                        className="text-slate-700 underline hover:text-slate-900"
+                        onClick={() => setActiveTab("items")}
+                      >
+                        View all
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
               </CardContent>
             </Card>
 
