@@ -12,7 +12,7 @@ import {
   saveAppointmentToMedplum,
   getAppointmentFromMedplum,
   getPatientAppointmentsFromMedplum,
-  getUpcomingAppointments,
+  getUpcomingAppointmentsForClinic,
   updateAppointmentStatus,
   rescheduleAppointment,
   deleteAppointment,
@@ -91,16 +91,7 @@ export async function GET(request: NextRequest) {
     }
 
     // No filter — return upcoming appointments scoped to this clinic
-    const all = await getUpcomingAppointments(medplum);
-    const filtered = (
-      await Promise.all(
-        all.map(async (appt) => {
-          const patient = await getPatientFromMedplum(appt.patientId, clinicId, medplum, { includeMedicalHistory: false });
-          return patient ? appt : null;
-        })
-      )
-    ).filter((a): a is SavedAppointment => a !== null);
-
+    const filtered = await getUpcomingAppointmentsForClinic(medplum, clinicId);
     return NextResponse.json({ success: true, count: filtered.length, appointments: filtered });
   } catch (error) {
     return handleRouteError(error, 'GET /api/appointments');

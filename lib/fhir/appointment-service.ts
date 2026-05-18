@@ -202,6 +202,45 @@ export async function getUpcomingAppointments(medplum: MedplumClient, limit = 50
 }
 
 /**
+ * List upcoming appointments scoped to a single clinic.
+ *
+ * Before: 1 call to fetch appointments + 1 call per appointment to verify patient ownership (N+1).
+ * After:  1 call to fetch appointments + 1 batch Patient search to verify ownership = 2 calls total.
+ */
+export async function getUpcomingAppointmentsForClinic(
+  medplum: MedplumClient,
+  clinicId: string,
+  limit = 50
+): Promise<SavedAppointment[]> {
+  const all = await getUpcomingAppointments(medplum, limit);
+  if (all.length === 0) return [];
+
+  const uniquePatientIds = [...new Set(all.map((a) => a.patientId).filter(Boolean))];
+  if (uniquePatientIds.length === 0) return [];
+
+  // Single batch Patient search — no per-row lookup.
+  const patients = await medplum.searchResources('Patient', {
+    _id: uniquePatientIds.join(','),
+    _count: String(uniquePatientIds.length),
+  });
+
+  // Replicate the same two-path ownership check used by patient-service.ts matchesClinic().
+  const validIds = new Set(
+    patients
+      .filter((p) => {
+        const byIdentifier = p.identifier?.some(
+          (id) => id.system === 'clinic' && id.value === clinicId
+        );
+        const byOrg = p.managingOrganization?.reference === `Organization/${clinicId}`;
+        return byIdentifier || byOrg;
+      })
+      .map((p) => p.id!)
+  );
+
+  return all.filter((a) => validIds.has(a.patientId));
+}
+
+/**
  * Update appointment status
  */
 export async function updateAppointmentStatus(
