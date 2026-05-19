@@ -26,6 +26,8 @@ docs/MEDPLUM_SELF_HOSTED_DETAILS.md
 # misc
 .DS_Store
 *.pem
+.bolt/
+.vscode/
 
 # debug
 npm-debug.log*
