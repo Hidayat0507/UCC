@@ -12,7 +12,7 @@ import NextImage from "next/image";
 
 export default function ScanICPage() {
   return (
-    <Suspense fallback={<div className="container max-w-3xl py-6">Loading…</div>}>
+    <Suspense fallback={<div className="container max-w-3xl py-6">Loading...</div>}>
       <ScanICPageInner />
     </Suspense>
   );
@@ -158,7 +158,9 @@ function ScanICPageInner() {
       <Card>
         <CardHeader>
           <CardTitle>Scan IC</CardTitle>
-          <CardDescription>Use your phone camera to scan the ID card. We’ll extract name and NRIC for quick registration.</CardDescription>
+          <CardDescription>
+            Use your camera to scan the ID card. We extract name and NRIC for faster registration.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="relative w-full aspect-video rounded-md overflow-hidden bg-black/20">
@@ -178,7 +180,7 @@ function ScanICPageInner() {
             )}
             {isReading && (
               <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center text-white gap-2">
-                <span className="text-sm font-medium">Reading IC…</span>
+                <span className="text-sm font-medium">Reading IC...</span>
                 <span className="text-xs text-white/80">This may take a few seconds on first use.</span>
               </div>
             )}
@@ -188,7 +190,7 @@ function ScanICPageInner() {
               <Camera className="h-4 w-4" /> {captured ? 'Retake Photo' : 'Capture'}
             </Button>
             <Button type="button" variant="secondary" onClick={runOCR} disabled={!captured || isReading}>
-              {isReading ? 'Reading…' : 'Read IC'}
+              {isReading ? 'Reading...' : 'Read IC'}
             </Button>
           </div>
 

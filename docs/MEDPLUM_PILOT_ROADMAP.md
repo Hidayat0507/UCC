@@ -1,8 +1,8 @@
-# Medplum Pilot Roadmap
+# Medplum Registration Roadmap
 
-Goal: introduce Medplum-native workflows in parallel with the current UCC workflows, validate them safely, and only replace existing flows after the pilot proves stable.
+Goal: introduce Medplum-native workflows in parallel with the current UCC workflows, validate them safely, and only replace existing flows after the new flow proves stable.
 
-This document is the working source of truth for future Medplum pilot work in this repo.
+This document is the working source of truth for future Medplum registration work in this repo.
 
 For the broader non-intake Medplum tracks, see [MEDPLUM_WORKSTREAMS_ROADMAP.md](/Users/hidayat/Documents/Projects/UCC/docs/MEDPLUM_WORKSTREAMS_ROADMAP.md).
 
@@ -11,7 +11,7 @@ For the broader non-intake Medplum tracks, see [MEDPLUM_WORKSTREAMS_ROADMAP.md](
 - Do not break or replace the current production workflow first.
 - Build new Medplum-native flows beside the current flow.
 - Keep rollout reversible with a feature flag, hidden route, or both.
-- Only cut over after the pilot has passed functional, workflow, and data checks.
+- Only cut over after the new flow has passed functional, workflow, and data checks.
 
 ## Decision already made
 
@@ -19,15 +19,15 @@ We are not doing a direct replacement.
 
 We will use this sequence:
 
-1. Build a pilot workflow in parallel.
+1. Build a new flow in parallel.
 2. Test it on a narrow surface.
 3. Compare it with the current workflow.
 4. Switch selected traffic only after it is stable.
 5. Remove the old path only after a deliberate cutover.
 
-## First pilot
+## First flow
 
-Pilot target: new patient registration with `Questionnaire` and `QuestionnaireResponse`.
+Target: new patient registration with `Questionnaire` and `QuestionnaireResponse`.
 
 Why this is first:
 
@@ -36,22 +36,22 @@ Why this is first:
 - easy to test without disturbing consultation, checkout, billing, or queue flows
 - high Medplum value because forms and responses become versioned and structured
 
-Initial pilot shape:
+Initial shape:
 
 - keep current route `/patients/new` unchanged
-- add a separate pilot route `/patients/new-v1`
+- add a dedicated route `/patients/new-v1`
 - reuse the current patient creation path so patient registration still lands in the same patient records
 - add Medplum-native form capture around that flow
 
 ## Guardrails
 
 - `/patients/new` must continue working as-is until cutover is explicitly approved.
-- Pilot work must not block patient registration if the Medplum questionnaire layer fails.
-- Any pilot submission must produce clear logs or structured output for comparison.
+- New flow work must not block patient registration if the Medplum questionnaire layer fails.
+- Any submission must produce clear logs or structured output for comparison.
 - Any new behavior must be disabled by default unless explicitly enabled.
-- If a change cannot be turned off quickly, it is too invasive for pilot stage.
+- If a change cannot be turned off quickly, it is too invasive for this phase.
 
-## Non-goals for the first pilot
+## Non-goals for the first flow
 
 - no replacement of checkout or billing flow
 - no referral workflow cutover
@@ -74,24 +74,24 @@ Confirmed findings:
 
 ### Phase 0: Preparation
 
-Objective: make the pilot safe to add without touching the current route.
+Objective: make the new flow safe to add without touching the current route.
 
 Tasks:
 
-- add a new roadmap-backed pilot route
-- add feature flags for Medplum pilot flows
+- add a new roadmap-backed intake route
+- add feature flags for Medplum intake flows
 - define the questionnaire schema for registration
-- define what data is authoritative during pilot
+- define what data is authoritative during the new flow
 
 Definition of done:
 
-- pilot route agreed
+- route agreed
 - flag names agreed
 - questionnaire field map agreed
 
-### Phase 1: Parallel pilot implementation
+### Phase 1: Parallel implementation
 
-Objective: create a hidden or low-risk pilot registration flow.
+Objective: create a hidden or low-risk registration flow.
 
 Tasks:
 
@@ -110,7 +110,7 @@ Definition of done:
 
 ### Phase 2: Validation and comparison
 
-Objective: compare the pilot against the current workflow before any rollout.
+Objective: compare the new flow against the current workflow before any rollout.
 
 Tasks:
 
@@ -125,19 +125,19 @@ Tasks:
   - postal code
   - emergency contact
   - allergies
-- log or surface mismatches between pilot-derived structured data and current patient payload
+- log or surface mismatches between new-flow structured data and current patient payload
 - test failure handling
 - confirm no user-facing regression in navigation or post-submit behavior
 
 Definition of done:
 
-- pilot data can be reviewed reliably
+- new-flow data can be reviewed reliably
 - mismatches are visible
 - no silent data loss
 
 ### Phase 3: Narrow rollout
 
-Objective: expose the pilot to a limited audience.
+Objective: expose the new flow to a limited audience.
 
 Tasks:
 
@@ -147,9 +147,9 @@ Tasks:
 
 Definition of done:
 
-- pilot can be enabled and disabled quickly
+- the new flow can be enabled and disabled quickly
 - rollout group is clearly defined
-- issues can be traced to pilot traffic
+- issues can be traced to new-flow traffic
 
 ### Phase 4: Read-path transition
 
@@ -159,11 +159,11 @@ Tasks:
 
 - review whether `QuestionnaireResponse` becomes primary for intake history
 - decide whether patient registration audit screens should show questionnaire answers
-- keep fallback reads available while the pilot remains active
+- keep fallback reads available while the new flow remains active
 
 Definition of done:
 
-- pilot artifacts are usable operationally
+- new-flow artifacts are usable operationally
 - old read path is still available as fallback
 
 ### Phase 5: Cutover decision
@@ -180,10 +180,10 @@ Cutover criteria:
 
 Possible decisions:
 
-- continue pilot
-- expand pilot
+- continue the new flow
+- expand the new flow
 - cut over to Medplum-native route
-- abandon pilot and keep current flow
+- abandon the new flow and keep current flow
 
 ## Work queue
 
@@ -191,9 +191,8 @@ Possible decisions:
 
 Priority: highest
 
-- add `NEXT_PUBLIC_FEATURE_MEDPLUM_PATIENT_REGISTRATION_V1`
 - add `/patients/new-v1`
-- add server route or server helper to store pilot questionnaire artifacts
+- add server route or server helper to store questionnaire artifacts
 - keep existing patient create flow as the stable write path
 
 ### Queue B: Questionnaire design
@@ -215,7 +214,7 @@ Suggested first questionnaire sections:
 
 Priority: high
 
-- capture enough metadata to compare pilot submission and patient resource payload
+- capture enough metadata to compare submission and patient resource payload
 - add safe logs or an admin-visible review surface
 
 ### Queue D: Rollout controls
@@ -237,13 +236,13 @@ Likely files for the first implementation:
 - `lib/fhir/patient-client.ts`
 - `app/api/patients/route.ts`
 - new Medplum questionnaire helper under `lib/fhir/`
-- optional new pilot API route under `app/api/`
+- optional new API route under `app/api/`
 
 ## Things to preserve exactly
 
 - successful patient registration must still end with the same patient record outcome
 - current `/patients/new` navigation behavior must remain unchanged
-- existing staff workflow must not be forced onto the pilot route
+- existing staff workflow must not be forced onto the new route
 
 ## Testing expectations
 
@@ -253,7 +252,7 @@ Every agent working on this roadmap should verify at minimum:
 2. the new `/patients/new-v1` flow works independently
 3. patient creation still succeeds
 4. questionnaire response creation succeeds
-5. pilot failure does not corrupt the stable patient registration path
+5. new-flow failure does not corrupt the stable patient registration path
 6. browser console has no new errors
 7. build and lint remain green when feasible
 
@@ -269,13 +268,13 @@ When working on this roadmap:
 
 ## Open questions / blockers
 
-- Should the pilot store only `QuestionnaireResponse`, or also create and manage a formal `Questionnaire` resource in Medplum automatically?
-- Should pilot mismatch review live only in logs first, or should we add an admin review screen?
+- Should the new flow store only `QuestionnaireResponse`, or also create and manage a formal `Questionnaire` resource in Medplum automatically?
+- Should mismatch review live only in logs first, or should we add an admin review screen?
 - Should `/patients/new-v1` be fully standalone, or should `/patients/new` support an opt-in switch later?
 
-## Deferred Medplum pilots after intake
+## Deferred Medplum flows after intake
 
-These are valid next pilots, but not in the first implementation slice:
+These are valid next flows, but not in the first implementation slice:
 
 1. `Schedule` and `Slot` for appointment availability
 2. `Task` for operational queues and follow-up work
@@ -287,7 +286,7 @@ These are valid next pilots, but not in the first implementation slice:
 
 Current decision:
 
-- build a Medplum-native intake pilot in parallel
+- build a Medplum-native intake flow in parallel
 - keep the existing registration workflow intact
 - validate with a dedicated `new-v1` route
 - decide on replacement only after measured success

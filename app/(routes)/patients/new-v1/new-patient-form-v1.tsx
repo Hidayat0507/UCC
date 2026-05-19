@@ -172,7 +172,7 @@ export default function NewPatientFormV1({
 
       toast({
         title: "Success",
-        description: `Pilot registration saved. QuestionnaireResponse: ${
+        description: `Registration saved. QuestionnaireResponse: ${
           result.questionnaireResponseId ?? "n/a"
         }`,
       });
@@ -189,10 +189,10 @@ export default function NewPatientFormV1({
 
       router.push(`/patients/${result.patientId}/check-in`);
     } catch (error: any) {
-      console.error("Failed to register patient via pilot:", error);
+      console.error("Failed to register patient through the new flow:", error);
       toast({
         title: "Error",
-        description: error.message || "Failed to register patient through pilot. Please try again.",
+        description: error.message || "Failed to register patient. Please try again.",
         variant: "destructive",
       });
     }
@@ -208,10 +208,8 @@ export default function NewPatientFormV1({
       </div>
       <Card>
         <CardHeader>
-          <CardTitle>New Patient Registration (Pilot v1)</CardTitle>
-          <CardDescription>
-            This pilot stores QuestionnaireResponse alongside the current patient registration flow.
-          </CardDescription>
+          <CardTitle>New Patient Registration</CardTitle>
+          <CardDescription>Enter the patient&apos;s personal and medical information</CardDescription>
         </CardHeader>
         <CardContent>
           <Form {...form}>
@@ -259,7 +257,7 @@ export default function NewPatientFormV1({
                                   nric: current.nric || "",
                                   ...(initialVisitIntent ? { visitIntent: initialVisitIntent } : {}),
                                 }).toString();
-                                router.push(`/patients/new-v1/scan?${q}`);
+                                router.push(`/patients/new/scan?${q}`);
                               }}
                             >
                               <Camera className="mr-1.5 h-4 w-4" /> Scan NRIC
@@ -440,7 +438,7 @@ export default function NewPatientFormV1({
                 <Button variant="outline" type="button" asChild>
                   <Link href="/patients">Cancel</Link>
                 </Button>
-                <Button type="submit">Register Patient (Pilot)</Button>
+                <Button type="submit">Register Patient</Button>
               </div>
             </form>
           </Form>

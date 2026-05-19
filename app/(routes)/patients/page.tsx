@@ -23,7 +23,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useMedplumAuth } from "@/lib/auth-medplum";
-import { MEDPLUM_PATIENT_REGISTRATION_V1_ENABLED } from "@/lib/features";
 
 export default function PatientsPage() {
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -111,11 +110,6 @@ export default function PatientsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {MEDPLUM_PATIENT_REGISTRATION_V1_ENABLED ? (
-            <Button variant="outline" asChild>
-              <Link href="/patients/new-v1">New Patient (Pilot v1)</Link>
-            </Button>
-          ) : null}
           <Button asChild>
             <Link href="/patients/new">
               <Plus className="mr-2 h-4 w-4" />

@@ -1,5 +1,3 @@
-import { notFound } from "next/navigation";
-import { MEDPLUM_PATIENT_REGISTRATION_V1_ENABLED } from "@/lib/features";
 import NewPatientFormV1 from "./new-patient-form-v1";
 
 type SearchParams = { [key: string]: string | string[] | undefined };
@@ -10,10 +8,6 @@ type Props = {
 };
 
 export default async function Page({ searchParams }: Props) {
-  if (!MEDPLUM_PATIENT_REGISTRATION_V1_ENABLED) {
-    notFound();
-  }
-
   const resolvedParams: SearchParams = searchParams
     ? await searchParams.catch(() => ({} as SearchParams))
     : {};

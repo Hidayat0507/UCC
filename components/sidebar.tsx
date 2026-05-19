@@ -26,7 +26,6 @@ import type { LucideIcon } from "lucide-react";
 import { ThemeToggle } from "./theme-toggle";
 import { useMedplumAuth } from "@/lib/auth-medplum";
 import { getEnabledModules } from "@/lib/modules";
-import { MEDPLUM_BILLING_EXCEPTION_TASKS_ENABLED } from "@/lib/features";
 
 type SidebarModule = {
   id: string;
@@ -101,9 +100,7 @@ export default function Sidebar({ modules = [] }: SidebarProps) {
     // Combine base navigation with enabled modules.
     const items = [...baseNavigation, ...enabledModules];
     items.push({ name: "Follow Up", href: "/follow-up", icon: MessageCircle });
-    if (MEDPLUM_BILLING_EXCEPTION_TASKS_ENABLED) {
-      items.push({ name: "Tasks", href: "/tasks", icon: ClipboardCheck });
-    }
+    items.push({ name: "Tasks", href: "/tasks", icon: ClipboardCheck });
     return items;
   }, [enabledModules]);
 

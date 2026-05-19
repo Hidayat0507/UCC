@@ -28,16 +28,11 @@ export const TRANSCRIBE_ENABLED = parseBooleanFlag(
   false
 );
 
-export const MEDPLUM_PATIENT_REGISTRATION_V1_ENABLED = parseBooleanFlag(
-  process.env.NEXT_PUBLIC_FEATURE_MEDPLUM_PATIENT_REGISTRATION_V1 ??
-    process.env.NEXT_PUBLIC_FEATURE_MEDPLUM_PATIENT_REGISTRATION_V2,
-  false
-);
+// The v1 patient registration flow is now always available.
+export const MEDPLUM_PATIENT_REGISTRATION_V1_ENABLED = true;
 
-export const MEDPLUM_BILLING_EXCEPTION_TASKS_ENABLED = parseBooleanFlag(
-  process.env.NEXT_PUBLIC_FEATURE_MEDPLUM_BILLING_EXCEPTION_TASKS,
-  false
-);
+// The billing exception tasks queue is now always available.
+export const MEDPLUM_BILLING_EXCEPTION_TASKS_ENABLED = true;
 
 export function getFeatureFlags() {
   return {

@@ -175,9 +175,9 @@ function ScanICPageV1Inner() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Scan IC (Pilot v1)</CardTitle>
+          <CardTitle>Scan IC</CardTitle>
           <CardDescription>
-            Use your camera to scan the ID card. We extract name and NRIC for fast pilot registration.
+            Use your camera to scan the ID card. We extract name and NRIC for faster registration.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

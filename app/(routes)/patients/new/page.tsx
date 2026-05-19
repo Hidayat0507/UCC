@@ -1,4 +1,4 @@
-import NewPatientForm from "./new-patient-form";
+import NewPatientFormV1 from "../new-v1/new-patient-form-v1";
 
 type SearchParams = { [key: string]: string | string[] | undefined };
 type VisitIntent = "consultation" | "otc" | "follow_up";
@@ -24,7 +24,7 @@ export default async function Page({ searchParams }: Props) {
       : undefined;
 
   return (
-    <NewPatientForm
+    <NewPatientFormV1
       initialFullName={fullName}
       initialNric={nric}
       initialVisitIntent={visitIntent}
