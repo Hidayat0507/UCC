@@ -3,6 +3,7 @@ import { requireClinicAuth } from "@/lib/server/medplum-auth";
 import { handleRouteError } from "@/lib/server/route-helpers";
 import { bookSlotToAppointment } from "@/lib/fhir/scheduling-service";
 import { getPatientFromMedplum } from "@/lib/fhir/patient-service";
+import { createAppointmentReminderFollowUp } from "@/lib/fhir/communication-service";
 
 export async function POST(request: NextRequest) {
   try {
@@ -28,10 +29,14 @@ export async function POST(request: NextRequest) {
       clinicianDisplayOverride,
       durationMinutes,
     });
+    try {
+      await createAppointmentReminderFollowUp(medplum, { clinicId, appointmentId: result.appointmentId });
+    } catch (followUpError) {
+      console.error("[scheduling] Appointment booked but reminder follow-up creation failed", result.appointmentId, followUpError);
+    }
 
     return NextResponse.json({ success: true, ...result });
   } catch (error) {
     return handleRouteError(error, "POST /api/scheduling/book");
   }
 }
-

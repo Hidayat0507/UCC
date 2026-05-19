@@ -1,5 +1,5 @@
-import { BillingExceptionTasksClient } from "./tasks-client";
+import { TasksClient } from "./tasks-client";
 
 export default function TasksPage() {
-  return <BillingExceptionTasksClient />;
+  return <TasksClient />;
 }

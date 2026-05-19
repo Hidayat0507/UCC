@@ -19,6 +19,7 @@ import {
   type SavedAppointment,
 } from '@/lib/fhir/appointment-service';
 import { getPatientFromMedplum } from '@/lib/fhir/patient-service';
+import { createAppointmentReminderFollowUp } from '@/lib/fhir/communication-service';
 import { requireClinicAuth } from '@/lib/server/medplum-auth';
 import { handleRouteError } from '@/lib/server/route-helpers';
 import type { MedplumClient } from '@medplum/core';
@@ -53,6 +54,11 @@ export async function POST(request: NextRequest) {
     }
 
     const appointmentId = await saveAppointmentToMedplum(medplum, appointmentData);
+    try {
+      await createAppointmentReminderFollowUp(medplum, { clinicId, appointmentId });
+    } catch (followUpError) {
+      console.error('[appointments] Appointment saved but reminder follow-up creation failed', appointmentId, followUpError);
+    }
     return NextResponse.json({
       success: true,
       appointmentId,

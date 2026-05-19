@@ -3,6 +3,8 @@ import { requireClinicAuth } from "@/lib/server/medplum-auth";
 import { ForbiddenError, handleRouteError } from "@/lib/server/route-helpers";
 import {
   getFollowUpClinicId,
+  markFollowUpOpened,
+  sendFollowUpWithTwilio,
   updateFollowUpStatus,
   deleteFollowUp,
   type FollowUpStatus,
@@ -19,11 +21,15 @@ export async function PATCH(
     const { id } = await params;
     const body = await req.json().catch(() => null);
     const status = body?.status as FollowUpStatus | undefined;
+    const action = body?.action as string | undefined;
 
     if (!id) {
       return NextResponse.json({ success: false, error: "ID required" }, { status: 400 });
     }
-    if (!status || !VALID_STATUSES.includes(status)) {
+    if (!status && !action) {
+      return NextResponse.json({ success: false, error: "status or action required" }, { status: 400 });
+    }
+    if (status && !VALID_STATUSES.includes(status)) {
       return NextResponse.json({ success: false, error: "Invalid status" }, { status: 400 });
     }
 
@@ -32,7 +38,12 @@ export async function PATCH(
       throw new ForbiddenError("Follow up does not belong to this clinic.");
     }
 
-    const followUp = await updateFollowUpStatus(medplum, id, status);
+    const followUp =
+      action === "open"
+        ? await markFollowUpOpened(medplum, id)
+        : action === "send-twilio"
+          ? await sendFollowUpWithTwilio(medplum, id)
+          : await updateFollowUpStatus(medplum, id, status!);
     return NextResponse.json({ success: true, followUp });
   } catch (error) {
     return handleRouteError(error, "PATCH /api/follow-up/[id]");

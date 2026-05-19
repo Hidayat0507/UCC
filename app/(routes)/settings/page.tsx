@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ClipboardList, CreditCard, FileText, IdCard, Stethoscope, UserRound } from 'lucide-react';
+import { ClipboardList, CreditCard, FileText, IdCard, MessageCircle, Stethoscope, UserRound } from 'lucide-react';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,6 +13,7 @@ import { useMedplumAuth } from '@/lib/auth-medplum';
 import { fetchOrganizationDetails, saveOrganizationDetails } from '@/lib/org';
 import { InsurerManager } from '@/components/settings/insurer-manager';
 import { ClinicalCatalogManager } from '@/components/catalogs/clinical-catalog-manager';
+import { FollowUpSettings } from '@/components/settings/follow-up-settings';
 
 interface UserSettings {
   fullName: string;
@@ -212,6 +213,19 @@ export default function SettingsPage() {
           </CardHeader>
           <CardContent>
             <ClinicalCatalogManager />
+          </CardContent>
+        </Card>
+
+        <Card className="lg:col-span-2">
+          <CardHeader className="flex flex-row items-start gap-3 space-y-0">
+            <WorkflowIcon><MessageCircle className="h-4 w-4" /></WorkflowIcon>
+            <div>
+              <CardTitle>Follow Up</CardTitle>
+              <CardDescription>WhatsApp delivery mode and templates for review requests and appointment reminders.</CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <FollowUpSettings />
           </CardContent>
         </Card>
 

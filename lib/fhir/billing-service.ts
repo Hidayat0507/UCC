@@ -2,6 +2,7 @@ import type { MedplumClient } from "@medplum/core";
 import type { Extension, Invoice, InvoiceLineItem } from "@medplum/fhirtypes";
 import { randomUUID } from "crypto";
 import { updateQueueStatusForPatient } from "@/lib/fhir/triage-service";
+import { createReviewFollowUpForCheckout } from "@/lib/fhir/communication-service";
 
 export type CheckoutPaymentMethod = "cash" | "card" | "qr" | "panel";
 
@@ -335,6 +336,16 @@ export async function completeCheckoutInvoice(
     console.error("[billing-service] Invoice saved but queue status update failed for patient", input.patientId, err);
     const message = err instanceof Error ? err.message : "Queue status update failed";
     return { invoice: saved, queueUpdateError: message };
+  }
+
+  try {
+    await createReviewFollowUpForCheckout(medplum, {
+      clinicId: input.clinicId,
+      consultationId: input.consultationId,
+      patientId: input.patientId,
+    });
+  } catch (err) {
+    console.error("[billing-service] Checkout completed but review follow-up creation failed", input.patientId, err);
   }
 
   return { invoice: saved };
