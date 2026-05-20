@@ -1,0 +1,102 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - banner [ref=e3]:
+      - generic [ref=e4]:
+        - link "IatrumOS" [ref=e5] [cursor=pointer]:
+          - /url: /
+          - generic [ref=e6]: IatrumOS
+        - navigation [ref=e7]:
+          - link "Features" [ref=e8] [cursor=pointer]:
+            - /url: "#features"
+          - link "How It Works" [ref=e9] [cursor=pointer]:
+            - /url: "#how-it-works"
+          - link "Contact" [ref=e10] [cursor=pointer]:
+            - /url: mailto:hello@iatrum.com
+        - generic [ref=e11]:
+          - link "Login" [ref=e12] [cursor=pointer]:
+            - /url: /login
+          - link "Book a Demo" [ref=e13] [cursor=pointer]:
+            - /url: mailto:hello@iatrum.com?subject=Demo Request
+    - generic [ref=e15]:
+      - generic [ref=e16]: Built for clinic owners
+      - heading "The operating system for modern clinics." [level=1] [ref=e17]:
+        - text: The operating system
+        - text: for modern clinics.
+      - paragraph [ref=e18]: Iatrum OS brings your patient queue, clinical records, billing, and multi-branch management into one intelligent platform — so you can focus on care, not admin.
+      - generic [ref=e19]:
+        - link "Book a Demo →" [ref=e20] [cursor=pointer]:
+          - /url: mailto:hello@iatrum.com?subject=Demo Request
+        - link "See Features" [ref=e21] [cursor=pointer]:
+          - /url: "#features"
+    - generic [ref=e23]:
+      - generic [ref=e24]:
+        - paragraph [ref=e25]: < 1 day
+        - paragraph [ref=e26]: Setup time
+      - generic [ref=e27]:
+        - paragraph [ref=e28]: Multi-branch
+        - paragraph [ref=e29]: Clinic networks supported
+      - generic [ref=e30]:
+        - paragraph [ref=e31]: FHIR R4
+        - paragraph [ref=e32]: Compliant records
+      - generic [ref=e33]:
+        - paragraph [ref=e34]: Real-time
+        - paragraph [ref=e35]: Queue & analytics
+    - generic [ref=e37]:
+      - generic [ref=e38]:
+        - heading "Everything your clinic needs" [level=2] [ref=e39]
+        - paragraph [ref=e40]: From the front desk to the consulting room, Iatrum OS covers every touchpoint in the patient journey.
+      - generic [ref=e41]:
+        - generic [ref=e42]:
+          - generic [ref=e43]: 🏥
+          - heading "Patient Queue Management" [level=3] [ref=e44]
+          - paragraph [ref=e45]: Real-time queue visibility across every clinic. Staff see waitlists, check-ins, and triage status at a glance.
+        - generic [ref=e46]:
+          - generic [ref=e47]: 📋
+          - heading "Clinical Workflows" [level=3] [ref=e48]
+          - paragraph [ref=e49]: Guided consultation flows with structured SOAP notes, diagnosis coding, prescriptions, and referrals built in.
+        - generic [ref=e50]:
+          - generic [ref=e51]: 🧪
+          - heading "Lab & Imaging Orders" [level=3] [ref=e52]
+          - paragraph [ref=e53]: Order investigations, capture results, and attach reports — all linked to the patient's permanent record.
+        - generic [ref=e54]:
+          - generic [ref=e55]: 🏢
+          - heading "Multi-Clinic Management" [level=3] [ref=e56]
+          - paragraph [ref=e57]: Run a single clinic or an entire group. Each branch gets its own portal; admin sees everything from one dashboard.
+        - generic [ref=e58]:
+          - generic [ref=e59]: 💊
+          - heading "Inventory & Billing" [level=3] [ref=e60]
+          - paragraph [ref=e61]: Track medications, consumables, and supplier orders. Generate itemised bills and medical certificates in seconds.
+        - generic [ref=e62]:
+          - generic [ref=e63]: 🔒
+          - heading "FHIR-Compliant Records" [level=3] [ref=e64]
+          - paragraph [ref=e65]: Patient data stored on a battle-tested FHIR backend — structured, interoperable, and audit-ready.
+    - generic [ref=e67]:
+      - generic [ref=e68]:
+        - heading "Up and running in three steps" [level=2] [ref=e69]
+        - paragraph [ref=e70]: No lengthy implementations. No IT department needed.
+      - generic [ref=e71]:
+        - generic [ref=e72]:
+          - generic [ref=e73]: "01"
+          - heading "Set up your clinic" [level=3] [ref=e74]
+          - paragraph [ref=e75]: Register your clinic, add your team, and configure the modules you need. Go live in a day.
+        - generic [ref=e76]:
+          - generic [ref=e77]: "02"
+          - heading "Onboard your patients" [level=3] [ref=e78]
+          - paragraph [ref=e79]: Import existing records or register patients on arrival. Every visit is tracked from check-in to discharge.
+        - generic [ref=e80]:
+          - generic [ref=e81]: "03"
+          - heading "Run smarter, grow faster" [level=3] [ref=e82]
+          - paragraph [ref=e83]: Use analytics, billing insights, and inventory reports to make data-driven decisions across your network.
+    - generic [ref=e85]:
+      - heading "Ready to run your clinic smarter?" [level=2] [ref=e86]
+      - paragraph [ref=e87]: Book a personalised demo and see how Iatrum OS fits your clinic in 30 minutes.
+      - link "Book a Demo →" [ref=e88] [cursor=pointer]:
+        - /url: mailto:hello@iatrum.com?subject=Demo Request
+    - contentinfo [ref=e89]:
+      - generic [ref=e90]:
+        - generic [ref=e91]: IatrumOS
+        - generic [ref=e92]: © 2026 Iatrum. All rights reserved.
+        - link "hello@iatrum.com" [ref=e94] [cursor=pointer]:
+          - /url: mailto:hello@iatrum.com
+      - generic [ref=e95]: IATRUM SDN. BHD. (Registration No. 202601015400 (1677497-X))
+  - alert [ref=e96]
