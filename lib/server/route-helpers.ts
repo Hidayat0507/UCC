@@ -33,6 +33,18 @@ export class ClinicContextError extends Error {
   }
 }
 
+export class ConflictError extends Error {
+  code?: string;
+  details?: Record<string, unknown>;
+
+  constructor(message: string, options?: { code?: string; details?: Record<string, unknown> }) {
+    super(message);
+    this.name = 'ConflictError';
+    this.code = options?.code;
+    this.details = options?.details;
+  }
+}
+
 /**
  * Maps a caught error to the correct HTTP response.
  *
@@ -72,6 +84,18 @@ export function handleRouteError(
         code: 'NO_CLINIC_CONTEXT',
       },
       { status: 400 }
+    );
+  }
+
+  if (error instanceof ConflictError) {
+    console.warn(`${label} Conflict:`, error.message, error.details ?? {});
+    return NextResponse.json(
+      {
+        error: error.message,
+        ...(error.code ? { code: error.code } : {}),
+        ...(error.details ?? {}),
+      },
+      { status: 409 }
     );
   }
 

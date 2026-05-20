@@ -39,6 +39,27 @@ export interface RegistrationPilotResult {
   mismatchFields?: string[];
 }
 
+export class PatientApiError extends Error {
+  code?: string;
+  existingPatientId?: string;
+  existingPatientName?: string;
+  existingPatientNric?: string;
+
+  constructor(message: string, options?: {
+    code?: string;
+    existingPatientId?: string;
+    existingPatientName?: string;
+    existingPatientNric?: string;
+  }) {
+    super(message);
+    this.name = "PatientApiError";
+    this.code = options?.code;
+    this.existingPatientId = options?.existingPatientId;
+    this.existingPatientName = options?.existingPatientName;
+    this.existingPatientNric = options?.existingPatientNric;
+  }
+}
+
 async function readJson(response: Response): Promise<Record<string, unknown>> {
   try {
     return (await response.json()) as Record<string, unknown>;
@@ -54,6 +75,18 @@ function mapPatientRows(patients: unknown[]): Patient[] {
     createdAt: new Date(p.createdAt),
     updatedAt: new Date(p.updatedAt),
   }));
+}
+
+function toPatientApiError(data: Record<string, unknown>, fallback: string): PatientApiError {
+  return new PatientApiError(typeof data.error === "string" ? data.error : fallback, {
+    code: typeof data.code === "string" ? data.code : undefined,
+    existingPatientId:
+      typeof data.existingPatientId === "string" ? data.existingPatientId : undefined,
+    existingPatientName:
+      typeof data.existingPatientName === "string" ? data.existingPatientName : undefined,
+    existingPatientNric:
+      typeof data.existingPatientNric === "string" ? data.existingPatientNric : undefined,
+  });
 }
 
 /**
@@ -73,7 +106,7 @@ export async function savePatient(patient: PatientInput, clinicId?: string): Pro
   const data = await readJson(response);
 
   if (!response.ok || !data.success) {
-    throw new Error(typeof data.error === 'string' ? data.error : 'Failed to save patient');
+    throw toPatientApiError(data, 'Failed to save patient');
   }
 
   return data.patientId as string;
@@ -100,7 +133,7 @@ export async function savePatientThroughIntakePilot(
   const data = await readJson(response);
 
   if (!response.ok || !data.success) {
-    throw new Error(typeof data.error === "string" ? data.error : "Failed to save patient through intake pilot");
+    throw toPatientApiError(data, "Failed to save patient through intake pilot");
   }
 
   return {
@@ -204,6 +237,6 @@ export async function updatePatient(
   const data = await readJson(response);
 
   if (!response.ok || !data.success) {
-    throw new Error(typeof data.error === 'string' ? data.error : 'Failed to update patient');
+    throw toPatientApiError(data, 'Failed to update patient');
   }
 }

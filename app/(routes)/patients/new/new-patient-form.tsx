@@ -10,9 +10,9 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
-import { ArrowLeft, Camera } from "lucide-react";
+import { ArrowLeft, Camera, CircleAlert } from "lucide-react";
 import Link from "next/link";
-import { savePatient } from "@/lib/fhir/patient-client";
+import { PatientApiError, savePatient } from "@/lib/fhir/patient-client";
 import { useRouter } from "next/navigation";
 import React from "react";
 
@@ -56,6 +56,11 @@ export default function NewPatientForm({
 }: NewPatientFormProps) {
   const { toast } = useToast();
   const router = useRouter();
+  const [duplicateConflict, setDuplicateConflict] = React.useState<{
+    patientId: string;
+    patientName?: string;
+    nric?: string;
+  } | null>(null);
 
   const form = useForm<PatientFormValues>({
     resolver: zodResolver(patientFormSchema),
@@ -115,6 +120,8 @@ export default function NewPatientForm({
 
   async function onSubmit(data: PatientFormValues) {
     try {
+      setDuplicateConflict(null);
+      form.clearErrors('nric');
       let dateOfBirthObj: Date | undefined;
       if (data.dateOfBirth) {
         try {
@@ -178,6 +185,22 @@ export default function NewPatientForm({
       router.push(`/patients/${patientId}/check-in`);
     } catch (error: any) {
       console.error('Failed to register patient:', error);
+      if (
+        error instanceof PatientApiError &&
+        error.code === 'DUPLICATE_NRIC' &&
+        error.existingPatientId
+      ) {
+        setDuplicateConflict({
+          patientId: error.existingPatientId,
+          patientName: error.existingPatientName,
+          nric: error.existingPatientNric || data.nric,
+        });
+        form.setError('nric', {
+          type: 'manual',
+          message: 'This NRIC already belongs to an existing patient.',
+        });
+        return;
+      }
       toast({ 
         title: "Error", 
         description: error.message || "Failed to register patient. Please try again.", 
@@ -221,6 +244,10 @@ export default function NewPatientForm({
                         <div className="flex gap-2">
                           <Input placeholder="YYMMDD-SS-NNNN" {...field} onChange={(e) => {
                             const formatted = formatNRIC(e.target.value);
+                            if (duplicateConflict) {
+                              setDuplicateConflict(null);
+                              form.clearErrors('nric');
+                            }
                             field.onChange(formatted);
                           }} />
                           <Button
@@ -370,6 +397,31 @@ export default function NewPatientForm({
                 </Button>
                 <Button type="submit">Register Patient</Button>
               </div>
+              {duplicateConflict ? (
+                <div className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm">
+                  <div className="flex items-start gap-3">
+                    <CircleAlert className="mt-0.5 h-4 w-4 text-destructive" />
+                    <div className="space-y-3">
+                      <div>
+                        <p className="font-medium text-foreground">Patient already exists</p>
+                        <p className="text-muted-foreground">
+                          NRIC {duplicateConflict.nric ?? nric} is already registered
+                          {duplicateConflict.patientName ? ` to ${duplicateConflict.patientName}` : ''}.
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => router.push(`/patients/${duplicateConflict.patientId}/check-in`)}
+                        >
+                          Open existing patient
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
             </form>
           </Form>
         </CardContent>

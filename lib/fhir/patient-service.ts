@@ -16,6 +16,7 @@ import { QueueStatus, TriageData, VitalSigns } from '../types';
 import { TRIAGE_EXTENSION_URL } from './structure-definitions';
 import { createProvenanceForResource } from './provenance-service';
 import { validateAndCreate } from './fhir-helpers';
+import { ConflictError } from '@/lib/server/route-helpers';
 
 // Local Patient interface that matches your app
 export interface PatientData {
@@ -63,6 +64,13 @@ export interface SavedPatient extends PatientData {
 }
 
 const CLINIC_IDENTIFIER_SYSTEM = 'clinic';
+const DUPLICATE_NRIC_CODE = 'DUPLICATE_NRIC';
+
+type DuplicatePatientMatch = {
+  id: string;
+  fullName: string;
+  nric: string;
+};
 
 type Extension = { url: string;[key: string]: any };
 
@@ -111,6 +119,60 @@ function addManagingOrganization<T extends { [key: string]: any }>(resource: T, 
     ...resource,
     managingOrganization: { reference: `Organization/${clinicId}` },
   };
+}
+
+async function findPatientByNric(
+  client: MedplumClient,
+  nric: string,
+  clinicId?: string,
+  options?: { excludePatientId?: string }
+): Promise<DuplicatePatientMatch | null> {
+  if (!nric) return null;
+
+  const [nricMatches, icMatches] = await Promise.all([
+    client.searchResources('Patient', {
+      identifier: `nric|${nric}`,
+      _count: '20',
+    }),
+    client.searchResources('Patient', {
+      identifier: `ic|${nric}`,
+      _count: '20',
+    }),
+  ]);
+
+  const matches = [...nricMatches, ...icMatches];
+
+  const match = matches.find((patient) => {
+    if (!matchesClinic(patient, clinicId)) {
+      return false;
+    }
+    if (options?.excludePatientId && patient.id === options.excludePatientId) {
+      return false;
+    }
+    return true;
+  });
+
+  if (!match?.id) {
+    return null;
+  }
+
+  const patientData = fhirPatientToPatientData(match);
+  return {
+    id: match.id,
+    fullName: patientData.fullName,
+    nric: patientData.nric,
+  };
+}
+
+function throwDuplicatePatientConflict(match: DuplicatePatientMatch): never {
+  throw new ConflictError(`Patient with NRIC ${match.nric} already exists.`, {
+    code: DUPLICATE_NRIC_CODE,
+    details: {
+      existingPatientId: match.id,
+      existingPatientName: match.fullName,
+      existingPatientNric: match.nric,
+    },
+  });
 }
 
 
@@ -271,15 +333,9 @@ export async function savePatientToMedplum(
 
   console.log(`💾 Saving patient to Medplum FHIR...`);
 
-  // Check if patient already exists by NRIC
-  let existingPatient: FHIRPatient | undefined;
-  if (patientData.nric) {
-    existingPatient = await client.searchOne('Patient', {
-      identifier: `nric|${patientData.nric}`,
-    });
-    if (existingPatient && !matchesClinic(existingPatient, clinicId)) {
-      existingPatient = undefined;
-    }
+  const duplicatePatient = await findPatientByNric(client, patientData.nric, clinicId);
+  if (duplicatePatient) {
+    throwDuplicatePatientConflict(duplicatePatient);
   }
 
   const nameParts = patientData.fullName.split(' ');
@@ -338,51 +394,23 @@ export async function savePatientToMedplum(
 
   const fhirPatient = addManagingOrganization(basePatient, clinicId);
 
-  let savedPatient: FHIRPatient;
-  if (existingPatient) {
-    // Update existing patient
-    savedPatient = await client.updateResource({
-      ...fhirPatient,
-      id: existingPatient.id,
-    });
-    console.log(`✅ Updated FHIR Patient: ${savedPatient.id}`);
-    
-    // Create Provenance for update (non-blocking)
-    if (savedPatient.id) {
-      try {
-        await createProvenanceForResource(
-          client,
-          'Patient',
-          savedPatient.id,
-          undefined,
-          clinicId,
-          'UPDATE'
-        );
-        console.log(`✅ Created Provenance for Patient/${savedPatient.id} (UPDATE)`);
-      } catch (error) {
-        console.warn(`⚠️  Failed to create Provenance for Patient (non-blocking):`, error);
-      }
-    }
-  } else {
-    // Create new patient
-    savedPatient = await validateAndCreate<FHIRPatient>(client, fhirPatient);
-    console.log(`✅ Created FHIR Patient: ${savedPatient.id}`);
-    
-    // Create Provenance for audit trail (non-blocking)
-    if (savedPatient.id) {
-      try {
-        await createProvenanceForResource(
-          client,
-          'Patient',
-          savedPatient.id,
-          undefined,
-          clinicId,
-          'CREATE'
-        );
-        console.log(`✅ Created Provenance for Patient/${savedPatient.id}`);
-      } catch (error) {
-        console.warn(`⚠️  Failed to create Provenance for Patient (non-blocking):`, error);
-      }
+  const savedPatient = await validateAndCreate<FHIRPatient>(client, fhirPatient);
+  console.log(`✅ Created FHIR Patient: ${savedPatient.id}`);
+  
+  // Create Provenance for audit trail (non-blocking)
+  if (savedPatient.id) {
+    try {
+      await createProvenanceForResource(
+        client,
+        'Patient',
+        savedPatient.id,
+        undefined,
+        clinicId,
+        'CREATE'
+      );
+      console.log(`✅ Created Provenance for Patient/${savedPatient.id}`);
+    } catch (error) {
+      console.warn(`⚠️  Failed to create Provenance for Patient (non-blocking):`, error);
     }
   }
 
@@ -731,11 +759,38 @@ export async function updatePatientInMedplum(
     identifier: addClinicIdentifier(existingPatient.identifier, clinicId),
   }, clinicId);
 
+  if (updates.nric && updates.nric !== fhirPatientToPatientData(existingPatient).nric) {
+    const duplicatePatient = await findPatientByNric(client, updates.nric, clinicId, {
+      excludePatientId: patientId,
+    });
+    if (duplicatePatient) {
+      throwDuplicatePatientConflict(duplicatePatient);
+    }
+
+    const nonNricIdentifiers =
+      updatedPatient.identifier?.filter((identifier) => identifier.system !== 'nric' && identifier.system !== 'ic') ?? [];
+    updatedPatient.identifier = addClinicIdentifier(
+      [...nonNricIdentifiers, { system: 'nric', value: updates.nric }],
+      clinicId
+    );
+  }
+
   if (updates.fullName) {
     const nameParts = updates.fullName.split(' ');
     const family = nameParts.pop() || '';
     const given = nameParts;
     updatedPatient.name = [{ text: updates.fullName, family, given }];
+  }
+
+  if (updates.dateOfBirth) {
+    updatedPatient.birthDate =
+      updates.dateOfBirth instanceof Date
+        ? updates.dateOfBirth.toISOString().split('T')[0]
+        : String(updates.dateOfBirth).split('T')[0];
+  }
+
+  if (updates.gender) {
+    updatedPatient.gender = updates.gender;
   }
 
   if (updates.phone || updates.email) {
