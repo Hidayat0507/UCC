@@ -144,7 +144,7 @@ export default function NewBranchForm({ organisations }: Props) {
             </div>
             <div className="space-y-2">
               <Label htmlFor="subdomain">Subdomain *</Label>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <Input
                   id="subdomain"
                   placeholder="kl"
@@ -153,7 +153,7 @@ export default function NewBranchForm({ organisations }: Props) {
                   required
                   className="flex-1"
                 />
-                <span className="text-muted-foreground text-sm whitespace-nowrap">
+                <span className="text-sm text-muted-foreground sm:whitespace-nowrap">
                   .{baseDomain}
                 </span>
               </div>

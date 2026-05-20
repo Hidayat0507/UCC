@@ -3,8 +3,8 @@
  *
  * Verifies that the super-admin user can:
  *  1. Reach the admin portal after login
- *  2. See the platform overview with clinic + module counts
- *  3. Navigate to the clinic management pages
+ *  2. See the setup overview with organisation + branch readiness
+ *  3. Navigate to the branch management pages
  *  4. Access the user management page
  */
 
@@ -85,30 +85,26 @@ test.describe("Admin portal", () => {
       test.skip();
     }
   });
-  test("overview page loads with expected headings and cards", async ({
+  test("overview page loads with expected setup hierarchy", async ({
     page,
   }) => {
     await page.goto(adminPath("/"), { waitUntil: "domcontentloaded" });
 
-    // Core heading
     await expect(
       page.getByRole("heading", { name: /admin portal/i })
     ).toBeVisible();
 
-    // Stats cards
     await expect(
-      page.locator('[data-slot="card-title"]').filter({ hasText: /^Total Clinics$/ }).first()
+      page.locator('[data-slot="card-title"]').filter({ hasText: /^Setup path$/ }).first()
     ).toBeVisible();
     await expect(
-      page.locator('[data-slot="card-title"]').filter({ hasText: /^Active Modules$/ }).first()
+      page.locator('[data-slot="card-title"]').filter({ hasText: /^Branch readiness$/ }).first()
     ).toBeVisible();
     await expect(
-      page.locator('[data-slot="card-title"]').filter({ hasText: /^Platform$/ }).first()
+      page.getByText(/Organisation, Branches, then branch capabilities/i)
     ).toBeVisible();
-
-    // Clinics list section
     await expect(
-      page.locator('[data-slot="card-title"]').filter({ hasText: /^Clinics$/ }).first()
+      page.getByRole("link", { name: /add branch/i }).first()
     ).toBeVisible();
 
     await page.screenshot({ path: "test-results/admin-overview.png" });
@@ -148,9 +144,9 @@ test.describe("Admin portal", () => {
     await page.screenshot({ path: "test-results/admin-users.png" });
   });
 
-  test("Add Clinic button links to /clinics/new", async ({ page }) => {
+  test("Add Branch button links to /clinics/new", async ({ page }) => {
     await page.goto(adminPath("/"), { waitUntil: "domcontentloaded" });
-    const addBtn = page.getByRole("link", { name: /add clinic/i });
+    const addBtn = page.getByRole("link", { name: /add branch/i }).first();
     await expect(addBtn).toBeVisible();
     await expect(addBtn).toHaveAttribute("href", /\/clinics\/new$/);
   });

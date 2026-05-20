@@ -3,7 +3,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Building2, ExternalLink, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  Building2,
+  ExternalLink,
+  Puzzle,
+  Trash2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -43,9 +49,11 @@ import { useAdminPath } from "@/hooks/use-admin-path";
 export default function ClinicEditForm({
   clinic,
   organisations,
+  modules,
 }: {
   clinic: ClinicSummary;
   organisations: ParentOrganizationSummary[];
+  modules: { id: string; label: string; description?: string }[];
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -129,7 +137,7 @@ export default function ClinicEditForm({
   const clinicUrl = `https://${clinic.subdomain}.${baseDomain}`;
 
   return (
-    <div className="max-w-2xl space-y-6">
+    <div className="max-w-3xl space-y-6">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="sm" asChild>
           <Link href={adminPath("/clinics")}>
@@ -233,6 +241,49 @@ export default function ClinicEditForm({
               </Button>
             </div>
           </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Branch Modules</CardTitle>
+          <CardDescription>
+            Modules are shown here as branch capabilities. This preview is
+            UI-only; branch-specific persistence comes in a later phase.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {modules.length === 0 ? (
+            <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+              No active modules are installed for this deployment.
+            </div>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {modules.map((module) => (
+                <div
+                  key={module.id}
+                  className="flex items-start gap-3 rounded-md border bg-background p-3"
+                >
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted">
+                    <Puzzle className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-medium">{module.label}</p>
+                      <Badge variant="outline" className="text-xs">
+                        Available
+                      </Badge>
+                    </div>
+                    {module.description && (
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {module.description}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 

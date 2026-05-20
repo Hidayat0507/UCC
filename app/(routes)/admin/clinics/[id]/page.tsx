@@ -3,6 +3,7 @@ import {
   getOrganizationFromMedplum,
   getParentOrganizationsFromMedplum,
 } from "@/lib/fhir/admin-service";
+import { listActiveModules } from "@/lib/module-registry";
 import ClinicEditForm from "./clinic-edit-form";
 
 type Props = {
@@ -11,12 +12,23 @@ type Props = {
 
 export default async function EditClinicPage({ params }: Props) {
   const { id } = await params;
-  const [clinic, organisations] = await Promise.all([
+  const [clinic, organisations, modules] = await Promise.all([
     getOrganizationFromMedplum(id),
     getParentOrganizationsFromMedplum(),
+    listActiveModules().catch(() => []),
   ]);
   if (!clinic) {
     notFound();
   }
-  return <ClinicEditForm clinic={clinic} organisations={organisations} />;
+  return (
+    <ClinicEditForm
+      clinic={clinic}
+      organisations={organisations}
+      modules={modules.map((module) => ({
+        id: module.id,
+        label: module.label,
+        description: module.description,
+      }))}
+    />
+  );
 }

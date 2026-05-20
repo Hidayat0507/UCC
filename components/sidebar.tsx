@@ -130,7 +130,7 @@ export default function Sidebar({ modules = [] }: SidebarProps) {
           <Button 
             variant="ghost" 
             size="sm" 
-            className="absolute -right-4 top-16 h-8 w-8 rounded-full border bg-background z-50"
+            className="absolute right-2 top-16 z-50 h-11 w-11 rounded-full border bg-background md:-right-4 md:h-8 md:w-8"
             onClick={() => setIsCollapsed(!isCollapsed)}
           >
             {isCollapsed ? (
@@ -151,7 +151,7 @@ export default function Sidebar({ modules = [] }: SidebarProps) {
                   className={cn(
                     "flex items-center rounded-lg text-sm font-medium hover:bg-accent hover:text-accent-foreground",
                     isActive ? "bg-accent text-accent-foreground" : "text-muted-foreground",
-                    isCollapsed ? "justify-center w-8 h-8 p-2 mx-auto" : "px-3 py-2"
+                    isCollapsed ? "mx-auto h-11 w-11 justify-center p-2 md:h-8 md:w-8" : "px-3 py-2"
                   )}
                   title={isCollapsed ? item.name : undefined}
                 >
@@ -180,7 +180,7 @@ export default function Sidebar({ modules = [] }: SidebarProps) {
                 href={item.href}
                 className={cn(
                   "flex items-center rounded-lg text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground",
-                  isCollapsed ? "justify-center w-8 h-8 p-2 mx-auto" : "px-3 py-2"
+                  isCollapsed ? "mx-auto h-11 w-11 justify-center p-2 md:h-8 md:w-8" : "px-3 py-2"
                 )}
                 title={isCollapsed ? item.name : undefined}
               >
@@ -193,7 +193,7 @@ export default function Sidebar({ modules = [] }: SidebarProps) {
                 variant="ghost"
                 className={cn(
                   "w-full text-muted-foreground hover:text-accent-foreground",
-                  isCollapsed ? "justify-center w-8 h-8 p-2 mx-auto" : "justify-start px-3 py-2"
+                  isCollapsed ? "mx-auto h-11 w-11 justify-center p-2 md:h-8 md:w-8" : "justify-start px-3 py-2"
                 )}
                 onClick={async () => {
                   await signOut();
@@ -209,7 +209,7 @@ export default function Sidebar({ modules = [] }: SidebarProps) {
                 variant="ghost"
                 className={cn(
                   "w-full text-muted-foreground hover:text-accent-foreground",
-                  isCollapsed ? "justify-center w-8 h-8 p-2 mx-auto" : "justify-start px-3 py-2"
+                  isCollapsed ? "mx-auto h-11 w-11 justify-center p-2 md:h-8 md:w-8" : "justify-start px-3 py-2"
                 )}
                 asChild
               >

@@ -6,7 +6,7 @@ import * as z from "zod";
 import React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Camera } from "lucide-react";
+import { ArrowLeft, Camera, CircleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
-import { savePatientThroughIntakePilot } from "@/lib/fhir/patient-client";
+import { PatientApiError, savePatientThroughIntakePilot } from "@/lib/fhir/patient-client";
 
 const patientFormSchema = z.object({
   fullName: z.string().min(2, "Name must be at least 2 characters"),
@@ -58,6 +58,11 @@ export default function NewPatientFormV1({
 }: NewPatientFormV1Props) {
   const { toast } = useToast();
   const router = useRouter();
+  const [duplicateConflict, setDuplicateConflict] = React.useState<{
+    patientId: string;
+    patientName?: string;
+    nric?: string;
+  } | null>(null);
 
   const form = useForm<PatientFormValues>({
     resolver: zodResolver(patientFormSchema),
@@ -117,6 +122,8 @@ export default function NewPatientFormV1({
 
   async function onSubmit(data: PatientFormValues) {
     try {
+      setDuplicateConflict(null);
+      form.clearErrors("nric");
       let dateOfBirthObj: Date | undefined;
       if (data.dateOfBirth) {
         try {
@@ -190,6 +197,22 @@ export default function NewPatientFormV1({
       router.push(`/patients/${result.patientId}/check-in`);
     } catch (error: any) {
       console.error("Failed to register patient through the new flow:", error);
+      if (
+        error instanceof PatientApiError &&
+        error.code === "DUPLICATE_NRIC" &&
+        error.existingPatientId
+      ) {
+        setDuplicateConflict({
+          patientId: error.existingPatientId,
+          patientName: error.existingPatientName,
+          nric: error.existingPatientNric || data.nric,
+        });
+        form.setError("nric", {
+          type: "manual",
+          message: "This NRIC already belongs to an existing patient.",
+        });
+        return;
+      }
       toast({
         title: "Error",
         description: error.message || "Failed to register patient. Please try again.",
@@ -201,7 +224,7 @@ export default function NewPatientFormV1({
   return (
     <div className="container max-w-3xl py-6">
       <div className="mb-6">
-        <Link href="/patients" className="inline-flex items-center text-sm text-muted-foreground hover:text-primary">
+        <Link href="/patients" className="inline-flex min-h-11 items-center text-sm text-muted-foreground hover:text-primary">
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to Patients
         </Link>
@@ -237,15 +260,19 @@ export default function NewPatientFormV1({
                       <FormItem>
                         <RequiredLabel>NRIC</RequiredLabel>
                         <FormControl>
-                          <div className="flex gap-2">
-                            <Input
-                              placeholder="YYMMDD-SS-NNNN"
-                              {...field}
-                              onChange={(e) => {
-                                const formatted = formatNRIC(e.target.value);
-                                field.onChange(formatted);
-                              }}
-                            />
+                        <div className="flex gap-2">
+                          <Input
+                            placeholder="YYMMDD-SS-NNNN"
+                            {...field}
+                            onChange={(e) => {
+                              const formatted = formatNRIC(e.target.value);
+                              if (duplicateConflict) {
+                                setDuplicateConflict(null);
+                                form.clearErrors("nric");
+                              }
+                              field.onChange(formatted);
+                            }}
+                          />
                             <Button
                               type="button"
                               variant="secondary"
@@ -440,6 +467,29 @@ export default function NewPatientFormV1({
                 </Button>
                 <Button type="submit">Register Patient</Button>
               </div>
+              {duplicateConflict ? (
+                <div className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm">
+                  <div className="flex items-start gap-3">
+                    <CircleAlert className="mt-0.5 h-4 w-4 text-destructive" />
+                    <div className="space-y-3">
+                      <div>
+                        <p className="font-medium text-foreground">Patient already exists</p>
+                        <p className="text-muted-foreground">
+                          NRIC {duplicateConflict.nric ?? nric} is already registered
+                          {duplicateConflict.patientName ? ` to ${duplicateConflict.patientName}` : ""}.
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => router.push(`/patients/${duplicateConflict.patientId}/check-in`)}
+                      >
+                        Open existing patient
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
             </form>
           </Form>
         </CardContent>

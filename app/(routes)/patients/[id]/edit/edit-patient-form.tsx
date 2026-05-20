@@ -3,6 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
+import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -21,7 +22,8 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/components/ui/use-toast";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, CircleAlert } from "lucide-react";
+import { PatientApiError } from "@/lib/fhir/patient-client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -53,6 +55,11 @@ interface Props {
 export default function EditPatientForm({ patient }: Props) {
   const { toast } = useToast();
   const router = useRouter();
+  const [duplicateConflict, setDuplicateConflict] = React.useState<{
+    patientId: string;
+    patientName?: string;
+    nric?: string;
+  } | null>(null);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -80,6 +87,8 @@ export default function EditPatientForm({ patient }: Props) {
 
   async function onSubmit(data: FormValues) {
     try {
+      setDuplicateConflict(null);
+      form.clearErrors("nric");
       const res = await fetch('/api/patients', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -110,12 +119,36 @@ export default function EditPatientForm({ patient }: Props) {
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Failed to update patient');
+        throw new PatientApiError(err.error || 'Failed to update patient', {
+          code: typeof err.code === "string" ? err.code : undefined,
+          existingPatientId:
+            typeof err.existingPatientId === "string" ? err.existingPatientId : undefined,
+          existingPatientName:
+            typeof err.existingPatientName === "string" ? err.existingPatientName : undefined,
+          existingPatientNric:
+            typeof err.existingPatientNric === "string" ? err.existingPatientNric : undefined,
+        });
       }
 
       toast({ title: "Saved", description: "Patient record updated." });
       router.push(`/patients/${patient.id}`);
     } catch (error: any) {
+      if (
+        error instanceof PatientApiError &&
+        error.code === "DUPLICATE_NRIC" &&
+        error.existingPatientId
+      ) {
+        setDuplicateConflict({
+          patientId: error.existingPatientId,
+          patientName: error.existingPatientName,
+          nric: error.existingPatientNric || data.nric,
+        });
+        form.setError("nric", {
+          type: "manual",
+          message: "This NRIC already belongs to another patient.",
+        });
+        return;
+      }
       toast({ title: "Error", description: error.message, variant: "destructive" });
     }
   }
@@ -186,7 +219,19 @@ export default function EditPatientForm({ patient }: Props) {
                 <FormField control={form.control} name="nric" render={({ field }) => (
                   <FormItem>
                     <FormLabel>NRIC *</FormLabel>
-                    <FormControl><Input placeholder="YYMMDD-SS-NNNN" {...field} /></FormControl>
+                    <FormControl>
+                      <Input
+                        placeholder="YYMMDD-SS-NNNN"
+                        {...field}
+                        onChange={(event) => {
+                          if (duplicateConflict) {
+                            setDuplicateConflict(null);
+                            form.clearErrors("nric");
+                          }
+                          field.onChange(event);
+                        }}
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )} />
@@ -286,6 +331,30 @@ export default function EditPatientForm({ patient }: Props) {
                   </FormItem>
                 )} />
               </div>
+
+              {duplicateConflict ? (
+                <div className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm">
+                  <div className="flex items-start gap-3">
+                    <CircleAlert className="mt-0.5 h-4 w-4 text-destructive" />
+                    <div className="space-y-3">
+                      <div>
+                        <p className="font-medium text-foreground">NRIC already in use</p>
+                        <p className="text-muted-foreground">
+                          NRIC {duplicateConflict.nric ?? form.getValues("nric")} already belongs to
+                          {duplicateConflict.patientName ? ` ${duplicateConflict.patientName}` : " another patient"}.
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => router.push(`/patients/${duplicateConflict.patientId}`)}
+                      >
+                        Open conflicting patient
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
 
               <div className="flex justify-end gap-3">
                 <Button variant="outline" type="button" asChild>

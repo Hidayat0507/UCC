@@ -42,17 +42,17 @@ export default function AdminSidebar() {
   return (
     <div
       className={cn(
-        "flex h-screen border-r bg-background relative transition-all duration-300",
-        isCollapsed ? "w-16" : "w-40"
+        "relative flex h-screen shrink-0 border-r bg-background transition-all duration-300",
+        isCollapsed ? "w-16" : "w-16 md:w-40"
       )}
     >
       <div className="flex flex-col flex-1">
         {/* Header */}
-        <div className="flex h-14 items-center border-b px-4 justify-between">
+        <div className="flex h-14 items-center justify-center border-b px-2 md:justify-between md:px-4">
           {!isCollapsed && (
             <Link href={adminPath("/")} className="flex items-center space-x-2">
               <Activity className="h-6 w-6 text-primary" />
-              <div>
+              <div className="hidden md:block">
                 <p className="text-sm font-bold leading-none">Iatrum</p>
                 <p className="text-xs text-muted-foreground">Admin Portal</p>
               </div>
@@ -62,7 +62,7 @@ export default function AdminSidebar() {
           <Button
             variant="ghost"
             size="sm"
-            className="absolute -right-4 top-16 h-8 w-8 rounded-full border bg-background z-50"
+            className="absolute right-2 top-16 z-50 h-11 w-11 rounded-full border bg-background md:-right-4 md:h-8 md:w-8"
             onClick={() => setIsCollapsed(!isCollapsed)}
           >
             {isCollapsed ? (
@@ -89,13 +89,15 @@ export default function AdminSidebar() {
                     ? "bg-accent text-accent-foreground"
                     : "text-muted-foreground",
                   isCollapsed
-                    ? "justify-center w-8 h-8 p-2 mx-auto"
-                    : "px-3 py-2"
+                    ? "mx-auto h-11 w-11 justify-center p-2 md:h-8 md:w-8"
+                    : "justify-center p-2 md:justify-start md:px-3 md:py-2"
                 )}
                 title={isCollapsed ? item.name : undefined}
               >
                 <item.icon className="h-4 w-4 flex-shrink-0" />
-                {!isCollapsed && <span className="ml-2">{item.name}</span>}
+                {!isCollapsed && (
+                  <span className="ml-2 hidden md:inline">{item.name}</span>
+                )}
               </Link>
             );
           })}
@@ -104,7 +106,12 @@ export default function AdminSidebar() {
         {/* Footer */}
         <div className="mt-auto border-t">
           {!isCollapsed && (
-            <div className="px-4 py-2">
+            <div className="hidden px-4 py-2 md:block">
+              <ThemeToggle />
+            </div>
+          )}
+          {!isCollapsed && (
+            <div className="px-2 py-2 md:hidden">
               <ThemeToggle />
             </div>
           )}
@@ -115,8 +122,8 @@ export default function AdminSidebar() {
                 className={cn(
                   "w-full text-muted-foreground hover:text-accent-foreground",
                   isCollapsed
-                    ? "justify-center w-8 h-8 p-2 mx-auto"
-                    : "justify-start px-3 py-2"
+                    ? "mx-auto h-11 w-11 justify-center p-2 md:h-8 md:w-8"
+                    : "justify-center p-2 md:justify-start md:px-3 md:py-2"
                 )}
                 onClick={async () => {
                   await signOut();
@@ -125,7 +132,9 @@ export default function AdminSidebar() {
                 title={isCollapsed ? "Logout" : undefined}
               >
                 <LogOut className="h-4 w-4 flex-shrink-0" />
-                {!isCollapsed && <span className="ml-2">Logout</span>}
+                {!isCollapsed && (
+                  <span className="ml-2 hidden md:inline">Logout</span>
+                )}
               </Button>
             )}
           </div>

@@ -216,7 +216,7 @@ export function ClinicalCatalogManager({
     <div className={["space-y-4", className].filter(Boolean).join(" ")}>
       <Tabs value={activeType} onValueChange={(value) => setActiveType(value as CatalogManagerType)}>
         {visibleTypes.length > 1 && (
-          <TabsList>
+          <TabsList className="max-w-full justify-start overflow-x-auto">
             {visibleTypes.map((type) => (
               <TabsTrigger key={type} value={type}>{type === "document" ? "Documents" : TYPE_LABELS[type]}</TabsTrigger>
             ))}
@@ -251,14 +251,14 @@ export function ClinicalCatalogManager({
               )
             ) : (
               <>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2">
+            <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex min-w-0 items-center gap-2 rounded-md border bg-muted/40 px-3 py-2">
                 <Search className="h-4 w-4 text-muted-foreground" />
                 <Input
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                   placeholder={`Search ${TYPE_LABELS[type].toLowerCase()}`}
-                  className="h-8 border-0 bg-transparent p-0 shadow-none focus-visible:ring-0"
+                  className="h-11 border-0 bg-transparent p-0 shadow-none focus-visible:ring-0 md:h-8"
                 />
               </div>
               <Button type="button" onClick={() => setCreating(true)}>
@@ -433,8 +433,8 @@ function CatalogTable({
   onDelete: (item: ClinicalCatalogItem) => void;
 }) {
   return (
-    <div className="overflow-hidden rounded-md border">
-      <Table>
+    <div className="overflow-x-auto rounded-md border">
+      <Table className="min-w-[640px]">
         <TableHeader>
           <TableRow>
             <TableHead>Name</TableHead>

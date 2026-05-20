@@ -379,7 +379,7 @@ export default function AppointmentsSlotsPilotPage() {
   return (
     <div className="container max-w-3xl py-6">
       <div className="mb-6">
-        <Link href="/appointments" className="inline-flex items-center text-sm text-muted-foreground hover:text-primary">
+        <Link href="/appointments" className="inline-flex min-h-11 items-center text-sm text-muted-foreground hover:text-primary">
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to appointments
         </Link>
