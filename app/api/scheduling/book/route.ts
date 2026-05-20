@@ -12,7 +12,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Clinic context is required" }, { status: 400 });
     }
 
-    const { slotId, patientId, reason, clinicianDisplayOverride, durationMinutes } = await request.json();
+    const {
+      slotId,
+      patientId,
+      reason,
+      clinicianDisplayOverride,
+      durationMinutes,
+      reminderDaysBefore,
+    } = await request.json();
     if (!slotId || !patientId || !reason) {
       return NextResponse.json({ error: "Missing slotId, patientId, or reason" }, { status: 400 });
     }
@@ -30,7 +37,11 @@ export async function POST(request: NextRequest) {
       durationMinutes,
     });
     try {
-      await createAppointmentReminderFollowUp(medplum, { clinicId, appointmentId: result.appointmentId });
+      await createAppointmentReminderFollowUp(medplum, {
+        clinicId,
+        appointmentId: result.appointmentId,
+        daysBefore: reminderDaysBefore,
+      });
     } catch (followUpError) {
       console.error("[scheduling] Appointment booked but reminder follow-up creation failed", result.appointmentId, followUpError);
     }

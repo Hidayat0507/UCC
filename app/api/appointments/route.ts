@@ -55,7 +55,11 @@ export async function POST(request: NextRequest) {
 
     const appointmentId = await saveAppointmentToMedplum(medplum, appointmentData);
     try {
-      await createAppointmentReminderFollowUp(medplum, { clinicId, appointmentId });
+      await createAppointmentReminderFollowUp(medplum, {
+        clinicId,
+        appointmentId,
+        daysBefore: appointmentData.reminderDaysBefore,
+      });
     } catch (followUpError) {
       console.error('[appointments] Appointment saved but reminder follow-up creation failed', appointmentId, followUpError);
     }
