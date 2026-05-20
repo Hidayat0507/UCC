@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactElement } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -10,9 +10,11 @@ import {
   CreditCard,
   Eye,
   FileText,
+  Loader2,
   Printer,
   ReceiptText,
 } from "lucide-react";
+import { PDFViewer, pdf } from "@react-pdf/renderer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -43,6 +45,9 @@ import { Patient, Consultation } from "@/lib/models";
 import { formatDisplayDate } from "@/lib/utils";
 import { formatMedicationNameWithStrength, formatPrescriptionDetails } from "@/lib/prescriptions";
 import type { TreatmentPlanEntry } from "@/lib/treatment-plan";
+import { McDocument } from "@/components/mc/mc-document";
+import ReferralDocument from "@/components/referrals/referral-document";
+import { fetchOrganizationDetails, type OrganizationDetails } from "@/lib/org";
 
 type CheckoutClientProps = {
   consultationId: string;
@@ -63,11 +68,26 @@ type CheckoutItem = {
   category: "items" | "services" | "packages" | "documents";
   quantity: number;
   price: number;
+  documentDetails?: CheckoutDocumentDetails;
   orderIndex?: number;
   fallbackIndex: number;
 };
 
 type PaymentMethod = "cash" | "card" | "qr" | "panel";
+
+type CheckoutDocumentDetails = {
+  kind: "mc" | "referral";
+  title: string;
+  status?: string;
+  instruction?: string;
+  mcDays?: string;
+  mcDiagnosis?: string;
+  mcStartDate?: string;
+  mcDoctorName?: string;
+  referralTo?: string;
+  referralDiagnosis?: string;
+  referralContent?: string;
+};
 
 function currency(amount: number) {
   return new Intl.NumberFormat("en-MY", {
@@ -92,6 +112,72 @@ function patientFacingDescription(value: string | undefined, category?: string) 
   }
 
   return text;
+}
+
+function parseDocumentDetails(value: string | undefined, fallbackTitle: string): CheckoutDocumentDetails | undefined {
+  const text = value?.trim() || "";
+  if (!text.startsWith("{")) return undefined;
+
+  try {
+    const parsed = JSON.parse(text) as Record<string, string>;
+    if (parsed.kind !== "mc" && parsed.kind !== "referral") return undefined;
+
+    return {
+      kind: parsed.kind,
+      title: parsed.title || fallbackTitle || (parsed.kind === "mc" ? "MEDICAL CERTIFICATE (MC)" : "REFERRAL LETTER"),
+      status: parsed.status,
+      instruction: parsed.instruction,
+      mcDays: parsed.mcDays,
+      mcDiagnosis: parsed.mcDiagnosis,
+      mcStartDate: parsed.mcStartDate,
+      mcDoctorName: parsed.mcDoctorName,
+      referralTo: parsed.referralTo,
+      referralDiagnosis: parsed.referralDiagnosis,
+      referralContent: parsed.referralContent,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+function documentDetailsFromDraft(entry: TreatmentPlanEntry): CheckoutDocumentDetails | undefined {
+  if (entry.tab !== "documents") return undefined;
+  const kind =
+    entry.meta?.kind === "mc" || entry.catalogRef === "letter-mc"
+      ? "mc"
+      : entry.meta?.kind === "referral" || entry.catalogRef === "letter-referral"
+        ? "referral"
+        : null;
+
+  if (!kind) return undefined;
+
+  return {
+    kind,
+    title: entry.name || (kind === "mc" ? "MEDICAL CERTIFICATE (MC)" : "REFERRAL LETTER"),
+    status: entry.meta?.documentStatus || "completed",
+    instruction: entry.instruction,
+    mcDays: entry.meta?.mcDays,
+    mcDiagnosis: entry.meta?.mcDiagnosis,
+    mcStartDate: entry.meta?.mcStartDate,
+    mcDoctorName: entry.meta?.mcDoctorName,
+    referralTo: entry.meta?.referralTo,
+    referralDiagnosis: entry.meta?.referralDiagnosis,
+    referralContent: entry.meta?.referralContent,
+  };
+}
+
+function calcMcEndDate(startDate: string | undefined, numDays: number): string {
+  if (!startDate || numDays <= 0) return formatDisplayDate(new Date());
+  const date = new Date(startDate);
+  if (Number.isNaN(date.getTime())) return formatDisplayDate(new Date());
+  date.setDate(date.getDate() + numDays - 1);
+  return formatDisplayDate(date);
+}
+
+function displayDateOr(value: Date | string | null | undefined, fallback: string): string {
+  const formatted = formatDisplayDate(value);
+  if (formatted === "N/A" || formatted === "Invalid Date") return fallback;
+  return formatted;
 }
 
 function checkoutItemType(category: CheckoutItem["category"]): CheckoutItem["type"] {
@@ -121,6 +207,7 @@ function buildCheckoutItems(consultation: Consultation | null): CheckoutItem[] {
       category,
       quantity: procedure.quantity ?? 1,
       price: procedure.price ?? 0,
+      documentDetails: category === "documents" ? parseDocumentDetails(procedure.notes, procedure.name || "Document") : undefined,
       orderIndex: procedure.orderIndex,
       fallbackIndex: index,
     };
@@ -167,6 +254,7 @@ function buildDraftCheckoutItems(entries: TreatmentPlanEntry[]): CheckoutItem[] 
       category: entry.tab,
       quantity: entry.quantity,
       price: entry.unitPrice,
+      documentDetails: documentDetailsFromDraft(entry),
       orderIndex: index,
       fallbackIndex: index,
     }));
@@ -297,6 +385,56 @@ function buildPrintableBillHtml({
     </html>`;
 }
 
+function renderCheckoutDocument({
+  item,
+  patient,
+  date,
+  organization,
+}: {
+  item: CheckoutItem;
+  patient: Patient;
+  date: string;
+  organization: OrganizationDetails | null;
+}): ReactElement | null {
+  const details = item.documentDetails;
+  if (!details) return null;
+
+  if (details.kind === "mc") {
+    const numDays = Math.max(1, Number(details.mcDays || 1) || 1);
+    const startDate = displayDateOr(details.mcStartDate, date);
+    return (
+      <McDocument
+        patient={patient}
+        issuedDate={date}
+        startDate={startDate}
+        endDate={calcMcEndDate(details.mcStartDate, numDays)}
+        numDays={numDays}
+        doctorName={details.mcDoctorName || ""}
+        organization={organization}
+      />
+    );
+  }
+
+  return (
+    <ReferralDocument
+      letterText={details.referralContent || details.instruction || ""}
+      organization={organization}
+      metadata={{
+        dateLabel: date,
+        patientName: patient.fullName,
+        patientId: patient.nric,
+        patientDateOfBirth: displayDateOr(patient.dateOfBirth, ""),
+        patientPhone: patient.phone ?? null,
+        patientEmail: patient.email ?? null,
+        specialty: details.referralDiagnosis || null,
+        facility: details.referralTo || null,
+        toLine: details.referralTo || null,
+        fromLine: organization?.name ?? null,
+      }}
+    />
+  );
+}
+
 export default function CheckoutClient({ consultationId, patientId }: CheckoutClientProps) {
   const router = useRouter();
   const [details, setDetails] = useState<OrderDetails | null>(null);
@@ -308,6 +446,9 @@ export default function CheckoutClient({ consultationId, patientId }: CheckoutCl
   const [completionError, setCompletionError] = useState<string | null>(null);
   const [completing, setCompleting] = useState(false);
   const [billPreviewOpen, setBillPreviewOpen] = useState(false);
+  const [documentPreviewItem, setDocumentPreviewItem] = useState<CheckoutItem | null>(null);
+  const [printingDocument, setPrintingDocument] = useState(false);
+  const [organization, setOrganization] = useState<OrganizationDetails | null>(null);
   const [confirmComplete, setConfirmComplete] = useState(false);
 
   useEffect(() => {
@@ -374,6 +515,16 @@ export default function CheckoutClient({ consultationId, patientId }: CheckoutCl
       active = false;
     };
   }, [consultationId, patientId]);
+
+  useEffect(() => {
+    let active = true;
+    fetchOrganizationDetails().then((info) => {
+      if (active) setOrganization(info);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const checkoutItems = useMemo(
     () => {
@@ -483,6 +634,41 @@ export default function CheckoutClient({ consultationId, patientId }: CheckoutCl
     printWindow.focus();
     printWindow.print();
   };
+  const documentPreview = documentPreviewItem
+    ? renderCheckoutDocument({
+        item: documentPreviewItem,
+        patient,
+        date: billDate,
+        organization,
+      })
+    : null;
+  const handlePrintDocument = async () => {
+    if (!documentPreviewItem || !documentPreview || printingDocument) return;
+
+    const printWindow = window.open("", "_blank", "width=840,height=900");
+    if (!printWindow) {
+      setCompletionError("Unable to open document print preview. Please allow pop-ups for this site.");
+      return;
+    }
+
+    setPrintingDocument(true);
+    setCompletionError(null);
+    try {
+      const blob = await pdf(documentPreview).toBlob();
+      const url = URL.createObjectURL(blob);
+      printWindow.location.href = url;
+      printWindow.focus();
+      window.setTimeout(() => {
+        printWindow.print();
+      }, 1000);
+      window.setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } catch (err) {
+      printWindow.close();
+      setCompletionError(err instanceof Error ? err.message : "Failed to print document.");
+    } finally {
+      setPrintingDocument(false);
+    }
+  };
 
   return (
     <main className="w-full space-y-6 px-3 py-8 sm:px-4 lg:px-5 2xl:px-6">
@@ -583,7 +769,11 @@ export default function CheckoutClient({ consultationId, patientId }: CheckoutCl
                   <TreatmentRows items={checkoutItems.filter((item) => item.category === "packages")} emptyText="No packages added." />
                 </TabsContent>
                 <TabsContent value="documents">
-                  <TreatmentRows items={checkoutItems.filter((item) => item.category === "documents")} emptyText="No chargeable documents added." />
+                  <TreatmentRows
+                    items={checkoutItems.filter((item) => item.category === "documents")}
+                    emptyText="No chargeable documents added."
+                    onPreviewDocument={setDocumentPreviewItem}
+                  />
                 </TabsContent>
               </Tabs>
             </CardContent>
@@ -634,19 +824,9 @@ export default function CheckoutClient({ consultationId, patientId }: CheckoutCl
                 <Eye className="mr-2 h-4 w-4" />
                 Preview bill
               </Button>
-              <Button
-                variant="outline"
-                className="w-full"
-                type="button"
-                disabled={!canPreviewBill}
-                onClick={handlePrintBill}
-              >
-                <Printer className="mr-2 h-4 w-4" />
-                Print bill
-              </Button>
               {!canPreviewBill ? (
                 <p className="text-xs text-muted-foreground">
-                  Add at least one billable item before previewing or printing.
+                  Add at least one billable item before previewing.
                 </p>
               ) : null}
             </CardContent>
@@ -773,6 +953,45 @@ export default function CheckoutClient({ consultationId, patientId }: CheckoutCl
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={!!documentPreviewItem} onOpenChange={(open) => !open && setDocumentPreviewItem(null)}>
+        <DialogContent className="w-[95vw] overflow-hidden p-0 sm:max-w-5xl">
+          <div className="flex h-[90vh] flex-col">
+            <DialogHeader className="space-y-2 border-b px-6 py-4">
+              <DialogTitle>Document preview</DialogTitle>
+              <DialogDescription>
+                {documentPreviewItem?.documentDetails?.title || documentPreviewItem?.name || "Generated document"} · {patient.fullName}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="min-h-0 flex-1 px-6 py-4">
+              {documentPreview ? (
+                <div className="h-full overflow-hidden rounded-lg border">
+                  <PDFViewer className="h-full w-full">
+                    {documentPreview}
+                  </PDFViewer>
+                </div>
+              ) : (
+                <EmptyPanel text="This document cannot be previewed from checkout." />
+              )}
+            </div>
+
+            <DialogFooter className="border-t px-6 py-4">
+              <Button variant="outline" type="button" onClick={() => setDocumentPreviewItem(null)}>
+                Close
+              </Button>
+              <Button type="button" onClick={handlePrintDocument} disabled={!documentPreview || printingDocument}>
+                {printingDocument ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Printer className="mr-2 h-4 w-4" />
+                )}
+                Print document
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }
@@ -780,23 +999,37 @@ export default function CheckoutClient({ consultationId, patientId }: CheckoutCl
 function TreatmentRows({
   items,
   emptyText = "No billable items added.",
+  onPreviewDocument,
 }: {
   items: CheckoutItem[];
   emptyText?: string;
+  onPreviewDocument?: (item: CheckoutItem) => void;
 }) {
   if (items.length === 0) {
     return <EmptyPanel text={emptyText} />;
   }
 
+  const showPreviewColumn = Boolean(onPreviewDocument);
+
   return (
     <div className="overflow-hidden rounded-md border">
-      <div className="grid grid-cols-[1fr_80px_120px] bg-muted/60 px-4 py-2 text-xs font-medium text-muted-foreground">
+      <div
+        className={`grid ${
+          showPreviewColumn ? "grid-cols-[1fr_80px_120px_112px]" : "grid-cols-[1fr_80px_120px]"
+        } bg-muted/60 px-4 py-2 text-xs font-medium text-muted-foreground`}
+      >
         <span>Item</span>
         <span className="text-right">Qty</span>
         <span className="text-right">Amount</span>
+        {showPreviewColumn ? <span className="text-right">Preview</span> : null}
       </div>
       {items.map((item) => (
-        <div key={item.id} className="grid grid-cols-[1fr_80px_120px] items-center border-t px-4 py-3 text-sm">
+        <div
+          key={item.id}
+          className={`grid ${
+            showPreviewColumn ? "grid-cols-[1fr_80px_120px_112px]" : "grid-cols-[1fr_80px_120px]"
+          } items-center border-t px-4 py-3 text-sm`}
+        >
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <p className="font-medium">{item.name}</p>
@@ -808,6 +1041,21 @@ function TreatmentRows({
           </div>
           <span className="text-right">{item.quantity}</span>
           <span className="text-right font-medium">{currency(item.quantity * item.price)}</span>
+          {showPreviewColumn ? (
+            <div className="text-right">
+              {item.documentDetails ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  type="button"
+                  onClick={() => onPreviewDocument?.(item)}
+                >
+                  <Eye className="mr-2 h-4 w-4" />
+                  Preview
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       ))}
     </div>
