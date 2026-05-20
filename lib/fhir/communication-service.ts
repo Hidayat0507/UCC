@@ -536,7 +536,7 @@ export async function createReviewFollowUpForCheckout(
 
 export async function createAppointmentReminderFollowUp(
   medplum: MedplumClient,
-  input: { clinicId: string; appointmentId: string }
+  input: { clinicId: string; appointmentId: string; daysBefore?: unknown }
 ): Promise<FollowUp | null> {
   const appointment = await medplum.readResource("Appointment", input.appointmentId) as Appointment;
   if (!appointment.start) return null;
@@ -550,8 +550,12 @@ export async function createAppointmentReminderFollowUp(
   ]);
   const settings = await getFollowUpSettings(medplum, input.clinicId);
   const patientName = getPatientName(patient) || patientParticipant?.actor?.display || "Patient";
+  const numericDays = Number(input.daysBefore ?? 1);
+  const daysBefore = Number.isFinite(numericDays)
+    ? Math.max(0, Math.min(30, Math.trunc(numericDays)))
+    : 1;
   const due = new Date(appointment.start);
-  due.setDate(due.getDate() - 1);
+  due.setDate(due.getDate() - daysBefore);
 
   return createFollowUp(medplum, {
     clinicId: input.clinicId,

@@ -53,6 +53,7 @@ const appointmentSchema = z.object({
   selectedSlotId: z.string().optional(),
   visitType: z.string().optional(),
   notes: z.string().optional(),
+  reminderDaysBefore: z.string().default("1"),
 }).refine(
   (data) => {
     try {
@@ -71,6 +72,15 @@ const appointmentSchema = z.object({
   {
     message: "Duration must be a positive number",
     path: ["durationMinutes"],
+  }
+).refine(
+  (data) => {
+    const days = Number(data.reminderDaysBefore);
+    return Number.isFinite(days) && Number.isInteger(days) && days >= 0 && days <= 30;
+  },
+  {
+    message: "Reminder days must be a whole number from 0 to 30",
+    path: ["reminderDaysBefore"],
   }
 );
 
@@ -203,6 +213,7 @@ export default function AppointmentsSlotsPilotPage() {
       selectedSlotId: "",
       visitType: "",
       notes: "",
+      reminderDaysBefore: "1",
     },
   });
 
@@ -361,6 +372,7 @@ export default function AppointmentsSlotsPilotPage() {
         reason: values.visitType || "Clinic visit",
         type: values.visitType || undefined,
         notes: values.notes || undefined,
+        reminderDaysBefore: Number(values.reminderDaysBefore),
       });
 
       toast({
@@ -567,6 +579,19 @@ export default function AppointmentsSlotsPilotPage() {
                   )}
                 />
 
+                <FormField
+                  control={form.control}
+                  name="reminderDaysBefore"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Reminder days before appointment</FormLabel>
+                      <FormControl>
+                        <Input type="number" min={0} max={30} step={1} {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </div>
 
               <div className="flex items-center justify-end gap-3">

@@ -86,6 +86,7 @@ export async function bookSlot(payload: {
   patientId: string;
   reason: string;
   clinicianDisplayOverride?: string;
+  reminderDaysBefore?: number;
 }): Promise<{ appointmentId: string; slotId: string }> {
   const response = await fetch("/api/scheduling/book", {
     method: "POST",
@@ -112,6 +113,7 @@ export async function manualBookAppointment(payload: {
   reason: string;
   type?: string;
   notes?: string;
+  reminderDaysBefore?: number;
 }): Promise<{ appointmentId: string; slotId: string }> {
   const response = await fetch("/api/scheduling/manual-book", {
     method: "POST",

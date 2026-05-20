@@ -14,6 +14,7 @@ export interface AppointmentInput {
   status: 'proposed' | 'pending' | 'booked' | 'arrived' | 'fulfilled' | 'cancelled' | 'noshow';
   scheduledAt: Date | string;
   durationMinutes?: number;
+  reminderDaysBefore?: number;
 }
 
 export type FhirAppointmentStatus = 'proposed' | 'pending' | 'booked' | 'arrived' | 'fulfilled' | 'cancelled' | 'noshow';
@@ -126,9 +127,6 @@ export async function rescheduleAppointment(
     throw new Error(data.error || 'Failed to reschedule appointment');
   }
 }
-
-
-
 
 
 
