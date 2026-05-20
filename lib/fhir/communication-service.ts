@@ -1,5 +1,5 @@
 import type { MedplumClient } from "@medplum/core";
-import type { Appointment, Communication, Extension, Patient } from "@medplum/fhirtypes";
+import type { Appointment, Communication, Extension, Organization, Patient } from "@medplum/fhirtypes";
 import { env } from "@/lib/env";
 
 const FOLLOW_UP_CATEGORY_SYSTEM = "https://ucc.emr/communication-category";
@@ -89,6 +89,9 @@ export interface FollowUpSettings {
 export const DEFAULT_REVIEW_TEMPLATE =
   "Hi {{patientName}}, thank you for visiting us today. We would really appreciate it if you could leave us a Google review: {{reviewUrl}}";
 
+const DEFAULT_REVIEW_TEMPLATE_WITHOUT_URL =
+  "Hi {{patientName}}, thank you for visiting us today. We would really appreciate it if you could leave us a Google review.";
+
 export const DEFAULT_APPOINTMENT_TEMPLATE =
   "Hi {{patientName}}, this is a reminder for your appointment{{clinicSuffix}} on {{appointmentDate}}. Please reply or call us if you need to change your appointment.";
 
@@ -108,11 +111,20 @@ export function buildWhatsAppUrl(phone: string | undefined, message: string): st
   return `https://wa.me/${normalizedPhone}?text=${encodeURIComponent(message)}`;
 }
 
-export function buildReviewRequestMessage(patientName: string, reviewUrl: string): string {
-  return renderFollowUpTemplate(DEFAULT_REVIEW_TEMPLATE, {
+export function buildReviewRequestMessage(patientName: string, reviewUrl?: string, template?: string): string {
+  const trimmedReviewUrl = reviewUrl?.trim() || "";
+  const templateNeedsReviewUrl = /\{\{\s*reviewUrl\s*\}\}/.test(template || "");
+  const selectedTemplate =
+    template && (trimmedReviewUrl || !templateNeedsReviewUrl)
+      ? template
+      : trimmedReviewUrl
+        ? DEFAULT_REVIEW_TEMPLATE
+        : DEFAULT_REVIEW_TEMPLATE_WITHOUT_URL;
+
+  return renderFollowUpTemplate(selectedTemplate, {
     patientName: patientName.trim() || "there",
-    reviewUrl,
-  });
+    reviewUrl: trimmedReviewUrl,
+  }).replace(/\s+/g, " ").trim();
 }
 
 export function buildAppointmentReminderMessage(input: {
@@ -217,6 +229,15 @@ function replaceExtensions(existing: Extension[] | undefined, updates: Extension
   return [...(existing ?? []).filter((ext) => !updateUrls.has(ext.url)), ...updates];
 }
 
+function replaceExtensionsRemoving(
+  existing: Extension[] | undefined,
+  removeUrls: string[],
+  updates: Extension[]
+): Extension[] {
+  const urls = new Set([...removeUrls, ...updates.map((ext) => ext.url)]);
+  return [...(existing ?? []).filter((ext) => !urls.has(ext.url)), ...updates];
+}
+
 async function findExistingFollowUpBySource(
   medplum: MedplumClient,
   sourceType: FollowUpSourceType | undefined,
@@ -246,13 +267,9 @@ export async function getFollowUpSettings(
   medplum: MedplumClient,
   clinicId?: string
 ): Promise<FollowUpSettings> {
-  let org: { extension?: Extension[] } | null = null;
+  let org: Organization | null = null;
   if (clinicId) {
-    try {
-      org = await medplum.readResource("Organization", clinicId);
-    } catch {
-      // Clinic settings are optional for v1; default below.
-    }
+    org = await readClinicOrganization(medplum, clinicId);
   }
   const deliveryMode = getOrgExtensionString(org, WHATSAPP_DELIVERY_MODE_EXTENSION_URL);
   return {
@@ -276,19 +293,41 @@ export async function updateFollowUpSettings(
   clinicId: string,
   input: FollowUpSettings
 ): Promise<FollowUpSettings> {
-  const org = await medplum.readResource("Organization", clinicId);
+  const org = await readClinicOrganization(medplum, clinicId);
+  if (!org) throw new Error("Clinic organization not found");
+  const removeUrls = [
+    WHATSAPP_DELIVERY_MODE_EXTENSION_URL,
+    FOLLOW_UP_REVIEW_URL_EXTENSION_URL,
+    FOLLOW_UP_REVIEW_TEMPLATE_EXTENSION_URL,
+    FOLLOW_UP_APPOINTMENT_TEMPLATE_EXTENSION_URL,
+    FOLLOW_UP_TWILIO_REVIEW_CONTENT_SID_EXTENSION_URL,
+    FOLLOW_UP_TWILIO_APPOINTMENT_CONTENT_SID_EXTENSION_URL,
+  ];
+  const updates: Extension[] = [
+    { url: WHATSAPP_DELIVERY_MODE_EXTENSION_URL, valueString: input.deliveryMode },
+    ...stringExt(FOLLOW_UP_REVIEW_URL_EXTENSION_URL, input.googleReviewUrl),
+    { url: FOLLOW_UP_REVIEW_TEMPLATE_EXTENSION_URL, valueString: input.reviewTemplate || DEFAULT_REVIEW_TEMPLATE },
+    { url: FOLLOW_UP_APPOINTMENT_TEMPLATE_EXTENSION_URL, valueString: input.appointmentTemplate || DEFAULT_APPOINTMENT_TEMPLATE },
+    ...stringExt(FOLLOW_UP_TWILIO_REVIEW_CONTENT_SID_EXTENSION_URL, input.twilioReviewContentSid),
+    ...stringExt(FOLLOW_UP_TWILIO_APPOINTMENT_CONTENT_SID_EXTENSION_URL, input.twilioAppointmentContentSid),
+  ];
   const updated = await medplum.updateResource({
     ...org,
-    extension: replaceExtensions(org.extension, [
-      { url: WHATSAPP_DELIVERY_MODE_EXTENSION_URL, valueString: input.deliveryMode },
-      { url: FOLLOW_UP_REVIEW_URL_EXTENSION_URL, valueString: input.googleReviewUrl },
-      { url: FOLLOW_UP_REVIEW_TEMPLATE_EXTENSION_URL, valueString: input.reviewTemplate || DEFAULT_REVIEW_TEMPLATE },
-      { url: FOLLOW_UP_APPOINTMENT_TEMPLATE_EXTENSION_URL, valueString: input.appointmentTemplate || DEFAULT_APPOINTMENT_TEMPLATE },
-      { url: FOLLOW_UP_TWILIO_REVIEW_CONTENT_SID_EXTENSION_URL, valueString: input.twilioReviewContentSid },
-      { url: FOLLOW_UP_TWILIO_APPOINTMENT_CONTENT_SID_EXTENSION_URL, valueString: input.twilioAppointmentContentSid },
-    ]),
+    extension: replaceExtensionsRemoving(org.extension, removeUrls, updates),
   });
   return getFollowUpSettings(medplum, updated.id);
+}
+
+async function readClinicOrganization(medplum: MedplumClient, clinicId: string): Promise<Organization | null> {
+  try {
+    return await medplum.readResource("Organization", clinicId) as Organization;
+  } catch {
+    const organizations = await medplum.searchResources("Organization", {
+      identifier: `clinic|${clinicId}`,
+      _count: "1",
+    });
+    return (organizations?.[0] as Organization | undefined) ?? null;
+  }
 }
 
 export async function createFollowUp(
@@ -479,11 +518,7 @@ export async function createReviewFollowUpForCheckout(
   input: { clinicId: string; consultationId: string; patientId: string }
 ): Promise<FollowUp | null> {
   const settings = await getFollowUpSettings(medplum, input.clinicId);
-  const reviewUrl = settings.googleReviewUrl;
-  if (!reviewUrl) {
-    console.warn("[follow-up] Google review URL is not configured; skipping review follow-up");
-    return null;
-  }
+  const reviewUrl = settings.googleReviewUrl.trim();
   const patient = await medplum.readResource("Patient", input.patientId) as Patient;
   const patientName = getPatientName(patient);
   return createFollowUp(medplum, {
@@ -495,10 +530,7 @@ export async function createReviewFollowUpForCheckout(
     templateKey: "google-review-request",
     sourceType: "checkout",
     sourceId: input.consultationId,
-    message: renderFollowUpTemplate(settings.reviewTemplate || DEFAULT_REVIEW_TEMPLATE, {
-      patientName: patientName || "there",
-      reviewUrl,
-    }),
+    message: buildReviewRequestMessage(patientName, reviewUrl, settings.reviewTemplate),
   });
 }
 
@@ -514,7 +546,7 @@ export async function createAppointmentReminderFollowUp(
 
   const [patient, organization] = await Promise.all([
     medplum.readResource("Patient", patientId) as Promise<Patient>,
-    medplum.readResource("Organization", input.clinicId).catch(() => null),
+    readClinicOrganization(medplum, input.clinicId),
   ]);
   const settings = await getFollowUpSettings(medplum, input.clinicId);
   const patientName = getPatientName(patient) || patientParticipant?.actor?.display || "Patient";

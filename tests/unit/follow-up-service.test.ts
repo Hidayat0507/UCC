@@ -39,4 +39,12 @@ describe("follow-up communication helpers", () => {
       })
     ).toContain("Klinik Puteri");
   });
+
+  it("builds a review request message even when no review URL is configured", () => {
+    const message = buildReviewRequestMessage("Aina", "", "Hi {{ patientName }}, review: {{ reviewUrl }}");
+
+    expect(message).toContain("Aina");
+    expect(message).toContain("Google review");
+    expect(message).not.toContain("{{reviewUrl}}");
+  });
 });

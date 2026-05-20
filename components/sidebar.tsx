@@ -51,6 +51,14 @@ const moduleIconMap: Record<string, LucideIcon> = {
   Package,
   Calendar,
   BarChart,
+  MessageCircle,
+  "alert-triangle": AlertTriangle,
+  "test-tube": TestTube,
+  image: Image,
+  package: Package,
+  calendar: Calendar,
+  "bar-chart": BarChart,
+  "message-circle": MessageCircle,
 };
 
 export default function Sidebar({ modules = [] }: SidebarProps) {
@@ -97,12 +105,18 @@ export default function Sidebar({ modules = [] }: SidebarProps) {
   }, []);
 
   const navigation = useMemo(() => {
-    // Combine base navigation with enabled modules.
-    const items = [...baseNavigation, ...enabledModules];
-    items.push({ name: "Follow Up", href: "/follow-up", icon: MessageCircle });
+    const moduleItems = modules.map((module) => ({
+      name: module.label,
+      href: module.routePath,
+      icon: moduleIconMap[module.icon || ""] ?? Puzzle,
+    }));
+    const dedupedLegacyItems = enabledModules.filter(
+      (item) => !moduleItems.some((moduleItem) => moduleItem.href === item.href)
+    );
+    const items = [...baseNavigation, ...moduleItems, ...dedupedLegacyItems];
     items.push({ name: "Tasks", href: "/tasks", icon: ClipboardCheck });
     return items;
-  }, [enabledModules]);
+  }, [enabledModules, modules]);
 
   // Hide sidebar entirely on public routes like login/logout
   if (

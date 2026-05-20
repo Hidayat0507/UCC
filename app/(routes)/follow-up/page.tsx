@@ -1,21 +1,15 @@
 export const dynamic = "force-dynamic";
 
-import { redirect } from "next/navigation";
-import { getMedplumForRequest } from "@/lib/server/medplum-auth";
-import { resolveClinicIdFromServerScope } from "@/lib/server/clinic";
-import { getAllFollowUps } from "@/lib/fhir/communication-service";
-import FollowUpClient from "./follow-up-client";
+import { notFound } from "next/navigation";
+
+import { loadModulePage } from "@/lib/module-registry";
 
 export default async function FollowUpPage() {
-  let medplum;
-  try {
-    medplum = await getMedplumForRequest();
-  } catch {
-    redirect("/login");
+  const ModulePage = await loadModulePage("follow-up");
+
+  if (!ModulePage) {
+    notFound();
   }
 
-  const clinicId = await resolveClinicIdFromServerScope();
-  const followUps = await getAllFollowUps(medplum, clinicId);
-
-  return <FollowUpClient initialFollowUps={followUps} />;
+  return <ModulePage />;
 }
