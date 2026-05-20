@@ -7,7 +7,11 @@ import { notFound } from "next/navigation";
 import { MODULES } from "@/lib/modules";
 import { getAdminMedplum } from "@/lib/server/medplum-admin";
 import { resolveClinicIdFromServerScope } from "@/lib/server/clinic";
-import { getEnabledModuleIdsFromOrganization, DEFAULT_BRANCH_ENABLED_MODULE_IDS } from "@/lib/module-settings";
+import {
+  getEnabledModuleIdsFromOrganization,
+  DEFAULT_BRANCH_ENABLED_MODULE_IDS,
+  KNOWN_BRANCH_MODULE_IDS,
+} from "@/lib/module-settings";
 
 export type ModulePageLoader = () => Promise<ModulePageModule>;
 
@@ -184,7 +188,7 @@ export async function listAvailableBranchModules(): Promise<ModuleDefinition[]> 
   const registeredModules = await listActiveModules();
   const registeredById = new Map(registeredModules.map((module) => [module.id, module]));
   const moduleIds = Array.from(
-    new Set([...Object.keys(MODULES), ...registeredModules.map((module) => module.id)])
+    new Set([...KNOWN_BRANCH_MODULE_IDS, ...registeredModules.map((module) => module.id)])
   );
 
   return moduleIds
