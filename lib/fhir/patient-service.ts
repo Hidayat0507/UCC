@@ -396,7 +396,7 @@ export async function savePatientToMedplum(
 
   const savedPatient = await validateAndCreate<FHIRPatient>(client, fhirPatient);
   console.log(`✅ Created FHIR Patient: ${savedPatient.id}`);
-  
+
   // Create Provenance for audit trail (non-blocking)
   if (savedPatient.id) {
     try {
