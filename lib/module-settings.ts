@@ -14,6 +14,7 @@ export const KNOWN_BRANCH_MODULE_IDS = [
   "inventory",
   "analytics",
   "follow-up",
+  "tasks",
   "poct",
   "pacs",
   "triage",

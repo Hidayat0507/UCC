@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getBillingTaskClinicId, updateBillingExceptionTaskStatus } from "@/lib/fhir/billing-task-service";
+import { isModuleEnabledForClinic } from "@/lib/module-registry";
 import { requireClinicAuth } from "@/lib/server/medplum-auth";
 import { ForbiddenError, handleRouteError } from "@/lib/server/route-helpers";
 
@@ -9,6 +10,10 @@ export async function PATCH(
 ) {
   try {
     const { medplum, clinicId } = await requireClinicAuth(req);
+    if (!(await isModuleEnabledForClinic("tasks", clinicId))) {
+      return NextResponse.json({ success: false, error: "Tasks module is disabled" }, { status: 404 });
+    }
+
     const { id } = await params;
     const body = await req.json().catch(() => null);
     const status = body?.status;
@@ -35,4 +40,3 @@ export async function PATCH(
     return handleRouteError(error, "PATCH /api/tasks/[id]");
   }
 }
-

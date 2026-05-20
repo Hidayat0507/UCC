@@ -58,6 +58,8 @@ const moduleIconMap: Record<string, LucideIcon> = {
   calendar: Calendar,
   "bar-chart": BarChart,
   "message-circle": MessageCircle,
+  ClipboardCheck,
+  "clipboard-check": ClipboardCheck,
 };
 
 export default function Sidebar({ modules = [] }: SidebarProps) {
@@ -83,9 +85,7 @@ export default function Sidebar({ modules = [] }: SidebarProps) {
       href: module.routePath,
       icon: moduleIconMap[module.icon || ""] ?? Puzzle,
     }));
-    const items = [...baseNavigation, ...moduleItems];
-    items.push({ name: "Tasks", href: "/tasks", icon: ClipboardCheck });
-    return items;
+    return [...baseNavigation, ...moduleItems];
   }, [modules]);
 
   // Hide sidebar entirely on public routes like login/logout

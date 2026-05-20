@@ -6,12 +6,17 @@ import {
   mapFollowUpsToReminderTasks,
   sortUnifiedTasks,
 } from "@/lib/fhir/task-reminder-service";
+import { isModuleEnabledForClinic } from "@/lib/module-registry";
 import { requireClinicAuth } from "@/lib/server/medplum-auth";
 import { handleRouteError } from "@/lib/server/route-helpers";
 
 export async function GET(req: NextRequest) {
   try {
     const { medplum, clinicId } = await requireClinicAuth(req);
+    if (!(await isModuleEnabledForClinic("tasks", clinicId))) {
+      return NextResponse.json({ success: false, error: "Tasks module is disabled" }, { status: 404 });
+    }
+
     const { searchParams } = new URL(req.url);
     const type = searchParams.get("type") || "all";
     const status = searchParams.get("status") || "open";
