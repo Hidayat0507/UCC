@@ -1,5 +1,13 @@
-import { TasksClient } from "./tasks-client";
+import { notFound } from "next/navigation";
 
-export default function TasksPage() {
-  return <TasksClient />;
+import { loadEnabledModulePage } from "@/lib/module-registry";
+
+export default async function TasksPage() {
+  const ModulePage = await loadEnabledModulePage("tasks");
+
+  if (!ModulePage) {
+    notFound();
+  }
+
+  return <ModulePage />;
 }

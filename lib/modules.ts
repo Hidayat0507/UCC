@@ -5,7 +5,7 @@ import { DEFAULT_BRANCH_ENABLED_MODULE_IDS } from "@/lib/module-settings";
  * Allows features like POCT, PACS, Triage to be enabled/disabled
  */
 
-export type ModuleId = 'triage' | 'poct' | 'pacs' | 'inventory' | 'appointments' | 'analytics' | 'follow-up';
+export type ModuleId = 'triage' | 'poct' | 'pacs' | 'inventory' | 'appointments' | 'analytics' | 'follow-up' | 'tasks';
 
 export interface Module {
   id: ModuleId;
@@ -73,6 +73,14 @@ export const MODULES: Record<ModuleId, Omit<Module, 'enabled'>> = {
     description: 'Patient review requests, appointment reminders, and WhatsApp follow-up work.',
     icon: 'MessageCircle',
     route: '/follow-up',
+    category: 'administrative',
+  },
+  tasks: {
+    id: 'tasks',
+    name: 'Tasks',
+    description: 'Unified queue for follow-up reminders and billing exception work.',
+    icon: 'ClipboardCheck',
+    route: '/tasks',
     category: 'administrative',
   },
 };
@@ -172,7 +180,6 @@ export function resetModulesToDefault(): void {
   
   window.dispatchEvent(new CustomEvent('modulesReset'));
 }
-
 
 
 
