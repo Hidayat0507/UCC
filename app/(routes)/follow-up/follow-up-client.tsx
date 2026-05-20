@@ -611,15 +611,15 @@ export default function FollowUpClient({ initialFollowUps }: Props) {
                 />
               </div>
 
-              {/* Schedule for (due date) */}
+              {/* Reminder date */}
               <div className="space-y-1.5">
                 <div>
                   <label className="text-sm font-medium">
-                    Schedule for{" "}
+                    Reminder date{" "}
                     <span className="font-normal text-muted-foreground">(optional)</span>
                   </label>
                   <p className="text-xs text-muted-foreground">
-                    When this follow up should be actioned or sent
+                    When this follow up should appear as due
                   </p>
                 </div>
                 <Input
