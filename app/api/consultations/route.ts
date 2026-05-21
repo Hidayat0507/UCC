@@ -4,6 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import {
   saveConsultationToMedplum,
   getConsultationFromMedplum,
@@ -17,22 +18,64 @@ import { getTriageForPatient, updateQueueStatusForPatient } from '@/lib/fhir/tri
 import { requireClinicAuth } from '@/lib/server/medplum-auth';
 import { handleRouteError } from '@/lib/server/route-helpers';
 
+const procedureItemSchema = z.object({
+  name: z.string(),
+  price: z.number().optional(),
+  quantity: z.number().optional(),
+  orderIndex: z.number().optional(),
+  category: z.string().optional(),
+  notes: z.string().optional(),
+  procedureId: z.string().optional(),
+  codingSystem: z.string().optional(),
+  codingCode: z.string().optional(),
+  codingDisplay: z.string().optional(),
+});
+
+const prescriptionItemSchema = z.object({
+  medication: z.object({ id: z.string(), name: z.string() }),
+  frequency: z.string(),
+  duration: z.string(),
+  quantity: z.number().optional(),
+  orderIndex: z.number().optional(),
+  category: z.string().optional(),
+  price: z.number().optional(),
+  strength: z.string().optional(),
+});
+
+const postConsultationSchema = z.object({
+  patientId: z.string().min(1),
+  chiefComplaint: z.string().min(1),
+  diagnosis: z.string().min(1),
+  notes: z.string().optional(),
+  progressNote: z.string().optional(),
+  procedures: z.array(procedureItemSchema).optional(),
+  prescriptions: z.array(prescriptionItemSchema).optional(),
+});
+
+const patchConsultationSchema = z.object({
+  consultationId: z.string().min(1),
+  chiefComplaint: z.string().optional(),
+  diagnosis: z.string().optional(),
+  notes: z.string().optional(),
+  progressNote: z.string().optional(),
+  procedures: z.array(procedureItemSchema).optional(),
+  prescriptions: z.array(prescriptionItemSchema).optional(),
+});
+
 /**
  * POST - Create a new consultation in Medplum
  */
 export async function POST(request: NextRequest) {
   try {
     const { medplum, clinicId } = await requireClinicAuth(request);
-    const body = await request.json();
-    const { patientId, chiefComplaint, diagnosis, procedures, notes, progressNote, prescriptions } = body;
-
-    // Validate required fields
-    if (!patientId || !chiefComplaint || !diagnosis) {
+    const parsed = postConsultationSchema.safeParse(await request.json());
+    if (!parsed.success) {
       return NextResponse.json(
-        { error: 'Missing required fields: patientId, chiefComplaint, diagnosis' },
+        { error: 'Invalid request body', details: parsed.error.flatten().fieldErrors },
         { status: 400 }
       );
     }
+    const { patientId, chiefComplaint, diagnosis, procedures, notes, progressNote, prescriptions } = parsed.data;
 
     // 🎯 Get patient data from MEDPLUM (FHIR) - Source of Truth
     const patient = await getPatientFromMedplum(patientId, clinicId ?? undefined, medplum);
@@ -145,12 +188,14 @@ export async function GET(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     const { medplum, clinicId } = await requireClinicAuth(request);
-    const body = await request.json();
-    const { consultationId, ...updates } = body;
-
-    if (!consultationId) {
-      return NextResponse.json({ error: 'Missing consultationId' }, { status: 400 });
+    const parsed = patchConsultationSchema.safeParse(await request.json());
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'Invalid request body', details: parsed.error.flatten().fieldErrors },
+        { status: 400 }
+      );
     }
+    const { consultationId, ...updates } = parsed.data;
 
     await updateConsultationInMedplum(consultationId, updates, clinicId, medplum);
 
