@@ -230,7 +230,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { email, password, next } = await req.json();
+    const { email: rawEmail, password, next } = await req.json();
+    const email = typeof rawEmail === 'string' ? rawEmail.trim().toLowerCase() : rawEmail;
     if (!email || !password) {
       return NextResponse.json(
         { code: 'AUTH_CREDENTIALS', error: 'Email and password are required.' },
@@ -242,7 +243,7 @@ export async function POST(req: NextRequest) {
     const hostContext = deriveSubdomainContext(host);
     const { codeVerifier, codeChallenge } = createPkcePair();
     const code = await startEmailPasswordLogin(
-      String(email).trim().toLowerCase(),
+      String(email),
       String(password),
       codeChallenge
     );
