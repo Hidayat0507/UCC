@@ -4,16 +4,11 @@ import * as React from "react";
 import {
   AlertCircle,
   CheckCircle2,
-  Landmark,
   Package,
-  Pill,
-  Stethoscope,
 } from "lucide-react";
 
 import { AddMedicationForm } from "@/components/inventory/add-medication-form";
 import { InventoryTable } from "@/components/inventory/inventory-table";
-import { PurchaseOrdersPanel } from "@/components/inventory/purchase-orders-panel";
-import { SuppliersPanel } from "@/components/inventory/suppliers-panel";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,29 +30,13 @@ import {
   type Medication,
   updateMedication,
 } from "@/lib/inventory";
-import {
-  convertPurchaseDocument,
-  createPurchaseOrder,
-  createSupplier,
-  deleteSupplier,
-  getPurchaseOrders,
-  getSuppliers,
-  receivePurchaseOrder,
-  type PurchaseDocumentType,
-  type PurchaseOrder,
-  type Supplier,
-  updateSupplier,
-} from "@/lib/purchase-hub";
 
-type InventoryTab = "overview" | "items" | "purchases";
+type InventoryTab = "overview" | "items";
 
 export default function InventoryPage() {
   const [activeTab, setActiveTab] = React.useState<InventoryTab>("overview");
   const [showAddDialog, setShowAddDialog] = React.useState(false);
   const [medications, setMedications] = React.useState<Medication[]>([]);
-  const [suppliers, setSuppliers] = React.useState<Supplier[]>([]);
-  const [purchaseOrders, setPurchaseOrders] = React.useState<PurchaseOrder[]>([]);
-  const [autoCreateDocType, setAutoCreateDocType] = React.useState<PurchaseDocumentType | null>(null);
   const [searchTerm, setSearchTerm] = React.useState("");
   const [overviewFilter, setOverviewFilter] = React.useState("All");
   const [loading, setLoading] = React.useState(true);
@@ -69,14 +48,8 @@ export default function InventoryPage() {
 
   async function loadInventoryWorkspace() {
     try {
-      const [medicationData, supplierData, purchaseOrderData] = await Promise.all([
-        getMedications(),
-        getSuppliers(),
-        getPurchaseOrders(),
-      ]);
+      const medicationData = await getMedications();
       setMedications(medicationData);
-      setSuppliers(supplierData);
-      setPurchaseOrders(purchaseOrderData);
       setError(null);
     } catch (err) {
       console.error(err);
@@ -90,46 +63,9 @@ export default function InventoryPage() {
     setMedications(await getMedications());
   }
 
-  async function reloadSuppliers() {
-    setSuppliers(await getSuppliers());
-  }
-
-  async function reloadPurchaseOrders() {
-    setPurchaseOrders(await getPurchaseOrders());
-  }
-
   const lowStockItems = medications.filter((medication) => medication.stock <= medication.minimumStock);
   const outOfStockItems = medications.filter((medication) => medication.stock === 0);
-  const inventoryValue = medications.reduce(
-    (sum, medication) => sum + medication.stock * (medication.unitPrice || 0),
-    0
-  );
-  const pendingOrders = purchaseOrders.filter((order) => order.status === "ordered");
   const selectedMedication = lowStockItems[0] ?? medications[0] ?? null;
-  const stockReceived = purchaseOrders
-    .filter((order) => order.status === "received")
-    .reduce(
-      (sum, order) =>
-        sum +
-        order.items.reduce(
-          (itemSum, item) =>
-            itemSum + Number(item.receivedQuantity ?? item.requestedQuantity ?? item.quantity ?? 0),
-          0
-        ),
-      0
-    );
-  const stockPending = pendingOrders.reduce(
-    (sum, order) =>
-      sum +
-      order.items.reduce(
-        (itemSum, item) =>
-          itemSum + Number(item.requestedQuantity ?? item.quantity ?? item.receivedQuantity ?? 0),
-        0
-      ),
-    0
-  );
-  const totalTrackedStock = stockReceived + stockPending;
-  const receivedPercentage = totalTrackedStock === 0 ? 0 : Math.round((stockReceived / totalTrackedStock) * 100);
   const overviewMedications = React.useMemo(() => {
     if (overviewFilter === "All") return medications;
     if (overviewFilter === "Out of stock") return medications.filter((m) => m.stock === 0);
@@ -193,144 +129,6 @@ export default function InventoryPage() {
     }
   }
 
-  async function handleCreateSupplier(data: Omit<Supplier, "id" | "createdAt" | "updatedAt">) {
-    try {
-      await createSupplier(data);
-      await reloadSuppliers();
-      toast({
-        title: "Supplier saved",
-        description: "The supplier can now be used in purchase orders.",
-      });
-    } catch (err) {
-      console.error("Failed to create supplier:", err);
-      toast({
-        title: "Error",
-        description: err instanceof Error ? err.message : "Failed to save supplier.",
-        variant: "destructive",
-      });
-      throw err;
-    }
-  }
-
-  async function handleUpdateSupplier(id: string, data: Partial<Supplier>) {
-    try {
-      await updateSupplier(id, data);
-      await reloadSuppliers();
-      toast({
-        title: "Supplier updated",
-        description: "Supplier details have been updated.",
-      });
-    } catch (err) {
-      console.error("Failed to update supplier:", err);
-      toast({
-        title: "Error",
-        description: err instanceof Error ? err.message : "Failed to update supplier.",
-        variant: "destructive",
-      });
-      throw err;
-    }
-  }
-
-  async function handleDeleteSupplier(id: string) {
-    try {
-      await deleteSupplier(id);
-      await reloadSuppliers();
-      toast({
-        title: "Supplier deleted",
-        description: "The supplier record has been removed.",
-      });
-    } catch (err) {
-      console.error(err);
-      toast({
-        title: "Error",
-        description: "Failed to delete supplier.",
-        variant: "destructive",
-      });
-    }
-  }
-
-  async function handleCreatePurchaseOrder(input: {
-    documentType: PurchaseDocumentType;
-    reference?: string;
-    supplierId: string;
-    supplierName: string;
-    paymentTerms?: string;
-    orderedAt?: string;
-    dueDate?: string;
-    notes?: string;
-    status: "draft" | "ordered" | "received" | "cancelled";
-    taxAmount?: number;
-    adjustmentAmount?: number;
-    deliveryCharge?: number;
-    paidAmount?: number;
-    items: Array<{
-      medicationId: string;
-      medicationName: string;
-      quantity?: number;
-      requestedQuantity?: number;
-      receivedQuantity?: number;
-      unitCost: number;
-      batchNumber?: string;
-      expiryDate?: string;
-    }>;
-  }) {
-    try {
-      await createPurchaseOrder(input);
-      await reloadPurchaseOrders();
-      toast({
-        title: "Purchase document created",
-        description: "The purchase document has been saved.",
-      });
-    } catch (err) {
-      console.error("Failed to create purchase order:", err);
-      toast({
-        title: "Error",
-        description: err instanceof Error ? err.message : "Failed to save purchase document.",
-        variant: "destructive",
-      });
-      throw err;
-    }
-  }
-
-  async function handleReceivePurchaseOrder(id: string) {
-    try {
-      await receivePurchaseOrder(id);
-      await Promise.all([reloadPurchaseOrders(), reloadMedications()]);
-      toast({
-        title: "Stock received",
-        description: "The purchase order is marked received and stock has been updated.",
-      });
-    } catch (err) {
-      console.error(err);
-      toast({
-        title: "Receive failed",
-        description: err instanceof Error ? err.message : "Failed to receive purchase order.",
-        variant: "destructive",
-      });
-    }
-  }
-
-  async function handleConvertPurchaseDocument(id: string, targetType: PurchaseDocumentType) {
-    try {
-      await convertPurchaseDocument({ sourceId: id, targetType });
-      await reloadPurchaseOrders();
-      toast({
-        title: "Document converted",
-        description:
-          targetType === "purchaseOrder"
-            ? "RFQ converted to purchase order."
-            : "Purchase order converted to supplier invoice.",
-      });
-    } catch (err) {
-      console.error(err);
-      toast({
-        title: "Conversion failed",
-        description: err instanceof Error ? err.message : "Unable to convert purchase document.",
-        variant: "destructive",
-      });
-    }
-  }
-
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -354,7 +152,7 @@ export default function InventoryPage() {
       <div className="space-y-2">
         <h1 className="text-3xl font-semibold tracking-tight text-slate-950">Inventory</h1>
         <p className="text-sm text-muted-foreground">
-          Existing stock management, plus supplier-led purchasing and stock receiving.
+          Manage medication stock, pricing, and reorder thresholds.
         </p>
       </div>
 
@@ -372,7 +170,6 @@ export default function InventoryPage() {
         <TabsList className="h-auto flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-2">
           <TabsTrigger value="overview" className="rounded-xl">Overview</TabsTrigger>
           <TabsTrigger value="items" className="rounded-xl">Items</TabsTrigger>
-          <TabsTrigger value="purchases" className="rounded-xl">Purchases</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
@@ -532,64 +329,7 @@ export default function InventoryPage() {
                 </CardContent>
               </Card>
 
-              <Card className="border-slate-200/80 shadow-sm">
-                <CardHeader>
-                  <CardTitle className="text-base">Create a new</CardTitle>
-                </CardHeader>
-                <CardContent className="grid gap-3">
-                  {[
-                    { label: "Quotation", docType: "rfq" as PurchaseDocumentType },
-                    { label: "Purchase order", docType: "purchaseOrder" as PurchaseDocumentType },
-                  ].map(({ label, docType }) => (
-                    <button
-                      key={docType}
-                      type="button"
-                      className="inline-flex h-9 w-full items-center justify-start rounded-xl border border-gray-300 bg-white px-4 text-sm font-medium text-gray-900 shadow-sm transition-colors hover:bg-[#1c1e4b] hover:text-white focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                      onClick={() => {
-                        setActiveTab("purchases");
-                        setAutoCreateDocType(docType);
-                      }}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </CardContent>
-              </Card>
             </div>
-          </div>
-
-          <div className="grid gap-6 xl:grid-cols-[1.35fr_0.65fr]">
-            <Card className="border-slate-200/80 shadow-sm">
-              <CardHeader>
-                <CardTitle>Purchases</CardTitle>
-              </CardHeader>
-              <CardContent className="grid gap-4 md:grid-cols-3">
-                <PurchaseSummaryCard label="Pending payment" value={`RM ${pendingOrders.reduce((sum, order) => sum + order.totalAmount, 0).toFixed(2)}`} tone="amber" />
-                <PurchaseSummaryCard label="Inventory value" value={`RM ${inventoryValue.toFixed(2)}`} tone="slate" />
-                <PurchaseSummaryCard label="Received orders" value={purchaseOrders.filter((order) => order.status === "received").length.toString()} tone="emerald" />
-              </CardContent>
-            </Card>
-
-            <Card className="border-slate-200/80 shadow-sm">
-              <CardHeader>
-                <CardTitle>Inventory</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div>
-                  <p className="text-2xl font-semibold tracking-tight text-slate-950">{stockReceived} stock received</p>
-                  <p className="text-sm text-muted-foreground">
-                    out of {totalTrackedStock} tracked units across purchase orders
-                  </p>
-                </div>
-                <div className="h-2 rounded-full bg-slate-100">
-                  <div
-                    className="h-2 rounded-full bg-emerald-400 transition-all"
-                    style={{ width: `${receivedPercentage}%` }}
-                  />
-                </div>
-                <p className="text-right text-xs text-muted-foreground">{receivedPercentage}%</p>
-              </CardContent>
-            </Card>
           </div>
         </TabsContent>
 
@@ -599,7 +339,7 @@ export default function InventoryPage() {
               <div>
                 <CardTitle>Medication inventory</CardTitle>
                 <p className="text-sm text-muted-foreground">
-                  Continue managing stock directly while the purchase hub feeds new stock into this table.
+                  Continue managing stock directly from this table.
                 </p>
               </div>
               <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
@@ -610,7 +350,7 @@ export default function InventoryPage() {
                   <DialogHeader>
                     <DialogTitle>Add new medication</DialogTitle>
                     <DialogDescription>
-                      Create an inventory item that can also be referenced in purchase orders.
+                      Create a medication inventory item for stock tracking.
                     </DialogDescription>
                   </DialogHeader>
                   <AddMedicationForm onSubmit={handleAddMedication} onCancel={() => setShowAddDialog(false)} />
@@ -629,24 +369,6 @@ export default function InventoryPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="purchases" className="space-y-6">
-          <PurchaseOrdersPanel
-            medications={medications}
-            purchaseOrders={purchaseOrders}
-            suppliers={suppliers}
-            autoCreate={autoCreateDocType}
-            onAutoCreateConsumed={() => setAutoCreateDocType(null)}
-            onCreate={handleCreatePurchaseOrder}
-            onReceive={handleReceivePurchaseOrder}
-            onConvert={handleConvertPurchaseDocument}
-          />
-          <SuppliersPanel
-            suppliers={suppliers}
-            onCreate={handleCreateSupplier}
-            onUpdate={handleUpdateSupplier}
-            onDelete={handleDeleteSupplier}
-          />
-        </TabsContent>
       </Tabs>
     </div>
   );
@@ -671,29 +393,6 @@ function MetricCard({
       </div>
       <p className="mt-3 text-2xl font-semibold tracking-tight text-slate-950">{value}</p>
       <p className="mt-1 text-xs text-slate-500">{hint}</p>
-    </div>
-  );
-}
-
-function PurchaseSummaryCard({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone: "amber" | "slate" | "emerald";
-}) {
-  const toneClasses = {
-    amber: "border-amber-200 bg-amber-50/70 text-amber-950",
-    slate: "border-slate-200 bg-slate-50/70 text-slate-950",
-    emerald: "border-emerald-200 bg-emerald-50/70 text-emerald-950",
-  } as const;
-
-  return (
-    <div className={`rounded-2xl border p-4 ${toneClasses[tone]}`}>
-      <p className="text-sm">{label}</p>
-      <p className="mt-3 text-2xl font-semibold tracking-tight">{value}</p>
     </div>
   );
 }

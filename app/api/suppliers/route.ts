@@ -2,11 +2,22 @@ import { NextRequest, NextResponse } from 'next/server';
 import type { Organization } from '@medplum/fhirtypes';
 import { requireClinicAuth } from '@/lib/server/medplum-auth';
 import { handleRouteError } from '@/lib/server/route-helpers';
+import {
+  INVENTORY_PURCHASING_DISABLED_ERROR,
+  INVENTORY_PURCHASING_ENABLED,
+} from '@/lib/purchasing';
 
 const SUPPLIER_SYSTEM = 'urn:iatrum:organization-type';
 const SUPPLIER_CODE = 'supplier';
 const CLINIC_SYSTEM = 'clinic';
 const EXT_BASE = 'urn:iatrum:supplier';
+
+function disabledResponse() {
+  return NextResponse.json(
+    { success: false, error: INVENTORY_PURCHASING_DISABLED_ERROR },
+    { status: 403 }
+  );
+}
 
 function toOrg(data: Record<string, any>, clinicId: string): Organization {
   const telecom: Organization['telecom'] = [];
@@ -66,6 +77,10 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    if (!INVENTORY_PURCHASING_ENABLED) {
+      await requireClinicAuth(req);
+      return disabledResponse();
+    }
     const { medplum, clinicId } = await requireClinicAuth(req);
     const data = await req.json();
     if (!data?.name?.trim()) {
@@ -80,6 +95,10 @@ export async function POST(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   try {
+    if (!INVENTORY_PURCHASING_ENABLED) {
+      await requireClinicAuth(req);
+      return disabledResponse();
+    }
     const { medplum, clinicId } = await requireClinicAuth(req);
     const { id, ...data } = await req.json();
     if (!id) {
@@ -99,6 +118,10 @@ export async function PATCH(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
+    if (!INVENTORY_PURCHASING_ENABLED) {
+      await requireClinicAuth(req);
+      return disabledResponse();
+    }
     const { medplum, clinicId } = await requireClinicAuth(req);
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
