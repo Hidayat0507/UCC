@@ -67,11 +67,12 @@ function formatLabel(value: string) {
 
 export default function QueueTable({ patients, onQueueUpdate }: QueueTableProps) {
   const router = useRouter();
-  const [loadingItemId, setLoadingItemId] = useState<string | null>(null);
+  const [loadingSet, setLoadingSet] = useState<Set<string>>(new Set());
   const [pendingRemovePatient, setPendingRemovePatient] = useState<Patient | null>(null);
 
   const handleAddToQueue = async (patient: Patient) => {
-    setLoadingItemId(patient.id);
+    if (loadingSet.has(patient.id)) return;
+    setLoadingSet(prev => new Set(prev).add(patient.id));
     try {
       const res = await fetch('/api/queue', {
         method: 'POST',
@@ -97,12 +98,13 @@ export default function QueueTable({ patients, onQueueUpdate }: QueueTableProps)
         variant: "destructive"
       });
     } finally {
-      setLoadingItemId(null);
+      setLoadingSet(prev => { const next = new Set(prev); next.delete(patient.id); return next; });
     }
   };
 
   const handleStartConsultation = async (patient: Patient) => {
-    setLoadingItemId(patient.id);
+    if (loadingSet.has(patient.id)) return;
+    setLoadingSet(prev => new Set(prev).add(patient.id));
     try {
       const res = await fetch('/api/queue', {
         method: 'PATCH',
@@ -131,12 +133,13 @@ export default function QueueTable({ patients, onQueueUpdate }: QueueTableProps)
         variant: "destructive"
       });
     } finally {
-      setLoadingItemId(null);
+      setLoadingSet(prev => { const next = new Set(prev); next.delete(patient.id); return next; });
     }
   };
 
   const handleCompleteConsultation = async (patient: Patient) => {
-    setLoadingItemId(patient.id);
+    if (loadingSet.has(patient.id)) return;
+    setLoadingSet(prev => new Set(prev).add(patient.id));
     try {
       const res = await fetch('/api/queue', {
         method: 'PATCH',
@@ -162,12 +165,13 @@ export default function QueueTable({ patients, onQueueUpdate }: QueueTableProps)
         variant: "destructive"
       });
     } finally {
-      setLoadingItemId(null);
+      setLoadingSet(prev => { const next = new Set(prev); next.delete(patient.id); return next; });
     }
   };
 
   const handleRemoveFromQueue = async (patient: Patient) => {
-    setLoadingItemId(patient.id);
+    if (loadingSet.has(patient.id)) return;
+    setLoadingSet(prev => new Set(prev).add(patient.id));
     try {
       const res = await fetch('/api/queue', {
         method: 'DELETE',
@@ -193,7 +197,7 @@ export default function QueueTable({ patients, onQueueUpdate }: QueueTableProps)
         variant: "destructive"
       });
     } finally {
-      setLoadingItemId(null);
+      setLoadingSet(prev => { const next = new Set(prev); next.delete(patient.id); return next; });
     }
   };
 
@@ -325,8 +329,8 @@ export default function QueueTable({ patients, onQueueUpdate }: QueueTableProps)
               <TableCell className="text-right">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" className="h-8 w-8 p-0" disabled={loadingItemId === patient.id}>
-                      {loadingItemId === patient.id
+                    <Button variant="ghost" className="h-8 w-8 p-0" disabled={loadingSet.has(patient.id)}>
+                      {loadingSet.has(patient.id)
                         ? <Loader2 className="h-4 w-4 animate-spin" />
                         : <MoreHorizontal className="h-4 w-4" />}
                     </Button>
@@ -346,7 +350,7 @@ export default function QueueTable({ patients, onQueueUpdate }: QueueTableProps)
                     )}
                     {patient.queueStatus === 'waiting' && (
                       <DropdownMenuItem
-                        disabled={loadingItemId === patient.id}
+                        disabled={loadingSet.has(patient.id)}
                         onClick={() => handleStartConsultation(patient)}
                       >
                         Start Consultation
@@ -354,14 +358,14 @@ export default function QueueTable({ patients, onQueueUpdate }: QueueTableProps)
                     )}
                     {(patient.queueStatus === 'waiting' || patient.queueStatus === 'in_consultation' || patient.queueStatus === 'meds_and_bills') && (
                       <DropdownMenuItem
-                        disabled={loadingItemId === patient.id}
+                        disabled={loadingSet.has(patient.id)}
                         onClick={() => handleCompleteConsultation(patient)}
                       >
                         Mark as Complete
                       </DropdownMenuItem>
                     )}
                     <DropdownMenuItem
-                      disabled={loadingItemId === patient.id}
+                      disabled={loadingSet.has(patient.id)}
                       className="text-destructive focus:text-destructive"
                       onClick={() => setPendingRemovePatient(patient)}
                     >
