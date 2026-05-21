@@ -6,11 +6,22 @@ import {
   getInventoryMedicationByIdFromMedplum,
   updateInventoryMedicationInMedplum,
 } from '@/lib/fhir/inventory-service';
+import {
+  INVENTORY_PURCHASING_DISABLED_ERROR,
+  INVENTORY_PURCHASING_ENABLED,
+} from '@/lib/purchasing';
 
 const CODE_SYSTEM = 'urn:iatrum:resource-type';
 const CODE_VALUE = 'purchase-order';
 const CLINIC_SYSTEM = 'clinic';
 const DATA_EXT = 'urn:iatrum:purchase-order/data';
+
+function disabledResponse() {
+  return NextResponse.json(
+    { success: false, error: INVENTORY_PURCHASING_DISABLED_ERROR },
+    { status: 403 }
+  );
+}
 
 function normalizeItems(items: any[]): any[] {
   return (items ?? []).map((item) => {
@@ -99,6 +110,10 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    if (!INVENTORY_PURCHASING_ENABLED) {
+      await requireClinicAuth(req);
+      return disabledResponse();
+    }
     const { medplum, clinicId } = await requireClinicAuth(req);
     const input = await req.json();
 
@@ -137,6 +152,10 @@ export async function POST(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   try {
+    if (!INVENTORY_PURCHASING_ENABLED) {
+      await requireClinicAuth(req);
+      return disabledResponse();
+    }
     const { medplum, clinicId } = await requireClinicAuth(req);
     const body = await req.json();
     const { id, action, ...rest } = body;
@@ -250,6 +269,10 @@ export async function PATCH(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
+    if (!INVENTORY_PURCHASING_ENABLED) {
+      await requireClinicAuth(req);
+      return disabledResponse();
+    }
     const { medplum, clinicId } = await requireClinicAuth(req);
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
