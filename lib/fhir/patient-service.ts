@@ -65,6 +65,8 @@ export interface SavedPatient extends PatientData {
 
 const CLINIC_IDENTIFIER_SYSTEM = 'clinic';
 const DUPLICATE_NRIC_CODE = 'DUPLICATE_NRIC';
+// Must match TRIAGE_ENCOUNTER_EXTENSION_URL in triage-service.ts (cannot import — circular dep)
+const TRIAGE_ENCOUNTER_EXTENSION_URL = 'https://ucc.emr/triage-encounter';
 
 type DuplicatePatientMatch = {
   id: string;
@@ -702,7 +704,10 @@ export async function getAllPatientsFromMedplum(
         ...(clinicId ? { identifier: `${CLINIC_IDENTIFIER_SYSTEM}|${clinicId}` } : {}),
       }),
       client.searchResources('Encounter', {
-        status: 'finished',
+        // Include all active statuses so newly checked-in patients show correct
+        // queueStatus and lastVisit (arrived/triaged/in-progress would be missed
+        // if we only fetched 'finished').
+        status: 'arrived,triaged,in-progress,finished',
         _sort: '-date',
         _count: '500',
         ...(clinicId ? {
@@ -712,15 +717,32 @@ export async function getAllPatientsFromMedplum(
       }),
     ]);
 
-    // Build patientId → most recent visit date (encounters already sorted by -date)
+    // Encounters are sorted newest-first; first entry per patient wins.
     const lastVisitByPatientId = new Map<string, Date>();
+    const queueInfoByPatientId = new Map<string, { queueStatus: QueueStatus | null; queueAddedAt: string | null }>();
+
     for (const encounter of encounters) {
       const ref = (encounter as any).subject?.reference as string | undefined;
       const visitDate = (encounter as any).period?.start as string | undefined;
-      if (!ref || !visitDate) continue;
+      if (!ref) continue;
       const pid = ref.startsWith('Patient/') ? ref.slice(8) : ref;
-      if (!lastVisitByPatientId.has(pid)) {
+
+      if (visitDate && !lastVisitByPatientId.has(pid)) {
         lastVisitByPatientId.set(pid, new Date(visitDate));
+      }
+
+      // Read queueStatus from the triage encounter extension (not the Patient extension,
+      // which is never updated during check-in via triage-service.ts).
+      if (!queueInfoByPatientId.has(pid)) {
+        const triageExt = (encounter as any).extension?.find(
+          (ext: any) => ext.url === TRIAGE_ENCOUNTER_EXTENSION_URL
+        );
+        if (triageExt?.extension) {
+          const getSub = (key: string) => triageExt.extension.find((e: any) => e.url === key);
+          const queueStatus = (getSub('queueStatus')?.valueString as QueueStatus) ?? null;
+          const queueAddedAt = getSub('queueAddedAt')?.valueDateTime ?? visitDate ?? null;
+          queueInfoByPatientId.set(pid, { queueStatus, queueAddedAt });
+        }
       }
     }
 
@@ -730,6 +752,11 @@ export async function getAllPatientsFromMedplum(
         const data = fhirPatientToPatientData(patient);
         const lv = lastVisitByPatientId.get(data.id);
         if (lv) data.lastVisit = lv;
+        const queueInfo = queueInfoByPatientId.get(data.id);
+        if (queueInfo) {
+          data.queueStatus = queueInfo.queueStatus;
+          data.queueAddedAt = queueInfo.queueAddedAt;
+        }
         return data;
       })
       .filter((patient) => patient.active !== false);
