@@ -15,6 +15,16 @@ import {
   Trash2,
   UserRound,
 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -176,6 +186,9 @@ export default function FollowUpClient({ initialFollowUps }: Props) {
   const [formError, setFormError] = useState<string | null>(null);
   const [actionId, setActionId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  const [confirmMarkSent, setConfirmMarkSent] = useState<FollowUp | null>(null);
+  const [confirmDismiss, setConfirmDismiss] = useState<FollowUp | null>(null);
 
   // Patient search state
   const [patientResults, setPatientResults] = useState<PatientResult[]>([]);
@@ -368,6 +381,7 @@ export default function FollowUpClient({ initialFollowUps }: Props) {
     form.message.length > MAX_MESSAGE_LENGTH * 0.9 ? "text-amber-600" : "text-muted-foreground";
 
   return (
+    <>
     <div className="space-y-6 pb-10">
       {/* Header */}
       <div className="space-y-1">
@@ -655,7 +669,7 @@ export default function FollowUpClient({ initialFollowUps }: Props) {
                                     disabled={actionId === followUp.id}
                                     title="Confirm this WhatsApp was sent"
                                     aria-label={`Mark follow up for ${followUp.patientName} as sent`}
-                                    onClick={() => handleMarkSent(followUp.id, followUp.patientName)}
+                                    onClick={() => setConfirmMarkSent(followUp)}
                                   >
                                     <SendHorizontal className="mr-1.5 h-3.5 w-3.5" />
                                     Mark sent
@@ -688,7 +702,7 @@ export default function FollowUpClient({ initialFollowUps }: Props) {
                                   disabled={actionId === followUp.id}
                                   title="Remove this follow up"
                                   aria-label={`Dismiss follow up for ${followUp.patientName}`}
-                                  onClick={() => handleDismiss(followUp.id, followUp.patientName)}
+                                  onClick={() => setConfirmDismiss(followUp)}
                                 >
                                   <Trash2 className="h-3.5 w-3.5" />
                                 </Button>
@@ -706,5 +720,51 @@ export default function FollowUpClient({ initialFollowUps }: Props) {
         ))}
       </Tabs>
     </div>
+
+    <AlertDialog open={confirmMarkSent !== null} onOpenChange={(open) => { if (!open) setConfirmMarkSent(null); }}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Mark as sent?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This will mark the follow up for {confirmMarkSent?.patientName} as sent. This action cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={() => setConfirmMarkSent(null)}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={() => {
+              if (confirmMarkSent) handleMarkSent(confirmMarkSent.id, confirmMarkSent.patientName);
+              setConfirmMarkSent(null);
+            }}
+          >
+            Mark as sent
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
+    <AlertDialog open={confirmDismiss !== null} onOpenChange={(open) => { if (!open) setConfirmDismiss(null); }}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Dismiss follow up?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This will permanently delete the follow up for {confirmDismiss?.patientName}. This action cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={() => setConfirmDismiss(null)}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            onClick={() => {
+              if (confirmDismiss) handleDismiss(confirmDismiss.id, confirmDismiss.patientName);
+              setConfirmDismiss(null);
+            }}
+          >
+            Dismiss
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }
