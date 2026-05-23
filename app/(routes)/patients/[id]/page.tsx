@@ -165,7 +165,7 @@ export default async function PatientProfilePage({ params }: PatientProfilePageP
           {/* Stat row */}
           <div className="mt-4 border-t border-border pt-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
             <div>
-              <p className="text-xs text-muted-foreground">Last visit</p>
+              <p className="text-xs text-muted-foreground">Last completed visit</p>
               <p className="mt-0.5 font-medium">
                 {patient.lastVisit ? formatDisplayDate(patient.lastVisit) : "No visits yet"}
               </p>
