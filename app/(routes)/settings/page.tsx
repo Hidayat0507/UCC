@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ClipboardList, CreditCard, FileText, IdCard, MessageCircle, Stethoscope, UserRound } from 'lucide-react';
+import { BookOpen, ClipboardList, CreditCard, FileText, IdCard, MessageCircle, Stethoscope, UserRound } from 'lucide-react';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,6 +14,7 @@ import { fetchOrganizationDetails, saveOrganizationDetails } from '@/lib/org';
 import { InsurerManager } from '@/components/settings/insurer-manager';
 import { ClinicalCatalogManager } from '@/components/catalogs/clinical-catalog-manager';
 import { FollowUpSettings } from '@/components/settings/follow-up-settings';
+import { DocumentTemplateEditor } from '@/components/settings/document-template-editor';
 
 interface UserSettings {
   fullName: string;
@@ -25,6 +26,14 @@ function WorkflowIcon({ children }: { children: React.ReactNode }) {
     <div className="flex h-9 w-9 items-center justify-center rounded-md border bg-muted/40 text-muted-foreground">
       {children}
     </div>
+  );
+}
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-xs font-medium text-muted-foreground uppercase tracking-widest mb-3">
+      {children}
+    </p>
   );
 }
 
@@ -99,7 +108,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Settings</h1>
@@ -108,115 +117,147 @@ export default function SettingsPage() {
         <div className="text-sm text-muted-foreground">Signed in as: {profileEmail}</div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card>
-          <CardHeader className="flex flex-row items-start gap-3 space-y-0">
-            <WorkflowIcon><IdCard className="h-4 w-4" /></WorkflowIcon>
-            <div>
-              <CardTitle>Registration</CardTitle>
-              <CardDescription>Clinic identity shown on patient documents and registration output.</CardDescription>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-3">
-              <div className="space-y-2">
-                <Label htmlFor="org-name">Clinic name</Label>
-                <Input id="org-name" value={orgName} onChange={(e) => setOrgName(e.target.value)} />
+      {/* Section 1 — Clinic Identity */}
+      <div>
+        <SectionLabel>Clinic Identity</SectionLabel>
+        <div className="grid gap-4 lg:grid-cols-3">
+          <Card>
+            <CardHeader className="flex flex-row items-start gap-3 space-y-0">
+              <WorkflowIcon><IdCard className="h-4 w-4" /></WorkflowIcon>
+              <div>
+                <CardTitle>Registration</CardTitle>
+                <CardDescription>Clinic identity shown on patient documents and registration output.</CardDescription>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="org-phone">Phone</Label>
-                <Input id="org-phone" value={orgPhone} onChange={(e) => setOrgPhone(e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="org-address">Address</Label>
-                <Input id="org-address" value={orgAddress} onChange={(e) => setOrgAddress(e.target.value)} />
-              </div>
-            </div>
-            <Button
-              type="button"
-              className="w-full"
-              onClick={async () => {
-                try {
-                  await saveOrganizationDetails({
-                    name: orgName,
-                    address: orgAddress,
-                    phone: orgPhone,
-                    logoUrl: logoUrl || null,
-                  });
-                  toast({ title: 'Organization saved', description: 'Details will appear on documents.' });
-                } catch (e: any) {
-                  toast({ title: 'Save failed', description: e.message || 'Could not save', variant: 'destructive' });
-                }
-              }}
-            >
-              Save Registration Details
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-start gap-3 space-y-0">
-            <WorkflowIcon><ClipboardList className="h-4 w-4" /></WorkflowIcon>
-            <div>
-              <CardTitle>Check In</CardTitle>
-              <CardDescription>Panel insurers available during patient arrival and triage.</CardDescription>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <InsurerManager />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-start gap-3 space-y-0">
-            <WorkflowIcon><CreditCard className="h-4 w-4" /></WorkflowIcon>
-            <div>
-              <CardTitle>Invoice</CardTitle>
-              <CardDescription>Branding used on bills, MCs, referral letters, and receipts.</CardDescription>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {logoUrl ? (
-              <div className="flex items-center gap-4">
-                <div className="relative h-16 w-16 overflow-hidden rounded border bg-white">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={logoUrl} alt="Logo" className="h-full w-full object-contain" />
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="org-name">Clinic name</Label>
+                  <Input id="org-name" value={orgName} onChange={(e) => setOrgName(e.target.value)} />
                 </div>
-                <Button asChild variant="outline" disabled={isUploading}>
-                  <label>
-                    Change Logo
-                    <input type="file" accept="image/*" className="hidden" onChange={handleLogoChange} />
-                  </label>
-                </Button>
+                <div className="space-y-2">
+                  <Label htmlFor="org-phone">Phone</Label>
+                  <Input id="org-phone" value={orgPhone} onChange={(e) => setOrgPhone(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="org-address">Address</Label>
+                  <Input id="org-address" value={orgAddress} onChange={(e) => setOrgAddress(e.target.value)} />
+                </div>
               </div>
-            ) : (
-              <div className="space-y-3">
-                <Button asChild disabled={isUploading}>
-                  <label>
-                    Upload Logo
-                    <input type="file" accept="image/*" className="hidden" onChange={handleLogoChange} />
-                  </label>
-                </Button>
-                <p className="text-sm text-muted-foreground">PNG or JPG recommended, up to 1MB.</p>
+              <Button
+                type="button"
+                className="w-full"
+                onClick={async () => {
+                  try {
+                    await saveOrganizationDetails({
+                      name: orgName,
+                      address: orgAddress,
+                      phone: orgPhone,
+                      logoUrl: logoUrl || null,
+                    });
+                    toast({ title: 'Organization saved', description: 'Details will appear on documents.' });
+                  } catch (e: any) {
+                    toast({ title: 'Save failed', description: e.message || 'Could not save', variant: 'destructive' });
+                  }
+                }}
+              >
+                Save Registration Details
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-start gap-3 space-y-0">
+              <WorkflowIcon><ClipboardList className="h-4 w-4" /></WorkflowIcon>
+              <div>
+                <CardTitle>Check In</CardTitle>
+                <CardDescription>Panel insurers available during patient arrival and triage.</CardDescription>
               </div>
-            )}
-          </CardContent>
-        </Card>
+            </CardHeader>
+            <CardContent>
+              <InsurerManager />
+            </CardContent>
+          </Card>
 
-        <Card className="lg:col-span-2">
-          <CardHeader className="flex flex-row items-start gap-3 space-y-0">
-            <WorkflowIcon><Stethoscope className="h-4 w-4" /></WorkflowIcon>
-            <div>
-              <CardTitle>Service Catalogs</CardTitle>
-              <CardDescription>Orderable catalogs used by the treatment composer, labs, imaging, and generated letters.</CardDescription>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <ClinicalCatalogManager />
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-start gap-3 space-y-0">
+              <WorkflowIcon><CreditCard className="h-4 w-4" /></WorkflowIcon>
+              <div>
+                <CardTitle>Invoice</CardTitle>
+                <CardDescription>Branding used on bills, MCs, referral letters, and receipts.</CardDescription>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {logoUrl ? (
+                <div className="flex items-center gap-4">
+                  <div className="relative h-16 w-16 overflow-hidden rounded border bg-white">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={logoUrl} alt="Logo" className="h-full w-full object-contain" />
+                  </div>
+                  <Button asChild variant="outline" disabled={isUploading}>
+                    <label>
+                      Change Logo
+                      <input type="file" accept="image/*" className="hidden" onChange={handleLogoChange} />
+                    </label>
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <Button asChild disabled={isUploading}>
+                    <label>
+                      Upload Logo
+                      <input type="file" accept="image/*" className="hidden" onChange={handleLogoChange} />
+                    </label>
+                  </Button>
+                  <p className="text-sm text-muted-foreground">PNG or JPG recommended, up to 1MB.</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
 
-        <Card className="lg:col-span-2">
+      {/* Section 2 — Catalog & Workflows */}
+      <div>
+        <SectionLabel>Catalog &amp; Workflows</SectionLabel>
+        <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
+          <Card>
+            <CardHeader className="flex flex-row items-start gap-3 space-y-0">
+              <WorkflowIcon><Stethoscope className="h-4 w-4" /></WorkflowIcon>
+              <div>
+                <CardTitle>Service Catalogs</CardTitle>
+                <CardDescription>Orderable catalogs used by the treatment composer, labs, imaging, and generated letters.</CardDescription>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <ClinicalCatalogManager />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-start gap-3 space-y-0">
+              <WorkflowIcon><FileText className="h-4 w-4" /></WorkflowIcon>
+              <div>
+                <CardTitle>Consultation</CardTitle>
+                <CardDescription>Text shortcuts used while writing clinical notes.</CardDescription>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="rounded-md border border-dashed p-6">
+                <p className="text-sm font-medium">Smart Text is disabled for now.</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Built-in note shortcuts can be re-enabled after the storage path is finalized.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      {/* Section 3 — Communication */}
+      <div>
+        <SectionLabel>Communication</SectionLabel>
+        <Card>
           <CardHeader className="flex flex-row items-start gap-3 space-y-0">
             <WorkflowIcon><MessageCircle className="h-4 w-4" /></WorkflowIcon>
             <div>
@@ -228,26 +269,29 @@ export default function SettingsPage() {
             <FollowUpSettings />
           </CardContent>
         </Card>
+      </div>
 
+      {/* Section 4 — Documents */}
+      <div>
+        <SectionLabel>Documents</SectionLabel>
         <Card>
           <CardHeader className="flex flex-row items-start gap-3 space-y-0">
-            <WorkflowIcon><FileText className="h-4 w-4" /></WorkflowIcon>
+            <WorkflowIcon><BookOpen className="h-4 w-4" /></WorkflowIcon>
             <div>
-              <CardTitle>Consultation</CardTitle>
-              <CardDescription>Text shortcuts used while writing clinical notes.</CardDescription>
+              <CardTitle>Document Templates</CardTitle>
+              <CardDescription>Customise the HTML layout for Medical Certificates and Referral Letters.</CardDescription>
             </div>
           </CardHeader>
           <CardContent>
-            <div className="rounded-md border border-dashed p-6">
-              <p className="text-sm font-medium">Smart Text is disabled for now.</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Built-in note shortcuts can be re-enabled after the storage path is finalized.
-              </p>
-            </div>
+            <DocumentTemplateEditor />
           </CardContent>
         </Card>
+      </div>
 
-        <Card>
+      {/* Section 5 — Profile */}
+      <div>
+        <SectionLabel>Profile</SectionLabel>
+        <Card className="max-w-[400px]">
           <CardHeader className="flex flex-row items-start gap-3 space-y-0">
             <WorkflowIcon><UserRound className="h-4 w-4" /></WorkflowIcon>
             <div>
@@ -291,7 +335,6 @@ export default function SettingsPage() {
             </form>
           </CardContent>
         </Card>
-
       </div>
     </div>
   );
