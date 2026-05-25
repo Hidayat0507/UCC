@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ClipboardList, CreditCard, FileText, IdCard, MessageCircle, Stethoscope, UserRound } from 'lucide-react';
+import { BookOpen, ClipboardList, CreditCard, FileText, IdCard, MessageCircle, Stethoscope, UserRound } from 'lucide-react';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,6 +14,7 @@ import { fetchOrganizationDetails, saveOrganizationDetails } from '@/lib/org';
 import { InsurerManager } from '@/components/settings/insurer-manager';
 import { ClinicalCatalogManager } from '@/components/catalogs/clinical-catalog-manager';
 import { FollowUpSettings } from '@/components/settings/follow-up-settings';
+import { DocumentTemplateEditor } from '@/components/settings/document-template-editor';
 
 interface UserSettings {
   fullName: string;
@@ -244,6 +245,19 @@ export default function SettingsPage() {
                 Built-in note shortcuts can be re-enabled after the storage path is finalized.
               </p>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card className="lg:col-span-3">
+          <CardHeader className="flex flex-row items-start gap-3 space-y-0">
+            <WorkflowIcon><BookOpen className="h-4 w-4" /></WorkflowIcon>
+            <div>
+              <CardTitle>Document Templates</CardTitle>
+              <CardDescription>Customise the HTML layout for Medical Certificates and Referral Letters.</CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <DocumentTemplateEditor />
           </CardContent>
         </Card>
 

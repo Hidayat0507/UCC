@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
-import { PDFViewer, pdf } from "@react-pdf/renderer";
+// import { PDFViewer, pdf } from "@react-pdf/renderer"; // replaced with HTML template approach
 import { Download, FileText, Loader2, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,9 +26,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
 import { getPatientReferrals, deleteReferral, type Referral } from "@/lib/fhir/referral-client";
-import ReferralDocument from "@/components/referrals/referral-document";
-import { McDocument } from "@/components/mc/mc-document";
+// import ReferralDocument from "@/components/referrals/referral-document"; // replaced with HTML template approach
+// import { McDocument } from "@/components/mc/mc-document"; // kept as fallback
 import { fetchOrganizationDetails, type OrganizationDetails } from "@/lib/org";
+import { DEFAULT_MC_TEMPLATE, DEFAULT_REFERRAL_TEMPLATE } from "@/lib/document-templates";
 import type { ProcedureRecord } from "@/lib/models";
 
 function formatDateLabel(value: Date | string | null | undefined): string | null {
@@ -44,6 +45,20 @@ function calcMcEndDate(startDate: string | null | undefined, numDays: number): s
   if (Number.isNaN(date.getTime())) return formatDateLabel(new Date()) || "";
   date.setDate(date.getDate() + numDays - 1);
   return formatDateLabel(date) || "";
+}
+
+function calcAge(dob: string | Date | null | undefined): string {
+  if (!dob) return "";
+  const date = dob instanceof Date ? dob : new Date(String(dob));
+  if (Number.isNaN(date.getTime())) return "";
+  const now = new Date();
+  let age = now.getFullYear() - date.getFullYear();
+  if (
+    now.getMonth() < date.getMonth() ||
+    (now.getMonth() === date.getMonth() && now.getDate() < date.getDate())
+  )
+    age--;
+  return String(age);
 }
 
 interface ReferralMCSectionProps {
@@ -92,27 +107,35 @@ function signedDocumentKind(procedure: ProcedureRecord): "mc" | "referral" | nul
 
 function getSignedDocuments(consultations: ReferralMCSectionProps["consultations"] = []): SignedDocument[] {
   return consultations.flatMap((consultation) =>
-    (consultation.procedures || [])
-      .flatMap((procedure, index): SignedDocument[] => {
-        if (procedure.category !== "documents") return [];
+    (consultation.procedures || []).flatMap((procedure, index): SignedDocument[] => {
+      if (procedure.category !== "documents") return [];
 
-        const details = parseSignedDocumentNote(procedure.notes);
-        const kind = signedDocumentKind(procedure);
-        if (!kind) return [];
+      const details = parseSignedDocumentNote(procedure.notes);
+      const kind = signedDocumentKind(procedure);
+      if (!kind) return [];
 
-        return [{
+      return [
+        {
           id: `${consultation.id || "consultation"}-${procedure.procedureId || procedure.name}-${index}`,
           kind,
-          title: details.title || procedure.name || (kind === "mc" ? "Medical Certificate (MC)" : "Referral Letter"),
+          title:
+            details.title ||
+            procedure.name ||
+            (kind === "mc" ? "Medical Certificate (MC)" : "Referral Letter"),
           date: consultation.date,
           status: details.status || undefined,
           details,
           consultationId: consultation.id || "",
           procedureIndex: index,
           procedure,
-        }];
-      })
+        },
+      ];
+    })
   );
+}
+
+function fillPlaceholders(html: string, data: Record<string, string>): string {
+  return Object.entries(data).reduce((acc, [k, v]) => acc.replaceAll(k, v), html);
 }
 
 export default function ReferralMCSection({ patient, consultations = [] }: ReferralMCSectionProps) {
@@ -128,6 +151,8 @@ export default function ReferralMCSection({ patient, consultations = [] }: Refer
   const [savingSigned, setSavingSigned] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [organization, setOrganization] = useState<OrganizationDetails | null>(null);
+  const [viewingHtml, setViewingHtml] = useState<string | null>(null);
+  const [viewingHtmlLoading, setViewingHtmlLoading] = useState(false);
   const signedDocuments = getSignedDocuments(consultations);
 
   const loadReferrals = useCallback(() => {
@@ -171,7 +196,11 @@ export default function ReferralMCSection({ patient, consultations = [] }: Refer
       setReferrals((prev) => prev.filter((r) => r.id !== referralId));
       toast({ title: "Document deleted" });
     } catch (err: any) {
-      toast({ title: "Error", description: err?.message || "Failed to delete document.", variant: "destructive" });
+      toast({
+        title: "Error",
+        description: err?.message || "Failed to delete document.",
+        variant: "destructive",
+      });
     } finally {
       setDeleting(null);
     }
@@ -199,10 +228,7 @@ export default function ReferralMCSection({ patient, consultations = [] }: Refer
     const response = await fetch("/api/consultations", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        consultationId: doc.consultationId,
-        procedures,
-      }),
+      body: JSON.stringify({ consultationId: doc.consultationId, procedures }),
     });
 
     if (!response.ok) {
@@ -295,42 +321,138 @@ export default function ReferralMCSection({ patient, consultations = [] }: Refer
     }
   }
 
-  function renderSignedDocument(doc: SignedDocument) {
-    const issuedDate = formatDateLabel(doc.date) || formatDateLabel(new Date()) || "";
-    if (doc.kind === "mc") {
-      const numDays = Number(doc.details.mcDays || 1);
-      const startDate = formatDateLabel(doc.details.mcStartDate) || issuedDate;
-      return (
-        <McDocument
-          patient={patient}
-          issuedDate={issuedDate}
-          startDate={startDate}
-          endDate={calcMcEndDate(doc.details.mcStartDate, numDays)}
-          numDays={numDays}
-          doctorName={doc.details.mcDoctorName || ""}
-          organization={organization}
-        />
-      );
+  async function buildDocumentHtml(doc: SignedDocument): Promise<string> {
+    const res = await fetch(`/api/document-templates?type=${doc.kind}`);
+    let html: string;
+    if (res.ok) {
+      html = (await res.json()).html;
+    } else {
+      const body = await res.json().catch(() => null);
+      console.warn("Template fetch failed:", body?.error ?? `HTTP ${res.status}`, "— using default");
+      html = doc.kind === "mc" ? DEFAULT_MC_TEMPLATE : DEFAULT_REFERRAL_TEMPLATE;
     }
+    const today = new Date().toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+    const issuedDate = formatDateLabel(doc.date) || today;
+    const data: Record<string, string> =
+      doc.kind === "mc"
+        ? {
+            "{{clinicName}}": organization?.name || "",
+            "{{clinicAddress}}": organization?.address || "",
+            "{{clinicPhone}}": organization?.phone || "",
+            "{{patientName}}": patient.fullName || "",
+            "{{patientNric}}": patient.nric || "",
+            "{{patientDob}}": formatDateLabel(patient.dateOfBirth) || "",
+            "{{mcDays}}": doc.details.mcDays || "1",
+            "{{mcStartDate}}": formatDateLabel(doc.details.mcStartDate) || issuedDate,
+            "{{mcEndDate}}": calcMcEndDate(
+              doc.details.mcStartDate,
+              Number(doc.details.mcDays || 1)
+            ),
+            "{{diagnosis}}": doc.details.mcDiagnosis || "",
+            "{{doctorName}}": doc.details.mcDoctorName || "",
+            "{{date}}": today,
+          }
+        : {
+            "{{clinicName}}": organization?.name || "",
+            "{{clinicAddress}}": organization?.address || "",
+            "{{clinicPhone}}": organization?.phone || "",
+            "{{patientName}}": patient.fullName || "",
+            "{{patientNric}}": patient.nric || "",
+            "{{patientAge}}": calcAge(patient.dateOfBirth),
+            "{{referralTo}}": doc.details.referralTo || "",
+            "{{referralFrom}}":
+              doc.details.referralFrom ||
+              doc.details.mcDoctorName ||
+              organization?.name ||
+              "",
+            "{{referralBody}}": doc.details.referralContent || "",
+            "{{diagnosis}}": doc.details.referralDiagnosis || "",
+            "{{doctorName}}": doc.details.mcDoctorName || "",
+            "{{date}}": today,
+          };
+    return fillPlaceholders(html, data);
+  }
 
-    return (
-      <ReferralDocument
-        letterText={doc.details.referralContent || ""}
-        organization={organization}
-        metadata={{
-          dateLabel: issuedDate,
-          patientName: patient.fullName,
-          patientId: patient.nric,
-          patientDateOfBirth: formatDateLabel(patient.dateOfBirth),
-          patientPhone: patient.phone ?? null,
-          patientEmail: patient.email ?? null,
-          specialty: doc.details.referralDiagnosis || null,
-          facility: doc.details.referralTo || null,
-          toLine: doc.details.referralTo || null,
-          fromLine: organization?.name ?? null,
-        }}
-      />
-    );
+  async function buildLegacyReferralHtml(r: Referral): Promise<string> {
+    const res = await fetch("/api/document-templates?type=referral");
+    let html: string;
+    if (res.ok) {
+      html = (await res.json()).html;
+    } else {
+      const body = await res.json().catch(() => null);
+      console.warn("Template fetch failed:", body?.error ?? `HTTP ${res.status}`, "— using default");
+      html = DEFAULT_REFERRAL_TEMPLATE;
+    }
+    const today = new Date().toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+    const dateLabel = r.date ? format(new Date(r.date), "dd MMM yyyy") : today;
+    const toLine = [r.department, r.facility].filter(Boolean).join(", ") || "";
+    const data: Record<string, string> = {
+      "{{clinicName}}": organization?.name || "",
+      "{{clinicAddress}}": organization?.address || "",
+      "{{clinicPhone}}": organization?.phone || "",
+      "{{patientName}}": patient.fullName || "",
+      "{{patientNric}}": patient.nric || "",
+      "{{patientAge}}": calcAge(patient.dateOfBirth),
+      "{{referralTo}}": toLine,
+      "{{referralFrom}}": r.doctorName || organization?.name || "",
+      "{{referralBody}}": (r as any).letterText || "",
+      "{{diagnosis}}": r.specialty || "",
+      "{{doctorName}}": r.doctorName || "",
+      "{{date}}": dateLabel,
+    };
+    return fillPlaceholders(html, data);
+  }
+
+  function openPrintWindow(html: string) {
+    const blob = new Blob([html], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    const win = window.open(url, "_blank");
+    if (win) win.addEventListener("load", () => win.print());
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  }
+
+  async function openSignedDocumentViewer(doc: SignedDocument) {
+    setViewingSigned(doc);
+    setViewingHtml(null);
+    setViewingHtmlLoading(true);
+    try {
+      const html = await buildDocumentHtml(doc);
+      setViewingHtml(html);
+    } catch (err: any) {
+      toast({
+        title: "Preview failed",
+        description: err?.message || "Could not load document preview.",
+        variant: "destructive",
+      });
+    } finally {
+      setViewingHtmlLoading(false);
+    }
+  }
+
+  async function openLegacyReferralViewer(r: Referral) {
+    setViewing(r);
+    setViewingHtml(null);
+    setViewingHtmlLoading(true);
+    try {
+      const html = await buildLegacyReferralHtml(r);
+      setViewingHtml(html);
+    } catch (err: any) {
+      toast({
+        title: "Preview failed",
+        description: err?.message || "Could not load document preview.",
+        variant: "destructive",
+      });
+    } finally {
+      setViewingHtmlLoading(false);
+    }
   }
 
   return (
@@ -351,7 +473,13 @@ export default function ReferralMCSection({ patient, consultations = [] }: Refer
             <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
               <p className="text-sm font-medium text-destructive">Could not load generated documents.</p>
               <p className="mt-1 text-sm text-muted-foreground">{loadError}</p>
-              <Button type="button" variant="outline" size="sm" className="mt-3" onClick={() => loadReferrals()}>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-3"
+                onClick={() => loadReferrals()}
+              >
                 Retry
               </Button>
             </div>
@@ -365,11 +493,14 @@ export default function ReferralMCSection({ patient, consultations = [] }: Refer
             </div>
           )}
           {signedDocuments.map((doc) => (
-            <div key={doc.id} className="flex items-center justify-between gap-3 rounded-lg border p-4 transition-colors hover:bg-muted/40">
+            <div
+              key={doc.id}
+              className="flex items-center justify-between gap-3 rounded-lg border p-4 transition-colors hover:bg-muted/40"
+            >
               <button
                 type="button"
                 className="flex min-w-0 flex-1 items-center gap-4 text-left"
-                onClick={() => setViewingSigned(doc)}
+                onClick={() => openSignedDocumentViewer(doc)}
               >
                 <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
                   <FileText className="h-5 w-5 text-primary" />
@@ -382,11 +513,19 @@ export default function ReferralMCSection({ patient, consultations = [] }: Refer
                     {[
                       doc.kind === "mc"
                         ? [
-                            doc.details.mcDays ? `${doc.details.mcDays} day${doc.details.mcDays === "1" ? "" : "s"}` : null,
-                            doc.details.mcStartDate ? `from ${formatDateLabel(doc.details.mcStartDate)}` : null,
+                            doc.details.mcDays
+                              ? `${doc.details.mcDays} day${doc.details.mcDays === "1" ? "" : "s"}`
+                              : null,
+                            doc.details.mcStartDate
+                              ? `from ${formatDateLabel(doc.details.mcStartDate)}`
+                              : null,
                             doc.details.mcDiagnosis,
-                          ].filter(Boolean).join(" • ")
-                        : [doc.details.referralTo, doc.details.referralDiagnosis].filter(Boolean).join(" • "),
+                          ]
+                            .filter(Boolean)
+                            .join(" • ")
+                        : [doc.details.referralTo, doc.details.referralDiagnosis]
+                            .filter(Boolean)
+                            .join(" • "),
                       doc.date ? formatDateLabel(doc.date) : null,
                       doc.status,
                     ]
@@ -417,11 +556,14 @@ export default function ReferralMCSection({ patient, consultations = [] }: Refer
             </div>
           ))}
           {referrals.map((r) => (
-            <div key={r.id} className="flex items-center justify-between gap-3 rounded-lg border p-4 transition-colors hover:bg-muted/40">
+            <div
+              key={r.id}
+              className="flex items-center justify-between gap-3 rounded-lg border p-4 transition-colors hover:bg-muted/40"
+            >
               <button
                 type="button"
                 className="flex min-w-0 flex-1 items-center gap-4 text-left"
-                onClick={() => setViewing(r)}
+                onClick={() => openLegacyReferralViewer(r)}
               >
                 <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
                   <FileText className="h-5 w-5 text-primary" />
@@ -456,6 +598,7 @@ export default function ReferralMCSection({ patient, consultations = [] }: Refer
         </CardContent>
       </Card>
 
+      {/* Edit dialog — unchanged */}
       <Dialog
         open={!!editingSigned}
         onOpenChange={(open) => {
@@ -493,7 +636,9 @@ export default function ReferralMCSection({ patient, consultations = [] }: Refer
                   id="mc-start-date"
                   type="date"
                   value={editForm.mcStartDate || ""}
-                  onChange={(event) => setEditForm((prev) => ({ ...prev, mcStartDate: event.target.value }))}
+                  onChange={(event) =>
+                    setEditForm((prev) => ({ ...prev, mcStartDate: event.target.value }))
+                  }
                 />
               </div>
               <div className="grid gap-2">
@@ -501,7 +646,9 @@ export default function ReferralMCSection({ patient, consultations = [] }: Refer
                 <Textarea
                   id="mc-diagnosis"
                   value={editForm.mcDiagnosis || ""}
-                  onChange={(event) => setEditForm((prev) => ({ ...prev, mcDiagnosis: event.target.value }))}
+                  onChange={(event) =>
+                    setEditForm((prev) => ({ ...prev, mcDiagnosis: event.target.value }))
+                  }
                 />
               </div>
               <div className="grid gap-2">
@@ -509,7 +656,9 @@ export default function ReferralMCSection({ patient, consultations = [] }: Refer
                 <Input
                   id="mc-doctor"
                   value={editForm.mcDoctorName || ""}
-                  onChange={(event) => setEditForm((prev) => ({ ...prev, mcDoctorName: event.target.value }))}
+                  onChange={(event) =>
+                    setEditForm((prev) => ({ ...prev, mcDoctorName: event.target.value }))
+                  }
                 />
               </div>
             </div>
@@ -522,7 +671,9 @@ export default function ReferralMCSection({ patient, consultations = [] }: Refer
                 <Input
                   id="referral-to"
                   value={editForm.referralTo || ""}
-                  onChange={(event) => setEditForm((prev) => ({ ...prev, referralTo: event.target.value }))}
+                  onChange={(event) =>
+                    setEditForm((prev) => ({ ...prev, referralTo: event.target.value }))
+                  }
                 />
               </div>
               <div className="grid gap-2">
@@ -530,7 +681,9 @@ export default function ReferralMCSection({ patient, consultations = [] }: Refer
                 <Input
                   id="referral-diagnosis"
                   value={editForm.referralDiagnosis || ""}
-                  onChange={(event) => setEditForm((prev) => ({ ...prev, referralDiagnosis: event.target.value }))}
+                  onChange={(event) =>
+                    setEditForm((prev) => ({ ...prev, referralDiagnosis: event.target.value }))
+                  }
                 />
               </div>
               <div className="grid gap-2">
@@ -539,7 +692,9 @@ export default function ReferralMCSection({ patient, consultations = [] }: Refer
                   id="referral-content"
                   className="min-h-40"
                   value={editForm.referralContent || ""}
-                  onChange={(event) => setEditForm((prev) => ({ ...prev, referralContent: event.target.value }))}
+                  onChange={(event) =>
+                    setEditForm((prev) => ({ ...prev, referralContent: event.target.value }))
+                  }
                 />
               </div>
             </div>
@@ -564,120 +719,112 @@ export default function ReferralMCSection({ patient, consultations = [] }: Refer
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!viewingSigned} onOpenChange={(open) => !open && setViewingSigned(null)}>
+      {/* View signed document — HTML template iframe */}
+      <Dialog
+        open={!!viewingSigned}
+        onOpenChange={(open) => {
+          if (!open) {
+            setViewingSigned(null);
+            setViewingHtml(null);
+          }
+        }}
+      >
         <DialogContent className="w-[95vw] overflow-hidden p-0 sm:max-w-5xl">
           <div className="flex h-[90vh] flex-col">
             <DialogHeader className="space-y-2 border-b px-6 py-4">
               <DialogTitle>
                 {viewingSigned?.kind === "mc" ? "Medical Certificate (MC)" : "Referral Letter"}
               </DialogTitle>
-              <DialogDescription>{viewingSigned ? formatDateLabel(viewingSigned.date) : ""}</DialogDescription>
+              <DialogDescription>
+                {viewingSigned ? formatDateLabel(viewingSigned.date) : ""}
+              </DialogDescription>
             </DialogHeader>
 
             <div className="min-h-0 flex-1 px-6 py-4">
-              {viewingSigned && (
-                <div className="h-full overflow-hidden rounded-lg border">
-                  <PDFViewer className="h-full w-full">
-                    {renderSignedDocument(viewingSigned)}
-                  </PDFViewer>
+              {viewingHtmlLoading && (
+                <div className="flex h-full items-center justify-center">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
+              )}
+              {!viewingHtmlLoading && viewingHtml && (
+                <iframe
+                  srcDoc={viewingHtml}
+                  className="h-full w-full rounded-lg border"
+                  title="Document preview"
+                />
               )}
             </div>
 
             <div className="flex justify-end gap-2 border-t px-6 py-4">
-              <Button variant="outline" onClick={() => setViewingSigned(null)}>Close</Button>
               <Button
-                onClick={async () => {
-                  if (!viewingSigned) return;
-                  const blob = await pdf(renderSignedDocument(viewingSigned)).toBlob();
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement("a");
-                  a.href = url;
-                  a.download = `${viewingSigned.kind}-${patient.id}.pdf`;
-                  a.click();
-                  URL.revokeObjectURL(url);
+                variant="outline"
+                onClick={() => {
+                  setViewingSigned(null);
+                  setViewingHtml(null);
                 }}
-                disabled={!viewingSigned}
               >
-                <Download className="mr-2 h-4 w-4" /> Download PDF
+                Close
+              </Button>
+              <Button
+                disabled={!viewingHtml}
+                onClick={() => viewingHtml && openPrintWindow(viewingHtml)}
+              >
+                <Download className="mr-2 h-4 w-4" /> Print / Save PDF
               </Button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!viewing} onOpenChange={(open) => !open && setViewing(null)}>
+      {/* View legacy FHIR referral — HTML template iframe */}
+      <Dialog
+        open={!!viewing}
+        onOpenChange={(open) => {
+          if (!open) {
+            setViewing(null);
+            setViewingHtml(null);
+          }
+        }}
+      >
         <DialogContent className="w-[95vw] overflow-hidden p-0 sm:max-w-5xl">
           <div className="flex h-[90vh] flex-col">
             <DialogHeader className="space-y-2 border-b px-6 py-4">
               <DialogTitle>Referral Letter</DialogTitle>
-              <DialogDescription>{viewing ? `${viewing.specialty} — ${viewing.facility}` : ""}</DialogDescription>
+              <DialogDescription>
+                {viewing ? `${viewing.specialty} — ${viewing.facility}` : ""}
+              </DialogDescription>
             </DialogHeader>
 
             <div className="min-h-0 flex-1 px-6 py-4">
-              {viewing && (
-                <div className="flex h-full flex-col gap-4">
-                  <div className="min-h-0 flex-1 overflow-hidden rounded-lg border">
-                    <PDFViewer className="h-full w-full">
-                      <ReferralDocument
-                        letterText={(viewing as any).letterText || ""}
-                        organization={organization}
-                        metadata={{
-                          dateLabel: viewing.date ? format(new Date(viewing.date), "dd MMM yyyy") : null,
-                          patientName: patient.fullName,
-                          patientId: patient.nric,
-                          patientDateOfBirth: formatDateLabel(patient.dateOfBirth),
-                          patientPhone: patient.phone ?? null,
-                          patientEmail: patient.email ?? null,
-                          specialty: viewing.specialty,
-                          facility: viewing.facility,
-                          department: viewing.department ?? null,
-                          doctorName: viewing.doctorName ?? null,
-                          toLine: [viewing.department, viewing.facility].filter(Boolean).join(", ") || null,
-                          fromLine: organization?.name ?? null,
-                        }}
-                      />
-                    </PDFViewer>
-                  </div>
+              {viewingHtmlLoading && (
+                <div className="flex h-full items-center justify-center">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
+              )}
+              {!viewingHtmlLoading && viewingHtml && (
+                <iframe
+                  srcDoc={viewingHtml}
+                  className="h-full w-full rounded-lg border"
+                  title="Document preview"
+                />
               )}
             </div>
 
             <div className="flex justify-end gap-2 border-t px-6 py-4">
-              <Button variant="outline" onClick={() => setViewing(null)}>Close</Button>
               <Button
-                onClick={async () => {
-                  if (!viewing) return;
-                  const blob = await pdf(
-                    <ReferralDocument
-                      letterText={(viewing as any).letterText || ""}
-                      organization={organization}
-                      metadata={{
-                        dateLabel: viewing.date ? format(new Date(viewing.date), "dd MMM yyyy") : null,
-                        patientName: patient.fullName,
-                        patientId: patient.nric,
-                        patientDateOfBirth: formatDateLabel(patient.dateOfBirth),
-                        patientPhone: patient.phone ?? null,
-                        patientEmail: patient.email ?? null,
-                        specialty: viewing.specialty,
-                        facility: viewing.facility,
-                        department: viewing.department ?? null,
-                        doctorName: viewing.doctorName ?? null,
-                        toLine: [viewing.department, viewing.facility].filter(Boolean).join(", ") || null,
-                        fromLine: organization?.name ?? null,
-                      }}
-                    />
-                  ).toBlob();
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement("a");
-                  a.href = url;
-                  a.download = `referral-${patient.id}.pdf`;
-                  a.click();
-                  URL.revokeObjectURL(url);
+                variant="outline"
+                onClick={() => {
+                  setViewing(null);
+                  setViewingHtml(null);
                 }}
-                disabled={!viewing}
               >
-                <Download className="mr-2 h-4 w-4" /> Download PDF
+                Close
+              </Button>
+              <Button
+                disabled={!viewingHtml}
+                onClick={() => viewingHtml && openPrintWindow(viewingHtml)}
+              >
+                <Download className="mr-2 h-4 w-4" /> Print / Save PDF
               </Button>
             </div>
           </div>
