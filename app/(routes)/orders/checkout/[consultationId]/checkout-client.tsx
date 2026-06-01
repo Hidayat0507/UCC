@@ -14,7 +14,7 @@ import {
   Printer,
   ReceiptText,
 } from "lucide-react";
-import { PDFViewer, pdf } from "@react-pdf/renderer";
+import { PDFViewer, pdf, type DocumentProps } from "@react-pdf/renderer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -395,7 +395,7 @@ function renderCheckoutDocument({
   patient: Patient;
   date: string;
   organization: OrganizationDetails | null;
-}): ReactElement | null {
+}): ReactElement<DocumentProps> | null {
   const details = item.documentDetails;
   if (!details) return null;
 

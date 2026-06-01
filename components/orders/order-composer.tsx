@@ -345,13 +345,17 @@ export function OrderComposer({
 
   React.useEffect(() => {
     if (detailEntryId && !entries.some((e) => e.id === detailEntryId)) {
-      setDetailEntryId(null);
+      queueMicrotask(() => {
+        setDetailEntryId(null);
+      });
     }
   }, [entries, detailEntryId]);
 
   React.useEffect(() => {
     if (editingDocumentEntryId && !entries.some((e) => e.id === editingDocumentEntryId)) {
-      setEditingDocumentEntryId(null);
+      queueMicrotask(() => {
+        setEditingDocumentEntryId(null);
+      });
     }
   }, [entries, editingDocumentEntryId]);
 
@@ -442,8 +446,10 @@ export function OrderComposer({
 
   React.useEffect(() => {
     if (!persistDrafts) {
-      publishPlan(initialEntries);
-      setHydrated(true);
+      queueMicrotask(() => {
+        publishPlan(initialEntries);
+        setHydrated(true);
+      });
       return;
     }
 

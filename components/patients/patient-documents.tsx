@@ -83,7 +83,9 @@ export default function PatientDocuments({ patientId }: Props) {
   }, [patientId, toast]);
 
   useEffect(() => {
-    fetchDocs();
+    queueMicrotask(() => {
+      void fetchDocs();
+    });
   }, [fetchDocs]);
 
   async function registerUploadedDocument(upload: UploadResult) {

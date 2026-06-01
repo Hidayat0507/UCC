@@ -45,11 +45,6 @@ export function InsurerManager() {
   const [deleteTarget, setDeleteTarget] = useState<Insurer | null>(null);
   const { toast } = useToast();
 
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const load = async () => {
     try {
       setInsurers(await fetchInsurers());
@@ -59,6 +54,13 @@ export function InsurerManager() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      void load();
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleAdd = () => {
     setEditing(null);

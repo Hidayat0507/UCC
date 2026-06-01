@@ -188,8 +188,10 @@ export default function FollowUpClient({ initialFollowUps }: Props) {
     const q = form.patientName.trim();
     // If a patient is already confirmed or query too short, skip the search
     if (form.patientId || q.length < 2) {
-      setPatientResults([]);
-      setShowPatientDropdown(false);
+      queueMicrotask(() => {
+        setPatientResults([]);
+        setShowPatientDropdown(false);
+      });
       return;
     }
     const timer = setTimeout(async () => {

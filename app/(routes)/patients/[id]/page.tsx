@@ -15,6 +15,10 @@ import { notFound } from 'next/navigation';
 import { getTriageForPatient } from "@/lib/fhir/triage-service";
 import PatientProfileWorkspace from "./patient-profile-workspace";
 
+function getCurrentTimestamp(): number {
+  return Date.now();
+}
+
 interface PatientProfilePageProps {
   params: Promise<{ id: string }>;
 }
@@ -41,13 +45,14 @@ export default async function PatientProfilePage({ params }: PatientProfilePageP
     medications: [],
   };
   const vitals = triageData.triage?.vitalSigns;
+  const nowMs = getCurrentTimestamp();
 
   const upcomingAppointment = appointmentsData
     .filter((appointment) => {
       const scheduledAt = appointment.scheduledAt instanceof Date ? appointment.scheduledAt : new Date(appointment.scheduledAt);
       return (
         !Number.isNaN(scheduledAt.getTime()) &&
-        scheduledAt.getTime() >= Date.now() &&
+        scheduledAt.getTime() >= nowMs &&
         ["booked", "arrived", "pending", "proposed"].includes(appointment.status)
       );
     })

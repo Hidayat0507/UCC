@@ -38,7 +38,9 @@ export function LabResultsView({ patientId, encounterId }: LabResultsViewProps) 
   }, [encounterId, patientId]);
 
   useEffect(() => {
-    loadLabResults();
+    queueMicrotask(() => {
+      void loadLabResults();
+    });
   }, [loadLabResults]);
 
   const getStatusColor = (status: string) => {
@@ -187,7 +189,6 @@ export function LabResultsView({ patientId, encounterId }: LabResultsViewProps) 
     </div>
   );
 }
-
 
 
 

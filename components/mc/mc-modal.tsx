@@ -39,25 +39,26 @@ export default function McModal({ isOpen, onClose, isLoading, data }: McModalPro
 
   const [organization, setOrganization] = useState<OrganizationDetails | null>(null);
   const [orgLoaded, setOrgLoaded] = useState(false);
-  const [orgLoading, setOrgLoading] = useState(false);
+  const [orgLoading, setOrgLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
-    setOrgLoading(true);
-    fetchOrganizationDetails()
-      .then((info) => {
-        if (!active) return;
-        setOrganization(info);
-        setOrgLoaded(true);
-      })
-      .catch(() => {
-        if (!active) return;
-        setOrgLoaded(true);
-      })
-      .finally(() => {
-        if (!active) return;
-        setOrgLoading(false);
-      });
+    queueMicrotask(() => {
+      fetchOrganizationDetails()
+        .then((info) => {
+          if (!active) return;
+          setOrganization(info);
+          setOrgLoaded(true);
+        })
+        .catch(() => {
+          if (!active) return;
+          setOrgLoaded(true);
+        })
+        .finally(() => {
+          if (!active) return;
+          setOrgLoading(false);
+        });
+    });
     return () => {
       active = false;
     };

@@ -44,12 +44,24 @@ const visitTypes = [
 
 const DEFAULT_SLOT_DURATION_MINUTES = 30;
 
+function buildDefaultScheduledAt(): Date {
+  return new Date(Date.now() + 30 * 60 * 1000);
+}
+
 const appointmentSchema = z.object({
-  patientId: z.string({ required_error: "Patient is required" }).min(1, "Patient is required"),
-  scheduledDate: z.string({ required_error: "Date is required" }).min(1, "Date is required"),
-  scheduledTime: z.string({ required_error: "Time is required" }).min(1, "Time is required"),
+  patientId: z
+    .string({ error: (issue) => (issue.input === undefined ? "Patient is required" : undefined) })
+    .min(1, "Patient is required"),
+  scheduledDate: z
+    .string({ error: (issue) => (issue.input === undefined ? "Date is required" : undefined) })
+    .min(1, "Date is required"),
+  scheduledTime: z
+    .string({ error: (issue) => (issue.input === undefined ? "Time is required" : undefined) })
+    .min(1, "Time is required"),
   durationMinutes: z.string().min(1, "Duration is required"),
-  practitionerId: z.string({ required_error: "Clinician is required" }).min(1, "Clinician is required"),
+  practitionerId: z
+    .string({ error: (issue) => (issue.input === undefined ? "Clinician is required" : undefined) })
+    .min(1, "Clinician is required"),
   selectedSlotId: z.string().optional(),
   visitType: z.string().optional(),
   notes: z.string().optional(),
@@ -200,7 +212,7 @@ export default function AppointmentsSlotsPilotPage() {
   const [slots, setSlots] = useState<SchedulingSlot[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [slotMessage, setSlotMessage] = useState<string | null>(null);
-  const defaultScheduledAt = useMemo(() => new Date(Date.now() + 30 * 60 * 1000), []);
+  const [defaultScheduledAt] = useState(() => buildDefaultScheduledAt());
 
   const form = useForm<AppointmentFormValues>({
     resolver: zodResolver(appointmentSchema),
@@ -285,15 +297,18 @@ export default function AppointmentsSlotsPilotPage() {
     return "Search patient...";
   }, [loadingPatients, patientOptions.length]);
 
-  const visibleSlots = useMemo(() => {
-    const now = Date.now();
-    return slots.filter((slot) => new Date(slot.start).getTime() > now).slice(0, 16);
-  }, [slots]);
+  const slotReferenceTime = defaultScheduledAt.getTime() - 30 * 60 * 1000;
+  const visibleSlots = useMemo(
+    () => slots.filter((slot) => new Date(slot.start).getTime() > slotReferenceTime).slice(0, 16),
+    [slotReferenceTime, slots]
+  );
 
   useEffect(() => {
-    setSlots([]);
-    setSlotMessage(null);
-    form.setValue("selectedSlotId", "");
+    queueMicrotask(() => {
+      setSlots([]);
+      setSlotMessage(null);
+      form.setValue("selectedSlotId", "");
+    });
   }, [form, practitionerId, scheduledDate]);
 
   async function handleLoadSlots() {

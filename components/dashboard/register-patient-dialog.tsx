@@ -48,40 +48,32 @@ export function RegisterPatientDialog({ open, onOpenChange }: RegisterPatientDia
   const searchWrapRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
-    if (!open) {
-      setQuery("");
-      setResults([]);
-      setListOpen(false);
-    }
-  }, [open]);
-
-  React.useEffect(() => {
     if (!open) return;
     if (debouncedQuery.length < 2) {
-      setResults([]);
-      setLoading(false);
       return;
     }
 
     let cancelled = false;
-    setLoading(true);
-    (async () => {
-      try {
-        const res = await fetch(
-          `/api/patients?search=${encodeURIComponent(debouncedQuery)}&limit=20`
-        );
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok || data.success === false) {
+    queueMicrotask(() => {
+      setLoading(true);
+      void (async () => {
+        try {
+          const res = await fetch(
+            `/api/patients?search=${encodeURIComponent(debouncedQuery)}&limit=20`
+          );
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || data.success === false) {
+            if (!cancelled) setResults([]);
+            return;
+          }
+          if (!cancelled) setResults((data.patients || []) as SearchHit[]);
+        } catch {
           if (!cancelled) setResults([]);
-          return;
+        } finally {
+          if (!cancelled) setLoading(false);
         }
-        if (!cancelled) setResults((data.patients || []) as SearchHit[]);
-      } catch {
-        if (!cancelled) setResults([]);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
+      })();
+    });
 
     return () => {
       cancelled = true;
@@ -99,23 +91,33 @@ export function RegisterPatientDialog({ open, onOpenChange }: RegisterPatientDia
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, [listOpen]);
 
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) {
+      setQuery("");
+      setResults([]);
+      setLoading(false);
+      setListOpen(false);
+    }
+    onOpenChange(nextOpen);
+  };
+
   const goNewPatient = () => {
-    onOpenChange(false);
+    handleOpenChange(false);
     router.push("/patients/new");
   };
 
   const goMyKad = () => {
-    onOpenChange(false);
+    handleOpenChange(false);
     router.push("/patients/new/scan");
   };
 
   const selectExisting = (p: SearchHit) => {
-    onOpenChange(false);
+    handleOpenChange(false);
     router.push(`/patients/${p.id}/check-in`);
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
         className={cn(
           "gap-0 overflow-hidden p-0 sm:max-w-[460px]",
@@ -138,7 +140,12 @@ export function RegisterPatientDialog({ open, onOpenChange }: RegisterPatientDia
                 placeholder="Enter patient name, NRIC or phone number"
                 value={query}
                 onChange={(e) => {
-                  setQuery(e.target.value);
+                  const nextQuery = e.target.value;
+                  setQuery(nextQuery);
+                  if (nextQuery.trim().length < 2) {
+                    setResults([]);
+                    setLoading(false);
+                  }
                   setListOpen(true);
                 }}
                 onFocus={() => setListOpen(true)}

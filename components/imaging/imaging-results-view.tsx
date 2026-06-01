@@ -38,7 +38,9 @@ export function ImagingResultsView({ patientId, encounterId }: ImagingResultsVie
   }, [encounterId, patientId]);
 
   useEffect(() => {
-    loadImagingStudies();
+    queueMicrotask(() => {
+      void loadImagingStudies();
+    });
   }, [loadImagingStudies]);
 
   const getStatusColor = (status: string) => {
@@ -252,7 +254,6 @@ export function ImagingResultsView({ patientId, encounterId }: ImagingResultsVie
     </div>
   );
 }
-
 
 
 

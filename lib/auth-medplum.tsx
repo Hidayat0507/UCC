@@ -29,6 +29,7 @@ function createMemoryStorage(): IClientStorage {
   const values = new Map<string, unknown>();
   return {
     clear: () => values.clear(),
+    makeKey: (key) => key,
     getString: (key) => {
       const value = values.get(key);
       return typeof value === 'string' ? value : undefined;
@@ -70,7 +71,30 @@ function clinicIdFromBrowserHostname(): string | null {
   return sub;
 }
 
+function getInitialClinicId(): string | null {
+  const fromHost = clinicIdFromBrowserHostname();
+  if (fromHost) {
+    return fromHost;
+  }
+
+  if (typeof document === 'undefined') {
+    return null;
+  }
+
+  const clinicCookie = document.cookie
+    .split('; ')
+    .find((row) => row.startsWith('medplum-clinic='))
+    ?.split('=')[1];
+
+  return clinicCookie ? decodeURIComponent(clinicCookie) : null;
+}
+
 export function MedplumAuthProvider({ children }: { children: React.ReactNode }) {
+  const [profile, setProfile] = useState<Resource | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [clinicId, setClinicIdState] = useState<string | null>(() => getInitialClinicId());
+  const [accessToken, setAccessTokenState] = useState<string | undefined>();
   const [medplum] = useState(() => new MedplumClient({
     baseUrl: MEDPLUM_BASE_URL,
     clientId: MEDPLUM_CLIENT_ID || undefined,
@@ -80,12 +104,6 @@ export function MedplumAuthProvider({ children }: { children: React.ReactNode })
       setIsAdmin(false);
     },
   }));
-
-  const [profile, setProfile] = useState<Resource | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [clinicId, setClinicIdState] = useState<string | null>(null);
-  const [accessToken, setAccessTokenState] = useState<string | undefined>();
 
   const refreshAuthState = async (): Promise<AuthMeResponse> => {
     const [sessionRes, authMeRes] = await Promise.all([
@@ -145,17 +163,6 @@ export function MedplumAuthProvider({ children }: { children: React.ReactNode })
 
   // Restore session from MedplumClient internal storage on mount
   useEffect(() => {
-    const fromHost = clinicIdFromBrowserHostname();
-    if (fromHost) {
-      setClinicIdState(fromHost);
-    } else {
-      const clinicCookie = document.cookie
-        .split('; ')
-        .find(row => row.startsWith('medplum-clinic='))
-        ?.split('=')[1];
-      if (clinicCookie) setClinicIdState(decodeURIComponent(clinicCookie));
-    }
-
     let cancelled = false;
 
     (async () => {

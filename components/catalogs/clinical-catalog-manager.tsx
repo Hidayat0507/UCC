@@ -95,6 +95,22 @@ export function ClinicalCatalogManager({
   const [procedures, setProcedures] = React.useState<ProcedureItem[]>([]);
   const [procedureSearch, setProcedureSearch] = React.useState("");
   const [procedureLoading, setProcedureLoading] = React.useState(false);
+  const resolvedActiveType = visibleTypes.includes(activeType) ? activeType : visibleTypes[0] || "lab";
+
+  const loadProcedures = React.useCallback(async () => {
+    setProcedureLoading(true);
+    try {
+      setProcedures(await getProcedures());
+    } catch (error) {
+      toast({
+        title: "Procedures unavailable",
+        description: error instanceof Error ? error.message : "Failed to load procedures.",
+        variant: "destructive",
+      });
+    } finally {
+      setProcedureLoading(false);
+    }
+  }, [toast]);
 
   const loadType = React.useCallback(async (type: ClinicalCatalogType) => {
     setLoading(true);
@@ -119,43 +135,26 @@ export function ClinicalCatalogManager({
   }, [onCatalogChange, toast]);
 
   React.useEffect(() => {
-    if (!visibleTypes.includes(activeType)) {
-      setActiveType(visibleTypes[0] || "lab");
-    }
-  }, [activeType, visibleTypes]);
-
-  React.useEffect(() => {
-    if (activeType === "procedure") {
-      void loadProcedures();
+    if (resolvedActiveType === "procedure") {
+      queueMicrotask(() => {
+        void loadProcedures();
+      });
       return;
     }
-    void loadType(activeType);
-  }, [activeType, loadType]);
+    queueMicrotask(() => {
+      void loadType(resolvedActiveType);
+    });
+  }, [loadProcedures, loadType, resolvedActiveType]);
 
-  async function loadProcedures() {
-    setProcedureLoading(true);
-    try {
-      setProcedures(await getProcedures());
-    } catch (error) {
-      toast({
-        title: "Procedures unavailable",
-        description: error instanceof Error ? error.message : "Failed to load procedures.",
-        variant: "destructive",
-      });
-    } finally {
-      setProcedureLoading(false);
-    }
-  }
-
-  const clinicalType = activeType === "procedure" ? "lab" : activeType;
-  const savedItems = activeType === "procedure" ? [] : items[clinicalType];
+  const clinicalType = resolvedActiveType === "procedure" ? "lab" : resolvedActiveType;
+  const savedItems = resolvedActiveType === "procedure" ? [] : items[clinicalType];
   const rows =
-    activeType === "procedure"
+    resolvedActiveType === "procedure"
       ? []
       : savedItems.length || clinicalType !== "document"
         ? savedItems
         : DEFAULT_DOCUMENT_CATALOG;
-  const usingDocumentDefaults = activeType === "document" && savedItems.length === 0;
+  const usingDocumentDefaults = resolvedActiveType === "document" && savedItems.length === 0;
   const filteredRows = rows.filter((item) => {
     const q = search.trim().toLowerCase();
     if (!q) return true;
@@ -188,8 +187,8 @@ export function ClinicalCatalogManager({
     if (!response.ok || data?.success === false) {
       throw new Error(data?.error || "Failed to delete catalog item.");
     }
-    if (activeType !== "procedure") {
-      await loadType(activeType);
+    if (resolvedActiveType !== "procedure") {
+      await loadType(resolvedActiveType);
     }
   }
 
@@ -214,7 +213,7 @@ export function ClinicalCatalogManager({
 
   return (
     <div className={["space-y-4", className].filter(Boolean).join(" ")}>
-      <Tabs value={activeType} onValueChange={(value) => setActiveType(value as CatalogManagerType)}>
+      <Tabs value={resolvedActiveType} onValueChange={(value) => setActiveType(value as CatalogManagerType)}>
         {visibleTypes.length > 1 && (
           <TabsList className="max-w-full justify-start overflow-x-auto">
             {visibleTypes.map((type) => (

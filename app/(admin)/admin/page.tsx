@@ -51,7 +51,7 @@ export default async function AdminOverviewPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Admin Portal</h1>
           <p className="mt-1 max-w-2xl text-muted-foreground">
-            Manage organisations, their branches, and each branch's modules
+            Manage organisations, their branches, and each branch&apos;s modules
             from one hierarchy.
           </p>
         </div>

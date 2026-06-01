@@ -25,10 +25,6 @@ export default function OrdersClient({ initialConsultations, otcContext, checkou
   const [consultations, setConsultations] = useState<BillableConsultation[]>(initialConsultations);
 
   useEffect(() => {
-    setConsultations(initialConsultations);
-  }, [initialConsultations]);
-
-  useEffect(() => {
     if (!checkoutComplete || checkoutToastShown.current) return;
 
     checkoutToastShown.current = true;

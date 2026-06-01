@@ -24,20 +24,14 @@ function ScanICPageInner() {
   const [stream, setStream] = useState<MediaStream | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [captured, setCaptured] = useState<string | null>(null);
-  const [fullName, setFullName] = useState("");
-  const [nric, setNric] = useState("");
-  const [isCapturing, setIsCapturing] = useState(false);
-  const [isReading, setIsReading] = useState(false);
   const { toast } = useToast();
   const searchParams = useSearchParams();
-
-  // Prefill from query params when coming from registration
-  useEffect(() => {
-    const qFullName = searchParams.get("fullName") || "";
-    const qNric = searchParams.get("nric") || "";
-    if (qFullName) setFullName(qFullName);
-    if (qNric) setNric(qNric);
-  }, [searchParams]);
+  const initialFullName = searchParams.get("fullName") || "";
+  const initialNric = searchParams.get("nric") || "";
+  const [fullName, setFullName] = useState(initialFullName);
+  const [nric, setNric] = useState(initialNric);
+  const [isCapturing, setIsCapturing] = useState(false);
+  const [isReading, setIsReading] = useState(false);
 
   // Camera stream lifecycle
   useEffect(() => {

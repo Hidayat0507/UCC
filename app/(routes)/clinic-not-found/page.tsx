@@ -19,7 +19,7 @@ export default function ClinicNotFoundPage() {
       <div className="flex flex-col items-center gap-2 text-sm text-muted-foreground">
         <p>If you believe this is an error, try:</p>
         <ul className="list-disc text-left space-y-1 pl-4">
-          <li>Double-checking the subdomain in your browser's address bar</li>
+          <li>Double-checking the subdomain in your browser&apos;s address bar</li>
           <li>Asking your administrator to verify the clinic is provisioned</li>
           <li>
             Visiting the{' '}
