@@ -39,10 +39,6 @@ export function DiagnosisSearch({ value, onChange }: DiagnosisSearchProps) {
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    setQuery(value);
-  }, [value]);
-
-  React.useEffect(() => {
     if (!open) return;
 
     const controller = new AbortController();
@@ -80,7 +76,15 @@ export function DiagnosisSearch({ value, onChange }: DiagnosisSearchProps) {
   const currentLabel = value || "Select or search diagnosis...";
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen);
+        if (nextOpen) {
+          setQuery(value);
+        }
+      }}
+    >
       <PopoverTrigger asChild>
         <Button
           variant="outline"

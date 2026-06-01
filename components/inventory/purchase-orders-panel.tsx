@@ -99,11 +99,13 @@ export function PurchaseOrdersPanel({
 
   React.useEffect(() => {
     if (autoCreate) {
-      setSelectedDocumentType(autoCreate);
-      setShowCreateOrder(true);
-      onAutoCreateConsumed?.();
+      queueMicrotask(() => {
+        setSelectedDocumentType(autoCreate);
+        setShowCreateOrder(true);
+        onAutoCreateConsumed?.();
+      });
     }
-  }, [autoCreate]);
+  }, [autoCreate, onAutoCreateConsumed]);
 
   const filteredOrders = React.useMemo(
     () =>
@@ -129,14 +131,6 @@ export function PurchaseOrdersPanel({
   const pageEnd = Math.min(currentPage * pageSize, filteredOrders.length);
   const paginatedOrders = filteredOrders.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
-  React.useEffect(() => {
-    setPage(1);
-  }, [pageSize, referenceFilter, searchTerm, statusFilter, supplierFilter]);
-
-  React.useEffect(() => {
-    setPage((current) => Math.min(current, totalPages));
-  }, [totalPages]);
-
   return (
     <div className="space-y-6">
       <Card className="border-slate-200/80 shadow-sm">
@@ -151,7 +145,10 @@ export function PurchaseOrdersPanel({
             <Input
               placeholder="Search orders, supplier, item"
               value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
+              onChange={(event) => {
+                setSearchTerm(event.target.value);
+                setPage(1);
+              }}
               className="sm:w-72"
             />
             <Button className="gap-2" onClick={() => setShowDocumentSelector(true)}>
@@ -162,7 +159,13 @@ export function PurchaseOrdersPanel({
         </CardHeader>
         <CardContent>
           <div className="mb-4 grid gap-3 border-b border-slate-200 pb-4 md:grid-cols-4">
-            <Select value={supplierFilter} onValueChange={setSupplierFilter}>
+            <Select
+              value={supplierFilter}
+              onValueChange={(value) => {
+                setSupplierFilter(value);
+                setPage(1);
+              }}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Supplier" />
               </SelectTrigger>
@@ -178,9 +181,18 @@ export function PurchaseOrdersPanel({
             <Input
               placeholder="Reference"
               value={referenceFilter}
-              onChange={(event) => setReferenceFilter(event.target.value)}
+              onChange={(event) => {
+                setReferenceFilter(event.target.value);
+                setPage(1);
+              }}
             />
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <Select
+              value={statusFilter}
+              onValueChange={(value) => {
+                setStatusFilter(value);
+                setPage(1);
+              }}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Status" />
               </SelectTrigger>

@@ -115,7 +115,9 @@ export function TasksClient() {
   }
 
   useEffect(() => {
-    loadTasks(filter);
+    queueMicrotask(() => {
+      void loadTasks(filter);
+    });
   }, [filter]);
 
   async function updateStatus(taskId: string, status: UpdateStatus) {

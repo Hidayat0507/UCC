@@ -12,11 +12,7 @@ const THEME_OPTIONS = [
 
 export function ThemeToggle({ className }: { className?: string }) {
   const { theme, resolvedTheme, setTheme } = useTheme();
-  const [mounted, setMounted] = React.useState(false);
-
-  React.useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = Boolean(theme || resolvedTheme);
 
   if (!mounted) {
     return (

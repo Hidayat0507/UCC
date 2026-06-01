@@ -149,7 +149,6 @@ function orderCategoryExtensionValue(resource: { extension?: { url?: string; val
     : undefined;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function validateAndCreate(medplum: MedplumClient, resource: any) {
   const validation = validateFhirResource(resource);
   logValidation(resource.resourceType, validation);

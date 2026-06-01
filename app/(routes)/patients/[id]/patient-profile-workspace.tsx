@@ -210,17 +210,32 @@ export default function PatientProfileWorkspace({
     };
   }, []);
 
+  const updateQueueStatus = useCallback(async (status: Exclude<QueueStatus, null>) => {
+    const response = await fetch("/api/queue", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ patientId, status }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data?.success) {
+      throw new Error(data?.error || "Failed to update queue status");
+    }
+    setQueueStatus(status);
+  }, [patientId]);
+
   useEffect(() => {
     if (queueStatus !== "arrived" && queueStatus !== "waiting") return;
 
-    void updateQueueStatus("in_consultation").catch((error) => {
-      toast({
-        title: "Queue Status Not Updated",
-        description: error instanceof Error ? error.message : "Failed to mark patient as in consultation.",
-        variant: "destructive",
+    queueMicrotask(() => {
+      void updateQueueStatus("in_consultation").catch((error) => {
+        toast({
+          title: "Queue Status Not Updated",
+          description: error instanceof Error ? error.message : "Failed to mark patient as in consultation.",
+          variant: "destructive",
+        });
       });
     });
-  }, [queueStatus]);
+  }, [queueStatus, toast, updateQueueStatus]);
 
   const visibleConsultations = useMemo(() => mergeByVisit(consultations), [consultations]);
 
@@ -308,19 +323,6 @@ export default function PatientProfileWorkspace({
 
   function handleTabChange(value: string) {
     setActiveTab(value as ProfileTab);
-  }
-
-  async function updateQueueStatus(status: Exclude<QueueStatus, null>) {
-    const response = await fetch("/api/queue", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ patientId, status }),
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok || !data?.success) {
-      throw new Error(data?.error || "Failed to update queue status");
-    }
-    setQueueStatus(status);
   }
 
   function openConsultPanel() {

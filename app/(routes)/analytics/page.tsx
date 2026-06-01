@@ -6,6 +6,10 @@ import { Activity, Users, Calendar, TrendingUp } from "lucide-react";
 import { getPatients, getConsultationsByPatientId } from "@/lib/models";
 import AnalyticsCharts from "@/components/analytics/analytics-charts";
 
+function getCurrentTimestamp(): number {
+  return Date.now();
+}
+
 export default async function AnalyticsPage() {
   const patients = await getPatients();
   // Fetch consultations for all patients (simple approach; can be optimized with an aggregate collection)
@@ -46,11 +50,12 @@ export default async function AnalyticsPage() {
 
   // Age buckets
   const buckets: Record<string, number> = { '0-17': 0, '18-39': 0, '40-64': 0, '65+': 0 };
+  const nowMs = getCurrentTimestamp();
   for (const p of patients) {
     if (!p.dateOfBirth) continue;
     const dob = new Date(p.dateOfBirth as any);
     if (isNaN(dob.getTime())) continue;
-    const age = Math.floor((Date.now() - dob.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+    const age = Math.floor((nowMs - dob.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
     if (age < 18) buckets['0-17']++; else if (age < 40) buckets['18-39']++; else if (age < 65) buckets['40-64']++; else buckets['65+']++;
   }
   const ageData = Object.entries(buckets).map(([name, value]) => ({ name, value }));

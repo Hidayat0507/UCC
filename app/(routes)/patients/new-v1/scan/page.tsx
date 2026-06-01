@@ -22,20 +22,13 @@ function ScanICPageV1Inner() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [captured, setCaptured] = useState<string | null>(null);
-  const [fullName, setFullName] = useState("");
-  const [nric, setNric] = useState("");
+  const searchParams = useSearchParams();
+  const [fullName, setFullName] = useState(() => searchParams.get("fullName") || "");
+  const [nric, setNric] = useState(() => searchParams.get("nric") || "");
   const [isCapturing, setIsCapturing] = useState(false);
   const [isReading, setIsReading] = useState(false);
   const streamRef = useRef<MediaStream | null>(null);
   const { toast } = useToast();
-  const searchParams = useSearchParams();
-
-  useEffect(() => {
-    const qFullName = searchParams.get("fullName") || "";
-    const qNric = searchParams.get("nric") || "";
-    if (qFullName) setFullName(qFullName);
-    if (qNric) setNric(qNric);
-  }, [searchParams]);
 
   useEffect(() => {
     let cancelled = false;

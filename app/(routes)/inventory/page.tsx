@@ -43,10 +43,6 @@ export default function InventoryPage() {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
-  React.useEffect(() => {
-    void loadInventoryWorkspace();
-  }, []);
-
   async function loadInventoryWorkspace() {
     try {
       const medicationData = await getMedications();
@@ -59,6 +55,12 @@ export default function InventoryPage() {
       setLoading(false);
     }
   }
+
+  React.useEffect(() => {
+    queueMicrotask(() => {
+      void loadInventoryWorkspace();
+    });
+  }, []);
 
   async function reloadMedications() {
     setMedications(await getMedications());

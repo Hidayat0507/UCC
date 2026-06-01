@@ -90,9 +90,11 @@ export default function Dashboard() {
   };
 
   useEffect(() => {
-    loadQueue();
-    loadAppointments();
-    loadConsultations();
+    queueMicrotask(() => {
+      void loadQueue();
+      void loadAppointments();
+      void loadConsultations();
+    });
     const interval = setInterval(loadQueue, 30000);
     return () => clearInterval(interval);
   }, []);

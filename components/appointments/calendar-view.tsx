@@ -140,8 +140,8 @@ interface Props {
 }
 
 export default function AppointmentsCalendarView({ appointments, viewMode, onViewModeChange }: Props) {
-  const today = new Date();
-  const todayKey = toDateKey(today);
+  const today = useMemo(() => new Date(), []);
+  const todayKey = useMemo(() => toDateKey(today), [today]);
 
   const [currentDate, setCurrentDate] = useState<Date>(
     () => new Date(today.getFullYear(), today.getMonth(), 1)
@@ -152,12 +152,14 @@ export default function AppointmentsCalendarView({ appointments, viewMode, onVie
     const prev = prevViewModeRef.current;
     if (prev === viewMode) return;
     prevViewModeRef.current = viewMode;
-    if (viewMode === "Month") {
-      setCurrentDate((cd) => new Date(cd.getFullYear(), cd.getMonth(), 1));
-    } else if (prev === "Month") {
-      setCurrentDate(new Date());
-    }
-  }, [viewMode]);
+    queueMicrotask(() => {
+      if (viewMode === "Month") {
+        setCurrentDate((cd) => new Date(cd.getFullYear(), cd.getMonth(), 1));
+      } else if (prev === "Month") {
+        setCurrentDate(new Date(today));
+      }
+    });
+  }, [viewMode, today]);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -307,15 +309,15 @@ export default function AppointmentsCalendarView({ appointments, viewMode, onVie
 
       {/* ── Month View ── */}
       {viewMode === "Month" && (
-        <div className="overflow-hidden rounded-lg border border-border">
-          <div className="grid grid-cols-7 border-b border-border bg-muted/40">
+        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+          <div className="grid grid-cols-7 border-b border-border bg-muted/30">
             {WEEKDAYS_SHORT.map((day) => (
-              <div key={day} className="py-1.5 text-center text-xs font-medium text-muted-foreground">
+              <div key={day} className="py-2 text-center text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                 {day}
               </div>
             ))}
           </div>
-          <div className="grid grid-cols-7" style={{ gridAutoRows: "calc((100dvh - 320px) / 6)" }}>
+          <div className="grid grid-cols-7 bg-border/40" style={{ gridAutoRows: "minmax(8.5rem, auto)" }}>
             {monthGrid.map(({ date, isCurrentMonth }, idx) => {
               const key = toDateKey(date);
               const dayAppts = appointmentsByDate.get(key) ?? [];
@@ -328,34 +330,37 @@ export default function AppointmentsCalendarView({ appointments, viewMode, onVie
                 <div
                   key={idx}
                   className={[
-                    "min-h-[70px] overflow-hidden p-1",
+                    "flex min-h-[8.5rem] flex-col gap-2 bg-background p-2 align-top",
                     !isLastCol && "border-r border-border",
                     !isLastRow && "border-b border-border",
-                    isCurrentMonth ? "bg-background" : "bg-muted/20",
+                    !isCurrentMonth && "bg-muted/15",
                   ].filter(Boolean).join(" ")}
                 >
-                  <div className="mb-1 flex justify-end">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                      {WEEKDAYS_SHORT[date.getDay()]}
+                    </div>
                     <span
                       className={[
-                        "flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium",
+                        "flex h-7 min-w-7 items-center justify-center rounded-full px-1.5 text-xs font-semibold",
                         isToday
                           ? "bg-primary text-primary-foreground"
                           : isCurrentMonth
                             ? "text-foreground"
-                            : "text-muted-foreground/50",
+                            : "text-muted-foreground/55",
                       ].join(" ")}
                     >
                       {date.getDate()}
                     </span>
                   </div>
-                  <div className="space-y-0.5">
+                  <div className="space-y-1">
                     {visible.map((appt) => (
                       <Link
                         key={appt.id}
                         href={`/appointments/${appt.id}`}
                         title={`${appt.patientName} · ${formatTime(appt.scheduledAt)}`}
                         className={[
-                          "flex items-center gap-1 rounded px-1 py-0.5 text-[11px] font-medium leading-tight cursor-pointer hover:opacity-80",
+                          "flex items-center gap-1.5 rounded-md px-1.5 py-1 text-[11px] font-medium leading-tight transition-opacity hover:opacity-80",
                           PILL_CLASSES[appt.status] ?? "bg-muted text-muted-foreground",
                         ].join(" ")}
                       >
@@ -364,7 +369,7 @@ export default function AppointmentsCalendarView({ appointments, viewMode, onVie
                       </Link>
                     ))}
                     {overflow > 0 && (
-                      <div className="px-1 text-[11px] text-muted-foreground">+{overflow} more</div>
+                      <div className="px-1.5 text-[11px] font-medium text-muted-foreground">+{overflow} more</div>
                     )}
                   </div>
                 </div>

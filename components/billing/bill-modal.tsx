@@ -52,26 +52,27 @@ export default function BillModal({ isOpen, onClose, isLoading, data }: BillModa
   const { patient, consultation } = data || {};
   const [organization, setOrganization] = useState<OrganizationDetails | null>(null);
   const [orgLoaded, setOrgLoaded] = useState(false);
-  const [orgLoading, setOrgLoading] = useState(false);
+  const [orgLoading, setOrgLoading] = useState(true);
   const [savingInvoice, setSavingInvoice] = useState(false);
 
   useEffect(() => {
     let active = true;
-    setOrgLoading(true);
-    fetchOrganizationDetails()
-      .then((info) => {
-        if (!active) return;
-        setOrganization(info);
-        setOrgLoaded(true);
-      })
-      .catch(() => {
-        if (!active) return;
-        setOrgLoaded(true);
-      })
-      .finally(() => {
-        if (!active) return;
-        setOrgLoading(false);
-      });
+    queueMicrotask(() => {
+      fetchOrganizationDetails()
+        .then((info) => {
+          if (!active) return;
+          setOrganization(info);
+          setOrgLoaded(true);
+        })
+        .catch(() => {
+          if (!active) return;
+          setOrgLoaded(true);
+        })
+        .finally(() => {
+          if (!active) return;
+          setOrgLoading(false);
+        });
+    });
     return () => {
       active = false;
     };

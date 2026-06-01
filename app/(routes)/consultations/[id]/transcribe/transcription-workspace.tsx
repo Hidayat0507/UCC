@@ -74,8 +74,10 @@ export default function TranscriptionWorkspace({
   }, []);
 
   useEffect(() => {
-    setSummary(defaultSummary);
-    setSavedSummary(consultation?.notes ?? "");
+    queueMicrotask(() => {
+      setSummary(defaultSummary);
+      setSavedSummary(consultation?.notes ?? "");
+    });
   }, [defaultSummary, consultation?.notes]);
 
   useEffect(() => {
@@ -86,7 +88,9 @@ export default function TranscriptionWorkspace({
     try {
       const stored = localStorage.getItem(storageKey);
       if (stored && stored.trim()) {
-        setSummary((current) => (current.trim() ? current : stored));
+        queueMicrotask(() => {
+          setSummary((current) => (current.trim() ? current : stored));
+        });
       }
     } catch {
       // ignore storage read failures

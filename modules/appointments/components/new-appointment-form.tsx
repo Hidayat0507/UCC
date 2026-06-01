@@ -3,7 +3,7 @@
 import { forwardRef, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import * as z from "zod";
 import Link from "next/link";
 import { format } from "date-fns";
@@ -42,10 +42,18 @@ const appointmentStatuses = [
 ] as const satisfies readonly AppointmentStatus[];
 
 const appointmentSchema = z.object({
-  patientId: z.string({ required_error: "Patient is required" }).min(1, "Patient is required"),
-  scheduledDate: z.string({ required_error: "Date is required" }).min(1, "Date is required"),
-  scheduledTime: z.string({ required_error: "Time is required" }).min(1, "Time is required"),
-  clinician: z.string({ required_error: "Clinician is required" }).min(1, "Clinician is required"),
+  patientId: z
+    .string({ error: (issue) => (issue.input === undefined ? "Patient is required" : undefined) })
+    .min(1, "Patient is required"),
+  scheduledDate: z
+    .string({ error: (issue) => (issue.input === undefined ? "Date is required" : undefined) })
+    .min(1, "Date is required"),
+  scheduledTime: z
+    .string({ error: (issue) => (issue.input === undefined ? "Time is required" : undefined) })
+    .min(1, "Time is required"),
+  clinician: z
+    .string({ error: (issue) => (issue.input === undefined ? "Clinician is required" : undefined) })
+    .min(1, "Clinician is required"),
   visitType: z.string().optional(),
   notes: z.string().optional(),
   status: z.enum(appointmentStatuses).default("scheduled"),
@@ -80,6 +88,9 @@ function combineDateTime(date: string, time: string): Date {
     throw new Error("Invalid appointment date or time");
   }
   return combined;
+}
+function buildDefaultScheduledAt(): Date {
+  return new Date(Date.now() + 30 * 60 * 1000);
 }
 
 type PatientOption = {
@@ -162,7 +173,7 @@ export default function NewAppointmentForm() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [practitioners, setPractitioners] = useState<PractitionerOption[]>([]);
   const [loadingPractitioners, setLoadingPractitioners] = useState(true);
-  const defaultScheduledAt = useMemo(() => new Date(Date.now() + 30 * 60 * 1000), []);
+  const [defaultScheduledAt] = useState(() => buildDefaultScheduledAt());
 
   const form = useForm<AppointmentFormValues>({
     resolver: zodResolver(appointmentSchema),
@@ -210,11 +221,13 @@ export default function NewAppointmentForm() {
 
     loadPatients();
 
-    setLoadingPractitioners(true);
-    getAllPractitioners()
-      .then(setPractitioners)
-      .catch(() => {})
-      .finally(() => setLoadingPractitioners(false));
+    queueMicrotask(() => {
+      setLoadingPractitioners(true);
+      getAllPractitioners()
+        .then(setPractitioners)
+        .catch(() => {})
+        .finally(() => setLoadingPractitioners(false));
+    });
   }, [authLoading]);
 
   const patientOptions = useMemo(() => {
@@ -225,7 +238,7 @@ export default function NewAppointmentForm() {
     }));
   }, [patients]);
 
-  const patientId = form.watch("patientId");
+  const patientId = useWatch({ control: form.control, name: "patientId" });
   const selectedPatient = useMemo(() => {
     return patientOptions.find((patient) => patient.id === patientId);
   }, [patientId, patientOptions]);
@@ -247,16 +260,7 @@ export default function NewAppointmentForm() {
         });
         return;
       }
-
       const scheduledAt = combineDateTime(values.scheduledDate, values.scheduledTime);
-      if (scheduledAt.getTime() <= Date.now()) {
-        toast({
-          title: "Invalid appointment time",
-          description: "Appointment date and time must be in the future.",
-          variant: "destructive",
-        });
-        return;
-      }
 
       // Map appointment status to FHIR status
       const fhirStatus = values.status === "scheduled" ? "booked" : 
